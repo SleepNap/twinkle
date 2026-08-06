@@ -135,6 +135,19 @@ public class Character implements CharacterState {
     private int x;
     private int y;
 
+    /** 当前所在地图对象（运行时，非持久化；进图时由频道装配，换图时更新）。 */
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private org.gms.domain.game.map.MapleMap mapObject;
+
+    public org.gms.domain.game.map.MapleMap getMapObject() {
+        return mapObject;
+    }
+
+    public void setMapObject(org.gms.domain.game.map.MapleMap mapObject) {
+        this.mapObject = mapObject;
+    }
+
     /**
      * @param logicVersion 创建该角色的逻辑版本（来自 VersionGate.currentVersion()）
      */

@@ -13,6 +13,8 @@ import lombok.Setter;
 public class MapleMonster {
 
     private final MobData data;
+    /** 地图内对象 id（v83 oid，刷怪时由地图分配，客户端据此寻址）。 */
+    private int objectId;
     private int hp;
     private int mp;
     private int x;

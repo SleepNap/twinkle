@@ -18,9 +18,15 @@ public final class V83ServerInitializer extends ChannelInitializer<SocketChannel
     private static final int IDLE_SECONDS = 30;
 
     private final HandlerRegistry registry;
+    private final DisconnectListener disconnectListener;
 
     public V83ServerInitializer(HandlerRegistry registry) {
+        this(registry, null);
+    }
+
+    public V83ServerInitializer(HandlerRegistry registry, DisconnectListener disconnectListener) {
         this.registry = registry;
+        this.disconnectListener = disconnectListener;
     }
 
     @Override
@@ -30,6 +36,6 @@ public final class V83ServerInitializer extends ChannelInitializer<SocketChannel
         p.addLast("idle", new IdleStateHandler(0, 0, IDLE_SECONDS));
         p.addLast("decoder", new V83PacketDecoder(ciphers.receive()));
         p.addLast("encoder", new V83PacketEncoder(ciphers.send()));
-        p.addLast("session", new NetworkSession(registry, ciphers));
+        p.addLast("session", new NetworkSession(registry, ciphers, disconnectListener));
     }
 }

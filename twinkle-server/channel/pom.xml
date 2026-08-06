@@ -30,6 +30,11 @@
             <groupId>org.gms</groupId>
             <artifactId>twinkle-wz-provider</artifactId>
         </dependency>
+        <!-- 脚本引擎（NPC/任务对话脚本宿主契约 + ScriptManager） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-domain-script</artifactId>
+        </dependency>
         <!-- 网络协议层（v83 收发包 + HandlerRegistry） -->
         <dependency>
             <groupId>org.gms</groupId>

@@ -3,6 +3,7 @@ package org.gms.domain.game.map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.gms.domain.game.mob.MapleMonster;
 import org.gms.domain.game.spi.CharacterState;
 
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 地图（纯数据，稳定层，内存态权威）。静态属性由 WZ 加载填充（M2-4），
@@ -67,6 +69,14 @@ public class MapleMap {
 
     @Getter(AccessLevel.NONE)
     private final List<CharacterState> characters = new ArrayList<>();
+
+    /** 地图内怪物（objectId → 运行时怪物）。 */
+    @Getter(AccessLevel.NONE)
+    private final Map<Integer, MapleMonster> monsters = new HashMap<>();
+
+    /** 对象 id 分配器（v83 oid 从 0 递增，客户端范围内唯一即可）。 */
+    @Getter(AccessLevel.NONE)
+    private final AtomicInteger objectIdSeq = new AtomicInteger();
 
     // ---------- 传送点 ----------
 
@@ -147,5 +157,29 @@ public class MapleMap {
 
     public int characterCount() {
         return characters.size();
+    }
+
+    // ---------- 怪物管理（数据结构操作，刷怪/战斗逻辑在可替换层系统/channel） ----------
+
+    /** 分配下一个对象 id（地图内递增，不用则 -1）。 */
+    public int nextObjectId() {
+        return objectIdSeq.getAndIncrement();
+    }
+
+    public void addMonster(MapleMonster monster) {
+        monsters.put(monster.getObjectId(), monster);
+    }
+
+    public void removeMonster(int objectId) {
+        monsters.remove(objectId);
+    }
+
+    public MapleMonster getMonster(int objectId) {
+        return monsters.get(objectId);
+    }
+
+    /** 全部怪物（不可变视图）。 */
+    public List<MapleMonster> monsters() {
+        return List.copyOf(monsters.values());
     }
 }

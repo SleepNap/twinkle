@@ -43,13 +43,19 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     private final HandlerRegistry registry;
     private final CipherPair ciphers;
     private final Map<String, Object> attributes = new ConcurrentHashMap<>();
+    private final DisconnectListener disconnectListener;
 
     private volatile Channel channel;
     private volatile SessionStage stage = SessionStage.HANDSHAKE;
 
     public NetworkSession(HandlerRegistry registry, CipherPair ciphers) {
+        this(registry, ciphers, null);
+    }
+
+    public NetworkSession(HandlerRegistry registry, CipherPair ciphers, DisconnectListener disconnectListener) {
         this.registry = registry;
         this.ciphers = ciphers;
+        this.disconnectListener = disconnectListener;
     }
 
     public CipherPair ciphers() {
@@ -68,7 +74,11 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     }
 
     public void setAttr(String key, Object value) {
-        attributes.put(key, value);
+        if (value == null) {
+            attributes.remove(key);
+        } else {
+            attributes.put(key, value);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -112,6 +122,10 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         LOG.info("连接关闭: {}", ctx.channel().remoteAddress());
+        DisconnectListener listener = disconnectListener;
+        if (listener != null) {
+            listener.onDisconnect(this);
+        }
     }
 
     @Override

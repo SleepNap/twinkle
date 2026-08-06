@@ -79,6 +79,26 @@ public final class ScriptManager {
     }
 
     /**
+     * 打开一个对话脚本会话（M3-5 NPC/任务多轮对话）。
+     *
+     * <p>从当前快照取最新源码 eval（L2 热重载天然生效——新对话用新代码）；
+     * 返回的 {@link ConversationScript} 持独立 Context，可多次 {@code invoke} 推进对话，
+     * 结束后调用方 {@code close}。
+     *
+     * @param key      脚本 key（如 {@code "nps/100"} = {@code scripts/nps/100.js}）
+     * @param bindings 宿主对象（cm/qm 等），键名即 JS 全局变量名
+     * @return 对话会话；key 不存在/加载失败返回 null
+     */
+    public ConversationScript openConversation(String key, Map<String, Object> bindings) {
+        ScriptSource src = repository.loadAll().get(key);
+        if (src == null) {
+            LOG.warn("对话脚本不存在: {}", key);
+            return null;
+        }
+        return ConversationScript.open(key, src.content(), bindings);
+    }
+
+    /**
      * L2 热重载入口：重新扫描脚本目录，更新内部快照。
      * 进行中的脚本执行不受影响（持有的是 eval 调用时刻的字符串）。
      */

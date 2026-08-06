@@ -14,8 +14,8 @@ import org.gms.net.packet.SessionStage;
  * 玩家登录进图处理（RecvOpcode.PLAYER_LOGGEDIN）。
  *
  * <p>客户端选角后重连频道服，握手后发本包。流程：按 charId 加载完整存档 →
- * 投影为内存态角色（CharacterLoader）→ 注册频道在线表 → 放入目标地图 →
- * 回 getCharInfo（SET_FIELD，客户端据此刻画角色并进入地图）。
+ * 投影为内存态角色（CharacterLoader）→ 注册频道在线表 + 会话注册表 →
+ * 放入目标地图 → 回 getCharInfo（SET_FIELD，客户端据此刻画角色并进入地图）。
  */
 public final class PlayerLoggedinHandler implements PacketHandler {
 
@@ -25,14 +25,19 @@ public final class PlayerLoggedinHandler implements PacketHandler {
     private final CharacterLoader characterLoader;
     private final ChannelMapManager mapManager;
     private final PlayerStorage players;
+    private final PlayerSessionRegistry sessions;
+    private final MonsterSpawnService spawnService;
     private final int channelId;
 
     public PlayerLoggedinHandler(CharacterRepository characterRepo, CharacterLoader characterLoader,
-                                 ChannelMapManager mapManager, PlayerStorage players, int channelId) {
+                                 ChannelMapManager mapManager, PlayerStorage players,
+                                 PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId) {
         this.characterRepo = characterRepo;
         this.characterLoader = characterLoader;
         this.mapManager = mapManager;
         this.players = players;
+        this.sessions = sessions;
+        this.spawnService = spawnService;
         this.channelId = channelId;
     }
 
@@ -50,8 +55,12 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         }
         Character chr = characterLoader.fromData(dbChar);
         MapleMap map = mapManager.getMap(chr.getMap());
+        chr.setMapObject(map);
         map.addCharacter(chr);
         players.add(chr);
+        sessions.register(chr.getId(), session);
+        // 首次进图生成地图怪物并广播
+        spawnService.spawnForMap(map);
         session.setAttr("character", chr);
         session.transition(SessionStage.IN_GAME);
         session.send(ChannelPacketFactory.charInfo(chr, channelId));

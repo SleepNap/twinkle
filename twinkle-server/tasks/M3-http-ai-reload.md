@@ -59,13 +59,15 @@ HTTP 重做（`/internal` + `/api`）+ LangChain4j AI + 按实体渐进重载。
 > `HealthRecoverySystem`；`MapleMonster`/`SpawnPoint`/`ItemData`/`MobData` 数据就绪；
 > `ScriptManager`（host 契约 cm/qm/im/rm/em）就绪。**M2 未接协议 handler，以下为本里程碑补齐**：
 
-- [ ] **移动**：`RecvOpcode.PLAYER_MOVE` handler → `MovementSystem.move` → 位置/朝向广播
-- [ ] **战斗**：近战/远程/魔法攻击包 handler → `CombatSystem.physicalAttack` → 伤害广播（怪物扣血/死亡/击退）
-- [ ] **刷怪/掉落**：`SpawnPoint` 重生调度 + `MapleMonster` 实例化 + 死亡掉落
-- [ ] **交易**：`TRADE_*` opcode 系列 handler → `TradeSystem`（双网络会话状态机 + 结算包）
-- [ ] **NPC/任务脚本挂接**：NPC 对话/任务脚本经 `ScriptManager` 调用 → `QuestSystem`
-- [ ] **任务/背包存档**：V3 迁移建 `queststatus`/`inventoryitems` 表（newmaple 兼容），QuestStatus/Inventory 持久化
-- [ ] **物品使用/装备穿戴**：使用类物品（HP 药等）handler → `ItemSystem` + `ItemData` 效果
+- [x] **移动**：`RecvOpcode.PLAYER_MOVE` handler → `MovementSystem.move` → 位置/朝向广播（`MovePlayerHandler`，v83 9 字节头 + numCommands 片段解析，思路参考 BeiDou AbstractMovementPacketHandler）
+- [x] **战斗**：近战/远程/魔法攻击包 handler → `CombatSystem.physicalAttack` → 伤害广播（怪物扣血/死亡/移除，`AttackHandler` 三类型共用解析，布局参考 BeiDou AbstractDealDamageHandler）
+- [x] **刷怪/掉落**：`SpawnPoint` 实例化 + `MonsterSpawnService` 重生调度（`SPAWN_MONSTER` 广播；死亡 `KILL_MONSTER` + 重生；掉落表未解析留后续）
+- [x] **交易**：`PLAYER_INTERACTION`（0x7B）子动作 handler → `TradeSystem`（双网络会话状态机 + 结算包，`PlayerInteractionHandler`，思路参考 BeiDou PlayerInteractionHandler）
+- [x] **NPC/任务脚本挂接**：`NpcTalkHandler`/`NpcTalkMoreHandler` 双路由（经典 `start`+`action(status)` 重入 + 北斗 nextlevel `levelXxx` 函数派发），`ConversationScript` 每会话独立 Context 持久化；host `Cm` 扩展对话/nextlevel/能力方法（`NpcConversationHost`）
+- [x] **任务/背包存档**：V3 迁移建 `queststatus`/`questprogress`/`inventoryitems` 表（newmaple 兼容）+ 实体/仓库（`QuestStatusEntity`/`InventoryItemEntity` + Flex 实现，replaceAll 覆盖落库）
+- [x] **物品使用**：`UseItemHandler`（0x48）→ `ItemSystem` 扣 1 + `ItemData.stats` 效果（hp/mp 药）+ `STAT_CHANGED`
+
+> **2026-08-06 交付**：进图后可玩闭环全部落地。前置缺件补齐——`PlayerSessionRegistry`（角色↔会话 + 广播）、bootstrap `WzConfig` 装配六个 replaceable system + Item/Mob 数据、`MapleMap` 怪物容器 + objectId、`MapleMonster.objectId`、`Character.mapObject`、断链注销（`DisconnectListener`）。E2E 全绿：`GamePlayE2ETest`（移动/战斗/刷怪/物品）、`NpcDialogE2ETest`（经典 + nextlevel 双路由）、`TradeE2ETest`（双客户端交易结算）。掉落表（mob drops）与魔法伤害公式留后续。
 
 > 接入时保持状态/逻辑分离纪律：handler 只做"收包→调 system→发包"，判定与状态变更一律在
 > system（经 spi 接口），不把逻辑写进 handler（红线 8/11/12）。

@@ -1,13 +1,21 @@
 package org.gms.bootstrap;
 
 import com.mybatisflex.core.MybatisFlexBootstrap;
+import org.gms.channel.AttackHandler;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelMapManager;
 import org.gms.channel.ChannelServer;
 import org.gms.channel.CharacterLoader;
+import org.gms.channel.MonsterSpawnService;
+import org.gms.channel.MovePlayerHandler;
+import org.gms.channel.NpcTalkHandler;
+import org.gms.channel.NpcTalkMoreHandler;
+import org.gms.channel.PlayerInteractionHandler;
 import org.gms.channel.PlayerLoggedinHandler;
 import org.gms.channel.PlayerMapTransitionHandler;
+import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
+import org.gms.channel.UseItemHandler;
 import org.gms.data.SimpleDriverDataSource;
 import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
@@ -17,6 +25,9 @@ import org.gms.data.migrate.MigrationRunner;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexCharacterRepository;
 import org.gms.domain.game.map.MapleMap;
+import org.gms.domain.script.ScriptEngine;
+import org.gms.domain.script.ScriptManager;
+import org.gms.domain.script.ScriptRepository;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.login.LoginService;
 import org.gms.login.handler.LoginHandlerRegistrar;
@@ -29,6 +40,11 @@ import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketCodec;
+import org.gms.replaceable.CombatSystem;
+import org.gms.replaceable.ItemSystem;
+import org.gms.replaceable.MovementSystem;
+import org.gms.replaceable.QuestSystem;
+import org.gms.replaceable.TradeSystem;
 import org.gms.wz.MapLoader;
 import org.junit.jupiter.api.Test;
 import org.mindrot.jbcrypt.BCrypt;
@@ -40,6 +56,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -145,11 +162,33 @@ class ChannelFlowE2ETest {
         CharacterLoader characterLoader = new CharacterLoader(new DefaultVersionGate());
         ChannelMapManager mapManager = new ChannelMapManager(new MapLoader(wzRoot));
         PlayerStorage players = new PlayerStorage();
+        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
+        DefaultVersionGate versionGate = new DefaultVersionGate();
+        Map<Integer, org.gms.domain.game.item.ItemData> itemData = Map.of();
+        Map<Integer, org.gms.domain.game.mob.MobData> mobData = Map.of();
+        ItemSystem itemSystem = new ItemSystem(versionGate, itemData);
+        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions);
+
+        // 脚本目录：临时空目录（NPC 对话脚本本测试不触发）
+        Path scriptDir = Files.createTempDirectory("twinkle-script-e2e");
+        ScriptEngine scriptEngine = new ScriptEngine();
+        ScriptManager scriptManager = new ScriptManager(scriptEngine,
+                new ScriptRepository(scriptDir));
+
         HandlerRegistry channelRegistry = new HandlerRegistry();
         new ChannelHandlerRegistrar(
                 new PlayerLoggedinHandler(
-                        new FlexCharacterRepository(characterMapper), characterLoader, mapManager, players, 1),
-                new PlayerMapTransitionHandler()
+                        new FlexCharacterRepository(characterMapper), characterLoader, mapManager, players,
+                        sessions, spawnService, 1),
+                new PlayerMapTransitionHandler(),
+                new MovePlayerHandler(new MovementSystem(versionGate), sessions),
+                new AttackHandler(new CombatSystem(versionGate), sessions, false, false),
+                new AttackHandler(new CombatSystem(versionGate), sessions, true, false),
+                new AttackHandler(new CombatSystem(versionGate), sessions, false, true),
+                new PlayerInteractionHandler(new TradeSystem(versionGate, itemSystem), sessions),
+                new NpcTalkHandler(scriptManager, itemSystem, new QuestSystem(versionGate)),
+                new NpcTalkMoreHandler(),
+                new UseItemHandler(itemSystem, itemData)
         ).register(channelRegistry);
         ChannelServer channelServer = new ChannelServer(channelRegistry);
         channelServer.start(0);
