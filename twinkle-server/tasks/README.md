@@ -6,9 +6,9 @@
 
 | 任务 | 标题 | 目标 | 前置依赖 | 状态 |
 |---|---|---|---|---|
-| [M0](M0-skeleton-and-foundation.md) | 骨架与基础设施 | 工程骨架 + 数据层 + 热更新地基 + 预算基线，验证关键技术可行 | — | 进行中 |
-| [M1](M1-protocol-and-netty.md) | 协议与 Netty | 客户端登录、进图 | M0 | 未开始 |
-| [M2](M2-game-logic.md) | 游戏逻辑重写 | 状态/逻辑分离重写，行为对齐参考项目 | M1 | 未开始 |
+| [M0](M0-skeleton-and-foundation.md) | 骨架与基础设施 | 工程骨架 + 数据层 + 热更新地基 + 预算基线，验证关键技术可行 | — | 进行中（主体完成，实测类收尾） |
+| [M1](M1-protocol-and-netty.md) | 协议与 Netty | 客户端登录、进图 | M0 | 进行中（核心完成，剩真实客户端验收） |
+| [M2](M2-game-logic.md) | 游戏逻辑重写 | 状态/逻辑分离重写，行为对齐参考项目 | M1 | 进行中（进图打通 + WZ foothold，剩核心机制/脚本/parity） |
 | [M3](M3-http-ai-reload.md) | HTTP + AI + 渐进重载 | /internal+/api、LangChain4j、按实体渐进重载 | M2 | 未开始 |
 | [M4](M4-plugin-hotreload-channels.md) | 插件 + 热更新全通 + 频道三机制 | 插件可装卸、L1-L4 全通、悄悄话/CC 走三机制 | M3 | 未开始 |
 | [M5](M5-webconsole-migration.md) | Web 控制台 + 迁移 | 控制台、单库迁移、上线切换 | M4 | 未开始 |

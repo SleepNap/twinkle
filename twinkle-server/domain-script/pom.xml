@@ -17,7 +17,8 @@
     <dependencies>
         <!-- GraalVM JS：org.graalvm.js:js 是 pom 聚合器（不含 jar），真正带语言实现的是
              js-language + truffle-runtime（Truffle 运行时）。js 聚合 POM 的依赖等价于显式引入这两个。
-             文档参见 https://www.graalvm.org/jdk24/reference-manual/embed-languages/ -->
+             版本须与 JDK 的 GraalVM compiler 精确匹配（红线 16 JDK 21：21.0.11 ↔ 23.1.11）。
+             文档参见 https://www.graalvm.org/jdk21/reference-manual/embed-languages/ -->
         <dependency>
             <groupId>org.graalvm.js</groupId>
             <artifactId>js-language</artifactId>

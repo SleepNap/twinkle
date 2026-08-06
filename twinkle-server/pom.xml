@@ -56,8 +56,13 @@
         <postgresql.version>42.7.13</postgresql.version>
         <mysql-connector.version>9.7.0</mysql-connector.version>
 
-        <graalvm-js.version>25.2.4</graalvm-js.version>
+        <!-- GraalVM JS：版本必须与 JDK 的 GraalVM compiler 精确匹配（红线 16 JDK 21）。
+             当前 JDK 21.0.11（compiler 23.1.11）→ js-language 23.1.11（实测 engine=Oracle GraalVM 编译优化）。
+             注意：25.2.4 属 JDK 25 系列，在 JDK 21 上降级解释执行；查版本用官方
+             repo1.maven.org maven-metadata.xml（search.maven.org 索引滞后，勿信其 latest）。 -->
+        <graalvm-js.version>23.1.11</graalvm-js.version>
         <log4j2.version>2.26.1</log4j2.version>
+        <lombok.version>1.18.46</lombok.version>
         <langchain4j.version>1.18.1</langchain4j.version>
         <bucket4j.version>8.19.0</bucket4j.version>
         <archunit.version>1.5.0</archunit.version>
@@ -218,6 +223,13 @@
 
     <dependencies>
         <!-- 全模块统一依赖：log4j2（日志红线 9）+ JUnit 5 + AssertJ + ArchUnit（架构测试）。 -->
+        <!-- Lombok（编码规范红线 11：可变实体类用 @Getter/@Setter 代替手写）：编译期注解处理，provided 不打进产物，2C2G 零运行时开销 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
@@ -267,6 +279,12 @@
                         <parameters>true</parameters>
                         <proc>full</proc>
                         <annotationProcessorPaths>
+                            <!-- Lombok 必须放在最前：与其他注解处理器（Micronaut）共存时，Lombok 需先于生成新类型的处理器 -->
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
                             <path>
                                 <groupId>io.micronaut</groupId>
                                 <artifactId>micronaut-inject-java</artifactId>
@@ -292,8 +310,9 @@
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
                         <!-- 红线 16：GraalVM JS 全速需 EnableJVMCI。EnableJVMCI 是实验选项，
-                             需 UnlockExperimentalVMOptions 前置。JDK 21 Temurin 有效。 -->
-                        <argLine>-XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI</argLine>
+                             需 UnlockExperimentalVMOptions 前置。JDK 21 Temurin 有效。
+                             ${argLine} 由 JaCoCo prepare-agent 注入（覆盖率探针），此处仅追加 JVM 实验选项。 -->
+                        <argLine>${argLine} -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI</argLine>
                     </configuration>
                 </plugin>
             </plugins>
@@ -318,6 +337,29 @@
                                 </requireMavenVersion>
                             </rules>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- JaCoCo：测试覆盖率探针（prepare-agent 注入 + report 生成）。
+                 仅出报告、不强制门禁，避免误伤；覆盖率门禁由团队后续按基线设定。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

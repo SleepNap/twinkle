@@ -1,0 +1,45 @@
+# ============== twinkle-server 基础配置（架构 4.1/4.2 装配档位） ==============
+# 默认档：single（全部内嵌一份内存，2C2G 红线 15 强制）
+# 启动时通过 -Dtwinkle.profile=split-channel 覆盖
+twinkle:
+  profile: ${TWINKLE_PROFILE:single}
+
+  # ============== 数据库（架构 6.2：按需三档） ==============
+  # 默认：SQLite（低配 standalone，路径相对运行目录）
+  # 大服 PostgreSQL：-Dtwinkle.db.url=jdbc:postgresql://host:5432/dbname
+  # 注意：Micronaut @Property 默认值（代码内）处理 jdbc: 前缀的安全；此处只留纯值
+  db:
+    url: jdbc:sqlite:./data/twinkle.db
+    user: ""
+    password: ""
+    # MySQL/PG 自动按 JDBC URL 前缀决定 dialect；显式覆盖可用 twinkle.db.dialect
+    dialect: ${TWINKLE_DB_DIALECT:auto}
+
+  # ============== 登录服 Netty（架构 M1：v83 客户端连接） ==============
+  # v83 客户端经典登录端口 8484；与 Micronaut HTTP 各自独立 EventLoop（红线 4）
+  net:
+    login:
+      port: ${TWINKLE_LOGIN_PORT:8484}
+    # 频道服端口（M2 进图：选角后客户端重连；单进程默认与登录服错开）
+    channel:
+      port: ${TWINKLE_CHANNEL_PORT:8584}
+
+  # 服务器列表展示名（LoginServer 响应 SERVERLIST 用）
+  server:
+    name: ${TWINKLE_SERVER_NAME:twinkle}
+
+  # ============== WZ / 脚本数据源（架构 6.4：直接指定路径、单份数据、读不到启动报错） ==============
+  wz:
+    path: ${TWINKLE_WZ_PATH:./wz}
+  script:
+    path: ${TWINKLE_SCRIPT_PATH:./scripts}
+
+# ============== log4j2 ==============
+log4j2:
+  configurationFile: log4j2.xml
+
+# ============== Micronaut HTTP（管理进程用，默认启用） ==============
+# 单进程档下管理进程内嵌，HTTP 端口 8080 默认；可由 -Dmicronaut.server.port=8080 改
+micronaut:
+  server:
+    port: ${TWINKLE_HTTP_PORT:8080}

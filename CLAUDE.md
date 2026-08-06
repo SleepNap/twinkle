@@ -16,13 +16,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 三条铁律
 
-1. **一套代码、多种拓扑**：单进程（`--profile=single`，默认）↔ 单机多进程 ↔ 跨机分布式，配置驱动切换。任何涉及"另一个东西"的接口从第一天起**不假设它在进程内**。判断标准：`standalone 下 X 是什么形态？分布式下 X 变成什么？`
+1. **一套代码、多种拓扑**：单进程（`--profile=single` 性能档 / `standalone` 低配档，默认 `single`）↔ 单机多进程 ↔ 跨机分布式，配置驱动切换。任何涉及"另一个东西"的接口从第一天起**不假设它在进程内**。判断标准：`单进程下 X 是什么形态？分布式下 X 变成什么？`
 2. **性能是硬指标**：2C2G 单进程必须能跑（硬红线）。任何默认引入重服务、常驻大内存、独立进程的方案都违反此线。
 3. **状态与逻辑分离**：游戏实体 = 纯数据 + 操作数据的逻辑系统。这是热重载、分布式、插件三者的共同地基。
 
 ### 模块结构（规划的 Maven 多模块，依赖单向无环）
 
-- **公共底座**：`bootstrap`（唯一 main，读 `--profile`）、`core`（DI/EventBus/配置/调度/插件/热更新）、`net-netty`、`net-packet`（v83 opcode/HandlerRegistry）、`data`（MyBatis-Flex/Flyway）、`db-dialect`、`plugin-api`
+- **公共底座**：`bootstrap`（唯一 main，读 `--profile`）、`core`（DI/EventBus/配置/调度/插件/热更新）、`net-netty`、`net-packet`（v83 opcode/HandlerRegistry）、`data`（MyBatis-Flex + 自研迁移器）、`db-dialect`、`plugin-api`
 - **游戏域**（频道进程）：`domain-game`、`domain-script`（GraalVM JS）、`wz-provider`、`channel`
 - **管理侧**（管理进程）：`coordinator`、`login`、`admin`、`http-api`、`ai`
 
@@ -45,7 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 技术选型
 
-Micronaut 4（DI/HTTP）、Temurin 21（GraalVM JS 以独立 Maven 库引入，需 `-XX:+EnableJVMCI`）、Netty 4（v83 协议字节级不动）、Flyway、log4j2、Bucket4j（限流）、LangChain4j（AI）、Web 控制台（JavaFX 明确移除）。
+Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM JS，全速无需 EnableJVMCI）、Netty 4（v83 协议字节级不动）、自研迁移器（Flyway 不引入）、log4j2、Bucket4j（限流）、LangChain4j（AI）、WZ/脚本数据源定位（配置直接指定路径、单份数据、读不到报错，见 ARCHITECTURE 6.4）、Web 控制台（JavaFX 明确移除）。
 
 ## 硬性编码约束（红线摘录）
 
@@ -58,7 +58,8 @@ Micronaut 4（DI/HTTP）、Temurin 21（GraalVM JS 以独立 Maven 库引入，�
 7. 全限定类名必须 import 后用短名（除非类名冲突）。
 8. **可替换层不得引用稳定层具体类**（用接口或数据投影，防 classloader 换代后 CCE）；**不得持有跨操作状态**。
 9. **贡献点（PacketHandler/HTTP/Script/Task/Event）从第一天版本化**——可装卸即兼容面。
-10. **JDK 锁定 Temurin 21**。
+10. **JDK 锁定 GraalVM CE for JDK 21**。
+11. **实体类选型**：一次性初始化、不可变的值对象用 `record`；需要运行时更新的可变实体类用 Lombok（`@Getter`/`@Setter`）代替手写 getter/setter。自定义 `equals`/`hashCode`/`copy` 等仍手写（不被 Lombok 生成覆盖）。
 
 ## 里程碑
 

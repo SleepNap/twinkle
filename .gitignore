@@ -28,6 +28,11 @@ target/
 
 # ===== 运行时数据库（SQLite 单文件，M0 起随启动生成） =====
 twinkle.db
+
+# ===== 密钥与敏感配置（安全红线 22：不得入仓） =====
+*.secret.*
+application-prod.yml
+*.env
 twinkle.db-wal
 twinkle.db-shm
 

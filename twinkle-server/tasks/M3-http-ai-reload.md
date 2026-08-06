@@ -50,6 +50,26 @@ HTTP 重做（`/internal` + `/api`）+ LangChain4j AI + 按实体渐进重载。
 - [ ] HTTP 线程投递游戏线程（投递机制，不直踩内存）
 - [ ] 第三方 API 流量不挤占游戏 tick 线程
 
+### 5. 协议层接入（承接 M2 核心机制，M2 只完成逻辑侧，此处置后补全）
+
+> **前置事实（M2-2 已就绪，勿重复实现）**：六个可替换层 system 已落地且统一经
+> `CharacterState` spi 接口 + 版本门——`ItemSystem`（背包 give/take/count）、`CombatSystem`
+> + `DamageCalculator`（伤害公式）、`MovementSystem` + `MapleMap.groundBelow`（落点物理）、
+> `TradeSystem` + `Trade`/`TradeSide`（状态机+双向结算）、`QuestSystem` + `QuestStatus`、
+> `HealthRecoverySystem`；`MapleMonster`/`SpawnPoint`/`ItemData`/`MobData` 数据就绪；
+> `ScriptManager`（host 契约 cm/qm/im/rm/em）就绪。**M2 未接协议 handler，以下为本里程碑补齐**：
+
+- [ ] **移动**：`RecvOpcode.PLAYER_MOVE` handler → `MovementSystem.move` → 位置/朝向广播
+- [ ] **战斗**：近战/远程/魔法攻击包 handler → `CombatSystem.physicalAttack` → 伤害广播（怪物扣血/死亡/击退）
+- [ ] **刷怪/掉落**：`SpawnPoint` 重生调度 + `MapleMonster` 实例化 + 死亡掉落
+- [ ] **交易**：`TRADE_*` opcode 系列 handler → `TradeSystem`（双网络会话状态机 + 结算包）
+- [ ] **NPC/任务脚本挂接**：NPC 对话/任务脚本经 `ScriptManager` 调用 → `QuestSystem`
+- [ ] **任务/背包存档**：V3 迁移建 `queststatus`/`inventoryitems` 表（newmaple 兼容），QuestStatus/Inventory 持久化
+- [ ] **物品使用/装备穿戴**：使用类物品（HP 药等）handler → `ItemSystem` + `ItemData` 效果
+
+> 接入时保持状态/逻辑分离纪律：handler 只做"收包→调 system→发包"，判定与状态变更一律在
+> system（经 spi 接口），不把逻辑写进 handler（红线 8/11/12）。
+
 ## 验收标准
 
 - [ ] `/internal/v1` 与 `/api/v1` 可调，`/api/v1` 限流生效且版本化

@@ -3,9 +3,12 @@ package org.gms.data.entity;
 import com.mybatisflex.annotation.Id;
 import com.mybatisflex.annotation.KeyType;
 import com.mybatisflex.annotation.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 配置表实体（架构 4.6.5 / 5.2 L1：配置中心 = DB 真值 + 版本号）。
+ * Lombok 生成字段 getter/setter（红线 11，可变实体类用 @Getter/@Setter 代替手写）。
  *
  * <p>字段对齐参考项目 {@code param_conf}（思路参考自 BeiDou-Server：
  * 架构上"配置 DB 真值"是 L1 热更新地基的入口，但表结构与查询走自研，不复制参考项目实现）。
@@ -20,6 +23,8 @@ import com.mybatisflex.annotation.Table;
  * </ul>
  */
 @Table("param_conf")
+@Getter
+@Setter
 public class ParamConf {
 
     @Id(keyType = KeyType.Auto)
@@ -36,45 +41,5 @@ public class ParamConf {
     public ParamConf(String configKey, String configValue) {
         this.configKey = configKey;
         this.configValue = configValue;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getConfigKey() {
-        return configKey;
-    }
-
-    public void setConfigKey(String configKey) {
-        this.configKey = configKey;
-    }
-
-    public String getConfigValue() {
-        return configValue;
-    }
-
-    public void setConfigValue(String configValue) {
-        this.configValue = configValue;
-    }
-
-    public long getVersion() {
-        return version;
-    }
-
-    public void setVersion(long version) {
-        this.version = version;
-    }
-
-    public String getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(String updatedAt) {
-        this.updatedAt = updatedAt;
     }
 }

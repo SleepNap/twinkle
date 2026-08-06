@@ -23,6 +23,17 @@
             <groupId>org.gms</groupId>
             <artifactId>twinkle-data</artifactId>
         </dependency>
+        <!-- v83 登录协议：handler / opcode / 包构造（login 是客户端协议处理器，ArchUnit 规则 4 已豁免） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-net-packet</artifactId>
+        </dependency>
+        <!-- 密码散列：jBCrypt（安全红线，不落明文） -->
+        <dependency>
+            <groupId>org.mindrot</groupId>
+            <artifactId>jbcrypt</artifactId>
+            <version>0.4</version>
+        </dependency>
         <!-- 管理侧禁止依赖 domain-game -->
     </dependencies>
 </project>

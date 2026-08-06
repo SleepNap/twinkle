@@ -60,25 +60,59 @@ class ArchitectureDependencyTest {
     }
 
     // ---- 规则 3：可替换层不得引用稳定层具体类 ----
-    // 稳定层 = 数据模型实体（org.gms.domain.game.. / org.gms.data.entity..）；可替换层在 org.gms.replaceable..
-    // M0 阶段尚无实际可替换层代码，规则是前瞻性的——allowEmptyShould(true) 允许空集（当前无该类即通过，
-    // 一旦 M2/M4 引入 replaceable 包，规则立即生效）。
+    // 稳定层【具体实现包】= org.gms.domain.game（Character，精确包）、.inventory、.skill、data.entity。
+    // 可替换层（org.gms.replaceable..）只能经 org.gms.domain.game.spi【接口包】访问稳定层
+    // （架构第三节"经接口访问"，接口不参与 reload、不会 CCE）——spi 是 domain.game 的子包，
+    // 精确包模式（不带 ..）不命中子包，故天然放行。
+    // 注：ArchUnit 1.5 基础链无 ignoreDependency；新增稳定层具体包须在此列表登记，否则规则按包拦截。
+    // allowEmptyShould(true)：M0 无该类 → 空集通过，一旦引入 replaceable 立即生效。
     @Test
     void replaceableLayerMustNotDependOnStableConcreteClasses() {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("org.gms.replaceable..", "org.gms.plugins..")
                 .should().dependOnClassesThat().resideInAnyPackage(
-                        "org.gms.domain.game..", "org.gms.data.entity..")
+                        "org.gms.domain.game",
+                        "org.gms.domain.game.inventory..",
+                        "org.gms.domain.game.skill..",
+                        "org.gms.data.entity..")
                 .allowEmptyShould(true); // M0 无该类 → 空集通过
         rule.check(ALL_CLASSES);
     }
 
     // ---- 规则 4：管理侧 HTTP/AI 不得依赖协议栈 ----
+    // login 例外：login 本身就是 v83 客户端登录协议处理器（读包/回包），必然依赖
+    // net-packet；禁的是 HTTP/AI 这类管理 API 直踩协议栈（架构：管理侧经 application service 交互）。
+    private static final String[] HTTP_AI_PACKAGES = {
+            "org.gms.coordinator..", "org.gms.admin..",
+            "org.gms.httpapi..", "org.gms.ai.."
+    };
+
     @Test
     void managementSideMustNotDependOnNetStack() {
         ArchRule rule = noClasses()
-                .that().resideInAnyPackage(MANAGEMENT_SIDE_PACKAGES)
+                .that().resideInAnyPackage(HTTP_AI_PACKAGES)
                 .should().dependOnClassesThat().resideInAnyPackage("org.gms.net.packet..", "org.gms.net.netty..");
+        rule.check(ALL_CLASSES);
+    }
+
+    // ---- 规则 5：公共底座不得依赖上层业务/游戏域/管理侧模块 ----
+    // 底座(core / net-* / data / db-dialect / plugin-api) 是稳定地基，必须保持纯净、不反向依赖任何上层，
+    // 这是"依赖单向无环"的更严保证。bootstrap 是装配模块（依赖全部），不在此约束内。
+    private static final String[] BASE_PACKAGES = {
+            "org.gms.core..", "org.gms.net.netty..", "org.gms.net.packet..",
+            "org.gms.data..", "org.gms.db.dialect..", "org.gms.plugin.."
+    };
+    private static final String[] UPPER_PACKAGES = {
+            "org.gms.domain.game..", "org.gms.domain.script..", "org.gms.wz..",
+            "org.gms.channel..", "org.gms.coordinator..", "org.gms.login..",
+            "org.gms.admin..", "org.gms.httpapi..", "org.gms.ai..", "org.gms.bootstrap.."
+    };
+
+    @Test
+    void baseModulesMustNotDependOnUpperModules() {
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage(BASE_PACKAGES)
+                .should().dependOnClassesThat().resideInAnyPackage(UPPER_PACKAGES);
         rule.check(ALL_CLASSES);
     }
 }

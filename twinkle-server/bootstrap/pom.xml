@@ -91,5 +91,11 @@
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-jackson-databind</artifactId>
         </dependency>
+        <!-- application.yml 解析：Micronaut 4.0 起 SnakeYAML 不再是传递依赖，需显式引入（版本由 Micronaut platform BOM 管理） -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 </project>

@@ -4,6 +4,8 @@ import io.micronaut.context.ApplicationContext;
 import org.gms.config.ConfigFacade;
 import org.gms.dialect.DbDialect;
 import org.gms.dialect.DbDialectRegistry;
+import org.gms.net.netty.LoginServer;
+import org.gms.net.packet.HandlerRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,22 +18,28 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Micronaut ApplicationContext 能完整启动（DI 图无缺失 Bean）。</li>
  *   <li>配置门面 Bean 存在（param_conf 加载路径通了）。</li>
  *   <li>方言注册表能解析 SQLite（低配默认）。</li>
+ *   <li>M1：网络装配——HandlerRegistry 存在且登录 handler 已注册（4 个贡献点），
+ *       LoginServer 已启动（随机端口避免占用）。</li>
  * </ol>
  *
- * <p>用 {@code :memory:} SQLite 避免污染文件系统。
+ * <p>用文件版 SQLite 避免 {@code :memory:} 的 {@code ::} 被属性解析截断。
  */
 class BootstrapContextTest {
 
     @Test
     void applicationContextStartsAndWiresCoreBeans() throws Exception {
-        // 用文件版 SQLite（:memory: 的 "::" 会被 Micronaut 属性解析截断，文件版无此问题）。
         // 用系统临时目录的绝对路径，避免 surefire 工作目录差异。
         // ApplicationContext.run(Map) 才是"键值配置"入口；run(String...) 是 CLI 参数形式。
         String dbPath = java.nio.file.Files.createTempDirectory("twinkle-boot-test")
                 .resolve("test.db").toString();
+        // 脚本目录须存在（架构 6.4：twinkle.script.path 读不到启动即失败），用临时空目录
+        String scriptDir = java.nio.file.Files.createTempDirectory("twinkle-script-test").toString();
         try (ApplicationContext ctx = ApplicationContext.run(java.util.Map.of(
                 "twinkle.db.url", "jdbc:sqlite:" + dbPath,
-                "twinkle.profile", "single"))) {
+                "twinkle.profile", "single",
+                "twinkle.net.login.port", "0",
+                "twinkle.net.channel.port", "0",
+                "twinkle.script.path", scriptDir))) {
 
             // 配置门面（param_conf 加载路径）——迁移在 DataSourceFactory 创建时已跑
             assertThat(ctx.containsBean(ConfigFacade.class)).isTrue();
@@ -44,6 +52,14 @@ class BootstrapContextTest {
             DbDialectRegistry registry = ctx.getBean(DbDialectRegistry.class);
             assertThat(registry.resolveByUrl("jdbc:sqlite:test.db").id())
                     .isEqualTo(DbDialect.DialectId.SQLITE);
+
+            // M1/M2：网络装配——handler 注册 + 登录服/频道服启动
+            assertThat(ctx.containsBean(HandlerRegistry.class)).isTrue();
+            HandlerRegistry handlers = ctx.getBean(HandlerRegistry.class);
+            assertThat(handlers.registeredCount()).isEqualTo(6); // 登录 4（LOGIN_PASSWORD/SERVERLIST/CHARLIST/CHAR_SELECT）+ 频道 2（PLAYER_LOGGEDIN/PLAYER_MAP_TRANSFER）
+            assertThat(ctx.containsBean(LoginServer.class)).isTrue();
+            LoginServer loginServer = ctx.getBean(LoginServer.class);
+            assertThat(loginServer.boundPort()).isGreaterThan(0);
         }
     }
 }

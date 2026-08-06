@@ -1,8 +1,10 @@
 package org.gms.data.config;
 
+import com.mybatisflex.core.MybatisFlexBootstrap;
 import org.gms.config.ConfigChangeEvent;
 import org.gms.data.SimpleDriverDataSource;
 import org.gms.data.entity.ParamConf;
+import org.gms.data.mapper.ParamConfMapper;
 import org.gms.event.InProcessEventBus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,11 +31,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * → 订阅者（DbConfigFacade 自己）重读 → 二次 {@code get(key)} 拿到新值。验证"改 DB → 热生效"链路
  * 不通就需要重启。
  *
- * <h2>为什么手写 JDBC Repository 而不用 MyBatis-Flex</h2>
- * <p>M0 阶段测试不想启动 SqlSessionFactory（涉及 dialect 探测 + mapper 注册较多配置）。
- * DbConfigFacade 依赖的是 {@link ParamConfRepository} 接口——测试给个 JDBC 实现即可，
- * 聚焦 facade 自身逻辑（缓存 + 广播）。M1 起接入 MyBatis-Flex SqlSessionFactory 后，
- * 这个测试不需要改（换成真实实现即可）。
+ * <h2>数据仓库</h2>
+ * <p>M1 起用 MyBatis-Flex 真实实现（{@link FlexParamConfRepository} + ParamConfMapper），
+ * 经临时 SQLite + MybatisFlexBootstrap 装配；每个测试方法唯一 environmentId 隔离
+ * MyBatis-Flex 静态注册表。聚焦 facade 自身逻辑（缓存 + 广播）。
  */
 class DbConfigFacadeTest {
 
@@ -55,8 +56,14 @@ class DbConfigFacadeTest {
         }
         // 跑迁移（V1 含 param_conf 建表 + seed）
         org.gms.data.migrate.MigrationRunner.applyMigrations(dataSource, "sqlite");
+        // M1 起用 MyBatis-Flex 真实实现（替换 M0 的纯 JDBC）；唯一 envId 隔离静态注册表
+        MybatisFlexBootstrap flex = new MybatisFlexBootstrap();
+        flex.setEnvironmentId("dbfacade-" + dbFile);
+        flex.setDataSource(dataSource);
+        flex.addMapper(ParamConfMapper.class);
+        flex.start();
         eventBus = new InProcessEventBus();
-        facade = new DbConfigFacade(new JdbcParamConfRepository(dataSource), eventBus);
+        facade = new DbConfigFacade(new FlexParamConfRepository(flex.getMapper(ParamConfMapper.class)), eventBus);
     }
 
     @Test

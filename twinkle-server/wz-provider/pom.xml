@@ -14,5 +14,11 @@
     <name>twinkle-wz-provider</name>
     <description>WZ 解析 + 预编译磁盘缓存（重开免重解析）</description>
 
-    <!-- 无内部依赖：WZ 文件解析独立模块 -->
+    <dependencies>
+        <!-- 填充目标：domain-game 的 MapleMap/Portal/SpawnPoint 数据模型 -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-domain-game</artifactId>
+        </dependency>
+    </dependencies>
 </project>

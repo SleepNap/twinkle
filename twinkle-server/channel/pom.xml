@@ -25,6 +25,21 @@
             <groupId>org.gms</groupId>
             <artifactId>twinkle-data</artifactId>
         </dependency>
+        <!-- WZ 数据源（进图加载地图） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-wz-provider</artifactId>
+        </dependency>
+        <!-- 网络协议层（v83 收发包 + HandlerRegistry） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-net-packet</artifactId>
+        </dependency>
+        <!-- 网络 IO 层（V83ServerInitializer / NetworkSession） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-net-netty</artifactId>
+        </dependency>
         <!-- 公共底座 -->
         <dependency>
             <groupId>org.gms</groupId>

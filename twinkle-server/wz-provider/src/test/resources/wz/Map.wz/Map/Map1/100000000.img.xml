@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<imgdir name="100000000.img">
+  <imgdir name="info">
+    <int name="town" value="1"/>
+    <float name="mobRate" value="1.0"/>
+    <int name="returnMap" value="100000000"/>
+    <int name="forcedReturn" value="999999999"/>
+    <int name="fieldLimit" value="0"/>
+    <string name="onUserEnter" value="explorationPoint"/>
+  </imgdir>
+  <imgdir name="portal">
+    <imgdir name="0">
+      <string name="pn" value="sp"/>
+      <int name="pt" value="0"/>
+      <int name="x" value="112"/>
+      <int name="y" value="197"/>
+      <int name="tm" value="999999999"/>
+    </imgdir>
+    <imgdir name="1">
+      <string name="pn" value="out00"/>
+      <int name="pt" value="3"/>
+      <int name="x" value="400"/>
+      <int name="y" value="200"/>
+      <int name="tm" value="104000000"/>
+      <string name="tn" value="in00"/>
+    </imgdir>
+  </imgdir>
+  <imgdir name="foothold">
+    <imgdir name="0">
+      <imgdir name="0">
+        <imgdir name="1">
+          <int name="x1" value="10"/>
+          <int name="y1" value="100"/>
+          <int name="x2" value="200"/>
+          <int name="y2" value="100"/>
+          <int name="next" value="2"/>
+        </imgdir>
+        <imgdir name="2">
+          <int name="x1" value="200"/>
+          <int name="y1" value="100"/>
+          <int name="x2" value="400"/>
+          <int name="y2" value="100"/>
+          <int name="prev" value="1"/>
+        </imgdir>
+      </imgdir>
+      <imgdir name="1">
+        <imgdir name="1">
+          <int name="x1" value="0"/>
+          <int name="y1" value="50"/>
+          <int name="x2" value="100"/>
+          <int name="y2" value="50"/>
+          <int name="force" value="50"/>
+        </imgdir>
+      </imgdir>
+    </imgdir>
+    <imgdir name="1">
+      <imgdir name="0">
+        <imgdir name="1">
+          <int name="x1" value="500"/>
+          <int name="y1" value="0"/>
+          <int name="x2" value="600"/>
+          <int name="y2" value="0"/>
+        </imgdir>
+      </imgdir>
+    </imgdir>
+  </imgdir>
+  <imgdir name="life">
+    <imgdir name="0">
+      <string name="type" value="n"/>
+      <string name="id" value="1012000"/>
+      <int name="x" value="149"/>
+      <int name="y" value="267"/>
+    </imgdir>
+    <imgdir name="1">
+      <string name="type" value="m"/>
+      <string name="id" value="100100"/>
+      <int name="x" value="500"/>
+      <int name="y" value="100"/>
+      <int name="mobTime" value="5"/>
+    </imgdir>
+  </imgdir>
+</imgdir>

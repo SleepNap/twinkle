@@ -11,6 +11,9 @@ import org.apache.logging.log4j.Logger;
 import org.gms.dialect.DbDialectRegistry;
 
 import javax.sql.DataSource;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -45,6 +48,9 @@ public class DataSourceFactory {
             @Property(name = "twinkle.db.password", defaultValue = "") String password,
             DbDialectRegistry dialectRegistry) {
         LOG.info("初始化数据源: {}", maskCredentials(url));
+        if (url.startsWith("jdbc:sqlite:") && !url.contains(":memory:")) {
+            ensureSqliteDir(url);
+        }
         SimpleDriverDataSource ds = new SimpleDriverDataSource(url, user, password);
         if (url.startsWith("jdbc:sqlite")) {
             applySqlitePragmas(ds);
@@ -55,6 +61,21 @@ public class DataSourceFactory {
         org.gms.data.migrate.MigrationRunner.applyMigrations(ds,
                 dialectRegistry.resolveByUrl(url).id().name().toLowerCase());
         return ds;
+    }
+
+    /**
+     * SQLite 文件型数据库：确保父目录存在（SQLite 不会自动创建父目录，缺目录即
+     * SQLITE_CANTOPEN）。内存库（:memory:）跳过。
+     */
+    private void ensureSqliteDir(String url) {
+        String filePath = url.substring("jdbc:sqlite:".length());
+        Path dir = Path.of(filePath).toAbsolutePath().getParent();
+        if (dir == null) return;
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new IllegalStateException("无法创建 SQLite 数据目录: " + dir, e);
+        }
     }
 
     /**
