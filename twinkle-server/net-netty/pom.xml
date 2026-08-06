@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gms</groupId>
+        <artifactId>twinkle-server</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>twinkle-net-netty</artifactId>
+    <name>twinkle-net-netty</name>
+    <description>Netty IO（客户端 v83 协议 + 内部通信复用，不依赖业务）</description>
+
+    <dependencies>
+        <!-- Netty 4.2（虚拟线程）：transport + codec + handler -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+        </dependency>
+        <!-- v83 协议字节定义 -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-net-packet</artifactId>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gms</groupId>
+        <artifactId>twinkle-server</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>twinkle-db-dialect</artifactId>
+    <name>twinkle-db-dialect</name>
+    <description>方言差异点封装（upsert/自增/布尔/时间函数等），业务代码禁止裸方言</description>
+
+    <dependencies>
+        <!-- Bean 作用域注解（jakarta.inject.Singleton）。父 pom 已管理版本 -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+        </dependency>
+        <!-- Micronaut 注入（@Singleton 编译期生成 BeanDefinition 所需） -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-inject</artifactId>
+        </dependency>
+    </dependencies>
+</project>

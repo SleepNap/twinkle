@@ -26,6 +26,11 @@ replay_pid*
 # ===== Maven =====
 target/
 
+# ===== 运行时数据库（SQLite 单文件，M0 起随启动生成） =====
+twinkle.db
+twinkle.db-wal
+twinkle.db-shm
+
 # ===== Node / 前端 =====
 node_modules/
 dist/
@@ -42,3 +47,6 @@ dist-ssr/
 # ===== 系统 / 临时 =====
 .DS_Store
 Thumbs.db
+
+# ===== Claude =====
+CLAUDE.local.md

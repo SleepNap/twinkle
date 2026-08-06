@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gms</groupId>
+        <artifactId>twinkle-server</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>twinkle-channel</artifactId>
+    <name>twinkle-channel</name>
+    <description>频道、玩家在线表、CC 迁移。游戏域（频道进程）</description>
+
+    <dependencies>
+        <!-- 游戏对象模型 -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-domain-game</artifactId>
+        </dependency>
+        <!-- 数据层（存档读写） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-data</artifactId>
+        </dependency>
+        <!-- 公共底座 -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-core</artifactId>
+        </dependency>
+    </dependencies>
+</project>

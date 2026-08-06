@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gms</groupId>
+        <artifactId>twinkle-server</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>twinkle-core</artifactId>
+    <name>twinkle-core</name>
+    <description>公共底座：DI、EventBus、配置门面、调度、插件框架、热更新、RestartCoordinator</description>
+
+    <dependencies>
+        <!-- Micronaut 注入（编译时 DI） -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-inject</artifactId>
+        </dependency>
+        <!-- Micronaut 上下文（Bean 容器生命周期 + @Scheduled 调度，4.5+ 合并进此模块） -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-context</artifactId>
+        </dependency>
+    </dependencies>
+</project>

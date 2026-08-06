@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gms</groupId>
+        <artifactId>twinkle-server</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>twinkle-domain-game</artifactId>
+    <name>twinkle-domain-game</name>
+    <description>游戏对象模型（Character/MapleMap/Item，纯数据 + 索引/服务）。稳定层，游戏对象不进容器</description>
+
+    <!-- 无内部依赖：稳定层数据模型，被 channel 与可替换层经接口引用 -->
+</project>

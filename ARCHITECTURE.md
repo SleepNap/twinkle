@@ -43,7 +43,7 @@
 | AI | **LangChain4j** | 流式 + 工具调用原生合一 |
 | 客户端网络 | **Netty 4** | v83 协议 / 加解密 / RecvOpcode 全部不动 |
 | 脚本 | **GraalVM JS**（独立库引入） | 保留，宿主对象契约（cm/qm/em/rm/im）不变 |
-| 数据迁移 | **Flyway** | 每数据源独立版本表 |
+| 数据迁移 | **自研迁移器**（M0 决策，替换 Flyway） | 每数据源独立版本表；Flyway 社区版自 V10 撤 SQLite（商业版才有），架构默认 SQLite，故三库统一自研（见 6.2） |
 | 日志 | log4j2 | 保留 |
 | 限流 | Bucket4j | 第三方 API |
 | UI | **Web 控制台**（北斗式） | JavaFX 明确移除 |
@@ -69,7 +69,7 @@ twinkle/
 │   ├── core/          # DI、EventBus、配置门面、调度、插件框架、热更新、RestartCoordinator
 │   ├── net-netty/     # Netty IO（客户端 v83 协议 + 内部通信复用，不依赖业务）
 │   ├── net-packet/    # v83 opcode、HandlerRegistry、PacketCodec
-│   ├── data/          # MyBatis-Flex 映射 + Repository + Flyway
+│   ├── data/          # MyBatis-Flex 映射 + Repository + 自研迁移器（M0 决策）
 │   ├── db-dialect/    # 方言差异点封装（upsert/自增/布尔/时间函数等）
 │   └── plugin-api/    # 插件 SPI（贡献点、SDK 版本化）
 │
@@ -374,7 +374,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 | ORM | **MyBatis-Flex**（一份代码跑三库，常规 CRUD 全覆盖） |
 | 复杂原生 SQL | 用"两库公共子集"语法写（SELECT/JOIN/CTE/窗口等本就通用） |
 | 方言差异点 | 自增 / upsert / 布尔 / 时间函数 / 字符串函数 → 集中进 **`db-dialect`** 模块，按配置选实现 |
-| 迁移 | **Flyway**，每库独立版本表，启动时跑 |
+| 迁移 | **自研迁移器**（M0 决策），每库独立版本表，启动时跑 |
 | seed | 基础数据随版本发布，与逻辑同版本（migration 管结构、seed 管内容） |
 
 **为什么 100 人用 SQLite 够（搜索核证）**：WAL 下实测 70,000 reads/s + 3,600 writes/s；读吞吐 2 倍于 MySQL、p99 读延迟低 19 倍。**SQLite 的极限是"持续 >10 并发写/秒"而非"人数"**——本架构 DB 层非热路径（热路径在内存），写 = 单写执行器（异步排队）+ 定期 flush + 下线存档，低频批量，天然避开软肋。嵌入式零常驻服务，是"极致省"的正解。**唯一边界：SQLite 单文件不能跨进程共享**，故单机多进程 / 分布式必须换真库——套铁律 1，接口不变、换实现即可。
@@ -487,7 +487,7 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 
 | 里程碑 | 交付 | 验证 |
 |---|---|---|
-| **M0** | 骨架 + Micronaut + 多模块 + MyBatis-Flex 连 SQLite（低配默认）与 PG（大服）双验证 + 配置门面 + Flyway + **热更新地基（接口化/事件化/模块 classloader/RestartCoordinator 状态机）** + **状态/逻辑分离边界** + **2C2G 内存/启动预算基线** + **parity 测试基建** + **Temurin 21 + GraalJS 全速（EnableJVMCI）验证** + **SQLite 100 人负载实测（写延迟/锁冲突/峰值内存）** + **增量 FLUSH 重开实测（秒级 + 不丢档）** | 能启动、连 SQLite、param_conf 热改、2C2G 跑通、GraalJS 峰值验证、WZ 文件缓存 |
+| **M0** | 骨架 + Micronaut + 多模块 + MyBatis-Flex 连 SQLite（低配默认）与 PG（大服）双验证 + 配置门面 + **自研迁移器**（替代 Flyway，社区版不支持 SQLite）+ **热更新地基（接口化/事件化/模块 classloader/RestartCoordinator 状态机）** + **状态/逻辑分离边界** + **2C2G 内存/启动预算基线** + **parity 测试基建** + **Temurin 21 + GraalJS 全速（EnableJVMCI）验证** + **SQLite 100 人负载实测（写延迟/锁冲突/峰值内存）** + **增量 FLUSH 重开实测（秒级 + 不丢档）** | 能启动、连 SQLite、param_conf 热改、2C2G 跑通、GraalJS 峰值验证、WZ 文件缓存 |
 | **M1** | 协议 + Netty + HandlerRegistry + NetworkSession | 客户端登录、进图 |
 | **M2** | 游戏逻辑**重写**（状态/逻辑分离），参考项目作 parity 真值（录包回放 / 双跑对照） | 行为对齐参考项目 |
 | **M3** | HTTP 重做（/internal + /api）+ LangChain4j AI + **按实体渐进重载** | API 可调、AI 流式+工具可用、重载无复制 bug |

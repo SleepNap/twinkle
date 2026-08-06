@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.gms</groupId>
+        <artifactId>twinkle-server</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>twinkle-http-api</artifactId>
+    <name>twinkle-http-api</name>
+    <description>Micronaut Controller（/internal/v1 官网 + /api/v1 第三方，限流+版本化）。管理侧</description>
+
+    <dependencies>
+        <!-- Micronaut HTTP Server（Netty） -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-http-server-netty</artifactId>
+        </dependency>
+        <!-- 限流：Bucket4j -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>${bucket4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-data</artifactId>
+        </dependency>
+        <!-- 管理侧禁止依赖 domain-game -->
+    </dependencies>
+</project>
