@@ -89,6 +89,29 @@ public final class TradeSystem {
         return true;
     }
 
+    /**
+     * 显式中断交易（架构 5.3：长操作在重载安全点等其自然结束或显式中断 + 回滚）。
+     *
+     * <p>交易天然可回滚：出价物品从未离开背包（offer 只是记录承诺），中断即清空
+     * 双方出价并置 CANCELLED——玩家看到"交易被取消"，背包归位（可感知极限 = 交易被
+     * 中断，不是东西没了/多出来了）。
+     *
+     * @return 是否确实中断了一个 ACTIVE 交易（已结束/未开始返回 false）
+     */
+    public boolean interrupt(Trade trade) {
+        if (trade.getState() != Trade.State.ACTIVE) {
+            return false;
+        }
+        trade.getFirst().clearOffer();
+        trade.getFirst().setMeso(0);
+        trade.getFirst().setLocked(false);
+        trade.getSecond().clearOffer();
+        trade.getSecond().setMeso(0);
+        trade.getSecond().setLocked(false);
+        trade.setState(Trade.State.CANCELLED);
+        return true;
+    }
+
     private boolean settle(Trade trade) {
         return transfer(trade.getFirst(), trade.getSecond())
                 && transfer(trade.getSecond(), trade.getFirst());

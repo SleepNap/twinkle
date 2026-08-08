@@ -55,10 +55,17 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     private final TradeSystem tradeSystem;
     private final PlayerSessionRegistry sessions;
+    private final org.gms.hotreload.EntityReloadCoordinator reloadCoordinator;
 
     public PlayerInteractionHandler(TradeSystem tradeSystem, PlayerSessionRegistry sessions) {
+        this(tradeSystem, sessions, null);
+    }
+
+    public PlayerInteractionHandler(TradeSystem tradeSystem, PlayerSessionRegistry sessions,
+                                    org.gms.hotreload.EntityReloadCoordinator reloadCoordinator) {
         this.tradeSystem = tradeSystem;
         this.sessions = sessions;
+        this.reloadCoordinator = reloadCoordinator;
     }
 
     @Override
@@ -108,6 +115,11 @@ public final class PlayerInteractionHandler implements PacketHandler {
         Trade trade = tradeSystem.create(first, second);
         session.setAttr(TRADE_ATTR, trade);
         target.setAttr(TRADE_ATTR, trade);
+        // 长操作跟踪（架构 5.3：交易跨 tick，重载安全点判定用）
+        if (reloadCoordinator != null) {
+            reloadCoordinator.beginOperation(chr.getId());
+            reloadCoordinator.beginOperation(targetChr.getId());
+        }
         // 邀请包（0x13A, INVITE + 3 + 名字 + 4B）
         target.send(tradeInvite(chr));
     }
@@ -124,6 +136,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
             partnerSession.send(tradeResult(number(partnerSession, trade), (byte) RESULT_PARTNER_CANCEL));
         }
         clearTrade(session);
+        endOperations(trade);
     }
 
     private void visit(PacketSession session, Character chr) {
@@ -158,6 +171,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         if (partnerSession != null) {
             clearTrade(partnerSession);
         }
+        endOperations(trade);
     }
 
     private void setItems(PacketSession session, Character chr, InPacket packet) {
@@ -229,6 +243,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
             if (partnerSession != null) {
                 clearTrade(partnerSession);
             }
+            endOperations(trade);
         } else {
             session.send(tradeConfirmation());
             if (partnerSession != null) {
@@ -342,5 +357,16 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     private static void clearTrade(PacketSession session) {
         session.setAttr(TRADE_ATTR, null);
+    }
+
+    /** 交易结束/中断：释放双方长操作跟踪（回到安全点，可重载）。 */
+    private void endOperations(Trade trade) {
+        if (reloadCoordinator == null) {
+            return;
+        }
+        Character first = (Character) trade.getFirst().getTrader();
+        Character second = (Character) trade.getSecond().getTrader();
+        reloadCoordinator.endOperation(first.getId());
+        reloadCoordinator.endOperation(second.getId());
     }
 }

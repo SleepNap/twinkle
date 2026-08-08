@@ -1,0 +1,107 @@
+package org.gms.ai.service;
+
+import org.gms.ai.model.LocalRuleChatModel;
+import org.gms.ai.model.tool.GameStatTool;
+import org.gms.ai.model.tool.ToolRouter;
+import org.gms.data.entity.AiUsageEntity;
+import org.gms.data.entity.Account;
+import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.AiUsageRepository;
+import org.gms.observability.Metrics;
+import org.gms.observability.NoopMetrics;
+import org.gms.service.admin.AdminService;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * M3-2 计费/调度测试：AiFacade 每次对话记录 ai_usage，每日总结调度可观测（架构 M3-2）。
+ *
+ * <p>验证：
+ * <ul>
+ *   <li>AiFacade.chat 后 ai_usage 落库（工具名/请求/响应长度/耗时）。</li>
+ *   <li>每日总结调度 runSummary 生成报表 + 埋点计数。</li>
+ * </ul>
+ */
+class AiFacadeBillingTest {
+
+    private static final class MemoryUsageRepo implements AiUsageRepository {
+        final List<AiUsageEntity> records = new CopyOnWriteArrayList<>();
+        final AtomicLong counter = new AtomicLong();
+
+        @Override
+        public void insert(AiUsageEntity usage) {
+            records.add(usage);
+        }
+
+        @Override
+        public long count() {
+            return records.size();
+        }
+    }
+
+    private static final class FakeAdmin implements AdminService {
+        @Override
+        public ChannelSummary onlineSummary() {
+            return new ChannelSummary(1, 1, List.of(new OnlinePlayer(1L, "Hero", 1, 10, 0)));
+        }
+
+        @Override
+        public boolean kick(long characterId) {
+            return false;
+        }
+    }
+
+    private static final class EmptyAccounts implements AccountRepository {
+        @Override
+        public Optional<Account> findByName(String name) {
+            return Optional.empty();
+        }
+    }
+
+    private AiFacade facade(MemoryUsageRepo usageRepo) {
+        LocalRuleChatModel model = new LocalRuleChatModel(new ToolRouter());
+        GameStatTool tool = new GameStatTool(new FakeAdmin(), new EmptyAccounts(), new NoopMetrics());
+        AiAssistant assistant = dev.langchain4j.service.AiServices.builder(AiAssistant.class)
+                .chatModel(model)
+                .streamingChatModel(model)
+                .tools(tool)
+                .build();
+        return new AiFacade(assistant, usageRepo);
+    }
+
+    @Test
+    void chatRecordsUsage() {
+        MemoryUsageRepo usageRepo = new MemoryUsageRepo();
+        AiFacade facade = facade(usageRepo);
+
+        String reply = facade.chat("在线统计");
+
+        assertThat(reply).contains("在线总人数：1");
+        assertThat(facade.callCount()).isEqualTo(1);
+        assertThat(usageRepo.records).hasSize(1);
+        AiUsageEntity record = usageRepo.records.get(0);
+        assertThat(record.getToolName()).isEqualTo("chat");
+        assertThat(record.getResponseLength()).isGreaterThan(0);
+    }
+
+    @Test
+    void dailySummaryRunsAndReports() {
+        MemoryUsageRepo usageRepo = new MemoryUsageRepo();
+        AiFacade facade = facade(usageRepo);
+        Metrics metrics = new NoopMetrics();
+        AiDailySummaryScheduler scheduler = new AiDailySummaryScheduler(facade, metrics);
+
+        scheduler.runSummary();
+
+        assertThat(facade.callCount()).isEqualTo(1);
+        assertThat(scheduler.lastRunEpoch()).isGreaterThan(0);
+        assertThat(scheduler.errorCount()).isZero();
+        scheduler.close();
+    }
+}

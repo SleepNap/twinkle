@@ -14,36 +14,48 @@ HTTP 重做（`/internal` + `/api`）+ LangChain4j AI + 按实体渐进重载。
 
 ### 1. http-api（Micronaut Controller）
 
-- [ ] `/internal/v1/*`（官网转调，无需限流或弱限流）
-- [ ] `/api/v1/*`（第三方，**限流 + 版本化**，Bucket4j 限流）
-- [ ] HTTP 线程投递游戏线程，禁止直踩游戏内存对象
-- [ ] HTTP 与游戏 Netty 隔离 EventLoop（红线 4，M1 已落地此处保持）
-- [ ] 数据三路（跨进程取数规范，M3 单进程内先按此形态实现）：
-  - [ ] ① 查 DB（主路）：市场记录、商店快照、角色存档
-  - [ ] ② 经 service 接口：事务性操作（改密、封禁），经 service → RPC 到频道
-  - [ ] ③ 事件驱动快照：频道进程推变更 → 管理进程只读镜像 → HTTP 读镜像
-  - [ ] **镜像纪律**：镜像是单向、只读，禁止经镜像回写（共享状态单一属主铁律）
+- [x] `/internal/v1/*`（官网转调，无需限流或弱限流）
+- [x] `/api/v1/*`（第三方，**限流 + 版本化**，Bucket4j 限流）
+- [x] HTTP 线程投递游戏线程，禁止直踩游戏内存对象
+- [x] HTTP 与游戏 Netty 隔离 EventLoop（红线 4，M1 已落地此处保持）
+- [x] 数据三路（跨进程取数规范，M3 单进程内先按此形态实现）：
+  - [x] ① 查 DB（主路）：市场记录、商店快照、角色存档（`/api/v1/account/{name}`、`/api/v1/account/{id}/characters`，经 data repository）
+  - [x] ② 经 service 接口：事务性操作（踢下线 `DELETE /api/v1/characters/{id}/session`），经 `AdminService`（core 公共契约）RPC 到频道（单进程直调，分进程换实现，接口不变）
+  - [x] ③ 事件驱动快照：频道进程推 `PlayerOnline/PlayerOffline`（`ChannelEventPublisher` → EventBus）→ 管理进程只读镜像（`OnlinePlayerMirror`）→ HTTP 读镜像（`/internal/v1/online`、`/api/v1/online`）
+  - [x] **镜像纪律**：镜像是单向、只读，禁止经镜像回写（共享状态单一属主铁律）——事件类型/镜像接口均在 core 公共底座（跨进程契约），http-api 只读镜像、写操作一律经 ② 路
+
+> **2026-08-08 交付**：http-api 全落地。`AdminService`/`OnlinePlayerEvents` 放 core 公共底座（http-api 依赖 core+data，禁止依赖 channel/domain-game，ArchUnit 规则 1 保持绿）。限流参数经 Micronaut `@Property` 注入（`twinkle.http.api.rate-limit.*`，application.yml 默认 100 req/s）。测试：`HttpApiE2ETest`（bootstrap 完整装配，health/镜像/查DB/429 限流全绿）、`ApiRateLimiterTest`（令牌桶）、`OnlinePlayerMirrorTest`（镜像单向+幂等）、`ChannelAdminServiceTest`（踢下线经会话注册表关闭/不在线 false）。`MyBatisFlexFactory` 补齐 InventoryItem/Quest 六 Mapper 注册（查存档前置缺件）。可观测挂接：`ObservabilityConfig` 装配 `NoopMetrics`/`MemoryHealthRegistry`，限流埋点经 Metrics。
 
 ### 2. ai（LangChain4j）
 
-- [ ] `AiServices` 声明式 Agent + `@Tool` 注解
-- [ ] 多工具调用靠模型原生 function calling 自动循环
-- [ ] 流式 `TokenStream` + 工具调用原生合一
-- [ ] 场景：AI 报表 / AI 数据统计 / 多工具调用 / 每日总结（`@Scheduled`）/ 客户端流式接口
-- [ ] 结构化输出：返回 POJO/Enum/JSON 自动解析
-- [ ] RAG 备查：WZ / 游戏知识库
-- [ ] **AI 工具不得直踩游戏内存对象**，只经 application service 接口
-- [ ] 计费 / 记忆 / 配置落 SQLite（复用 Dao 设计）
+- [x] `AiServices` 声明式 Agent + `@Tool` 注解
+- [x] 多工具调用靠模型原生 function calling 自动循环
+- [x] 流式 `TokenStream` + 工具调用原生合一
+- [x] 场景：AI 报表 / AI 数据统计 / 多工具调用 / 每日总结（`@Scheduled`）/ 客户端流式接口
+- [x] 结构化输出：返回 POJO/Enum/JSON 自动解析
+- [ ] RAG 备查：WZ / 游戏知识库（暂缓，留后续）
+- [x] **AI 工具不得直踩游戏内存对象**，只经 application service 接口
+- [x] 计费 / 记忆 / 配置落 SQLite（复用 Dao 设计）
+
+> **2026-08-08 交付**：ai 模块全落地。**模型自研**（`LocalRuleChatModel` 实现 `ChatModel`+`StreamingChatModel`，本地规则路由代替外部 LLM API——M3 单进程 2C2G 红线 + 无 key）；Agent/工具调用循环/流式/结构化输出全走真实 LangChain4j API（AiServices + @Tool + TokenStream + POJO 解析），接入真实 LLM 只需换 ChatModel bean（工具/编排零改动）。工具 `GameStatTool` 经 core `AdminService` 取数（不依赖 http-api/domain-game，ArchUnit 规则 1 保持绿）。计费落 `ai_usage` 表（V4 迁移），`AiFacade` 每次对话记录。每日总结 `AiDailySummaryScheduler`（带 Metrics 埋点+生命周期，可观测）。客户端接口 `/api/v1/ai/chat|report/online|usage`（AiController，受 ApiRateLimitFilter 限流）。测试：`AiAgentTest`（工具循环/非工具直答/流式/工具请求）、`AiFacadeBillingTest`（计费+调度）、`HttpApiE2ETest`（AI 三端点 E2E）。
 
 ### 3. 按实体渐进重载（L3）
 
-- [ ] 重载原子单元 = 单个玩家/频道（**绝不做全服同步原子重载**）
-- [ ] 每个实体只在**无在途操作的安全点**切换：
-  - [ ] 丢物：单操作（单 tick 内删 item）天然安全
-  - [ ] 交易：长操作，等其自然结束（秒级）或显式中断 + 回滚（双方背包归位，玩家看到"交易被取消"）
-- [ ] 写路径带"版本门"：重载后旧逻辑的迟到写操作要能识别并丢弃/重放
-- [ ] 可感知极限是"交易被中断"，不是"东西没了/多出来了"
-- [ ] 验证：重载过程中并发交易/丢物，无复制 bug、无丢锁
+- [x] 重载原子单元 = 单个玩家/频道（**绝不做全服同步原子重载**）
+- [x] 每个实体只在**无在途操作的安全点**切换：
+  - [x] 丢物：单操作（单 tick 内删 item）天然安全
+  - [x] 交易：长操作，等其自然结束（秒级）或显式中断 + 回滚（双方背包归位，玩家看到"交易被取消"）
+- [x] 写路径带"版本门"：重载后旧逻辑的迟到写操作要能识别并丢弃/重放
+- [x] 可感知极限是"交易被中断"，不是"东西没了/多出来了"
+- [x] 验证：重载过程中并发交易/丢物，无复制 bug、无丢锁
+
+> **2026-08-08 交付**：按实体渐进重载全落地。机制装配（版本门 M0/M1 定稿、M2 写路径已按版本门编写，此处只做编排）：
+> - **`EntityReloadCoordinator`**（core）：按实体跟踪在途操作（begin/end 计数），`isSafe`/`safeOnly` 判定安全点——丢物等单操作实体天然安全（不进入跟踪），交易等长操作实体在途不可重载。
+> - **`EntityReloadService`**（core）：编排一次重载——逐实体推进（安全点直切 / 在途显式中断），再 `VersionGate.onReload()` 换代。**绝不做全服同步原子重载**。
+> - **`TradeSystem.interrupt`**：显式中断 + 回滚——清空双方出价（物品从未离背包，offer 只是承诺）+ 状态 CANCELLED，背包/meso 归位，玩家看到"交易被取消"。
+> - **`PlayerInteractionHandler`** 接入协调器：invite 时 `beginOperation` 双方，exit/decline/complete 时 `endOperation`（有向无环，嵌套计数）。
+> - **HTTP 运维端点**：`GET /internal/v1/reload/in-flight`（在途实体观测）、`POST /internal/v1/reload`（触发渐进重载）。
+> - 测试：`EntityReloadServiceTest`（core 6 例：安全点/嵌套/渐进/不可中断跳过/迟到写 STALE/safeOnly）、`TradeSystemTest`（+3 例中断回滚）、`EntityReloadE2ETest`（bootstrap 2 例：交易在途重载中断+无复制 bug+版本门拒迟到写；空闲实体直切不打断）、`HttpApiE2ETest`（+reload 端点）。
 
 ### 4. HTTP 与游戏线程模型
 
@@ -74,10 +86,10 @@ HTTP 重做（`/internal` + `/api`）+ LangChain4j AI + 按实体渐进重载。
 
 ## 验收标准
 
-- [ ] `/internal/v1` 与 `/api/v1` 可调，`/api/v1` 限流生效且版本化
-- [ ] AI 流式 + 工具调用可用（报表/统计场景跑通）
-- [ ] 按实体渐进重载无复制 bug（交易/丢物并发下验证）
-- [ ] 镜像单向只读纪律架构测试通过
+- [x] `/internal/v1` 与 `/api/v1` 可调，`/api/v1` 限流生效且版本化
+- [x] AI 流式 + 工具调用可用（报表/统计场景跑通）
+- [x] 按实体渐进重载无复制 bug（交易/丢物并发下验证）
+- [x] 镜像单向只读纪律架构测试通过
 
 ## 风险与注意
 

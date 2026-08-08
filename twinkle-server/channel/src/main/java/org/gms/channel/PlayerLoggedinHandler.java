@@ -28,10 +28,18 @@ public final class PlayerLoggedinHandler implements PacketHandler {
     private final PlayerSessionRegistry sessions;
     private final MonsterSpawnService spawnService;
     private final int channelId;
+    private final org.gms.channel.admin.ChannelEventPublisher eventPublisher;
 
     public PlayerLoggedinHandler(CharacterRepository characterRepo, CharacterLoader characterLoader,
                                  ChannelMapManager mapManager, PlayerStorage players,
                                  PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId) {
+        this(characterRepo, characterLoader, mapManager, players, sessions, spawnService, channelId, null);
+    }
+
+    public PlayerLoggedinHandler(CharacterRepository characterRepo, CharacterLoader characterLoader,
+                                 ChannelMapManager mapManager, PlayerStorage players,
+                                 PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId,
+                                 org.gms.channel.admin.ChannelEventPublisher eventPublisher) {
         this.characterRepo = characterRepo;
         this.characterLoader = characterLoader;
         this.mapManager = mapManager;
@@ -39,6 +47,7 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         this.sessions = sessions;
         this.spawnService = spawnService;
         this.channelId = channelId;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -64,6 +73,9 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         session.setAttr("character", chr);
         session.transition(SessionStage.IN_GAME);
         session.send(ChannelPacketFactory.charInfo(chr, channelId));
+        if (eventPublisher != null) {
+            eventPublisher.playerOnline(chr);
+        }
         LOG.info("玩家进图: {} (id={}) 地图={}", chr.getName(), chr.getId(), map.getMapId());
     }
 }

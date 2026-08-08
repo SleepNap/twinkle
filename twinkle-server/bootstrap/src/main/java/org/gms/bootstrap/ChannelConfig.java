@@ -4,6 +4,8 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import jakarta.inject.Singleton;
+import org.gms.channel.admin.ChannelAdminService;
+import org.gms.channel.admin.ChannelEventPublisher;
 import org.gms.channel.AttackHandler;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelMapManager;
@@ -23,6 +25,9 @@ import org.gms.data.repo.CharacterRepository;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.mob.MobData;
 import org.gms.domain.script.ScriptManager;
+import org.gms.event.EventBus;
+import org.gms.hotreload.EntityReloadCoordinator;
+import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.netty.LoginServer;
@@ -32,6 +37,7 @@ import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.MovementSystem;
 import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.TradeSystem;
+import org.gms.service.admin.AdminService;
 import org.gms.wz.MapLoader;
 
 import java.nio.file.Path;
@@ -52,6 +58,18 @@ public class ChannelConfig {
     @Singleton
     public VersionGate versionGate() {
         return new DefaultVersionGate();
+    }
+
+    @Bean
+    @Singleton
+    public EntityReloadCoordinator entityReloadCoordinator() {
+        return new EntityReloadCoordinator();
+    }
+
+    @Bean
+    @Singleton
+    public EntityReloadService entityReloadService(EntityReloadCoordinator coordinator, VersionGate versionGate) {
+        return new EntityReloadService(coordinator, versionGate);
     }
 
     @Bean
@@ -86,17 +104,31 @@ public class ChannelConfig {
 
     @Bean
     @Singleton
-    public ChannelServer channelServer(HandlerRegistry registry, PlayerSessionRegistry playerSessionRegistry) {
+    public ChannelServer channelServer(HandlerRegistry registry, PlayerSessionRegistry playerSessionRegistry,
+                                       ChannelEventPublisher eventPublisher) {
         return new ChannelServer(registry, session -> {
-            // 断链注销：会话注册表 + 在线表 + 地图（IO 线程快速返回，不做重活）
+            // 断链注销：在线事件发布 + 会话注册表 + 在线表 + 地图（IO 线程快速返回，不做重活）
             org.gms.domain.game.Character chr = session.getAttr("character");
             if (chr != null) {
+                eventPublisher.playerOffline(chr.getId());
                 playerSessionRegistry.unregister(chr.getId());
             }
             org.gms.channel.NpcTalkHandler.closeConversation(session);
         });
     }
 
+    @Bean
+    @Singleton
+    public ChannelEventPublisher channelEventPublisher(EventBus eventBus) {
+        return new ChannelEventPublisher(eventBus);
+    }
+
+    @Bean
+    @Singleton
+    public AdminService adminService(PlayerStorage playerStorage, PlayerSessionRegistry playerSessionRegistry,
+                                     @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
+        return new ChannelAdminService(playerStorage, playerSessionRegistry, channelId);
+    }
     @Bean
     @Singleton
     public ChannelHandlerRegistrar channelHandlerRegistrar(CharacterRepository characterRepository,
@@ -111,16 +143,18 @@ public class ChannelConfig {
                                                            ItemSystem itemSystem,
                                                            QuestSystem questSystem,
                                                            ScriptManager scriptManager,
+                                                           ChannelEventPublisher eventPublisher,
+                                                           EntityReloadCoordinator entityReloadCoordinator,
                                                            Map<Integer, ItemData> itemData,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
-                new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId),
+                new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher),
                 new PlayerMapTransitionHandler(),
                 new MovePlayerHandler(movementSystem, playerSessionRegistry),
                 new AttackHandler(combatSystem, playerSessionRegistry, false, false),
                 new AttackHandler(combatSystem, playerSessionRegistry, true, false),
                 new AttackHandler(combatSystem, playerSessionRegistry, false, true),
-                new PlayerInteractionHandler(tradeSystem, playerSessionRegistry),
+                new PlayerInteractionHandler(tradeSystem, playerSessionRegistry, entityReloadCoordinator),
                 new NpcTalkHandler(scriptManager, itemSystem, questSystem),
                 new NpcTalkMoreHandler(),
                 new UseItemHandler(itemSystem, itemData));

@@ -10,12 +10,22 @@ import org.apache.logging.log4j.Logger;
 import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
+import org.gms.data.mapper.AiUsageMapper;
 import org.gms.data.mapper.CharacterMapper;
+import org.gms.data.mapper.InventoryItemMapper;
 import org.gms.data.mapper.ParamConfMapper;
+import org.gms.data.mapper.QuestProgressMapper;
+import org.gms.data.mapper.QuestStatusMapper;
 import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.AiUsageRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.FlexAccountRepository;
+import org.gms.data.repo.FlexAiUsageRepository;
 import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.data.repo.FlexInventoryItemRepository;
+import org.gms.data.repo.FlexQuestRepository;
+import org.gms.data.repo.InventoryItemRepository;
+import org.gms.data.repo.QuestRepository;
 
 import javax.sql.DataSource;
 
@@ -45,8 +55,13 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(ParamConfMapper.class);
         bootstrap.addMapper(AccountMapper.class);
         bootstrap.addMapper(CharacterMapper.class);
+        // M3-5 存档表（进图回填/下线落库；M3-1 HTTP 查存档也依赖，统一在此注册）
+        bootstrap.addMapper(InventoryItemMapper.class);
+        bootstrap.addMapper(QuestStatusMapper.class);
+        bootstrap.addMapper(QuestProgressMapper.class);
+        bootstrap.addMapper(AiUsageMapper.class);
         bootstrap.start();
-        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character 三个 Mapper 已注册");
+        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage 七个 Mapper 已注册");
         return bootstrap;
     }
 
@@ -70,6 +85,30 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public InventoryItemMapper inventoryItemMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(InventoryItemMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public QuestStatusMapper questStatusMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(QuestStatusMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public QuestProgressMapper questProgressMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(QuestProgressMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public AiUsageMapper aiUsageMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(AiUsageMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -85,5 +124,23 @@ public class MyBatisFlexFactory {
     @Singleton
     public CharacterRepository characterRepository(CharacterMapper mapper) {
         return new FlexCharacterRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public InventoryItemRepository inventoryItemRepository(InventoryItemMapper mapper) {
+        return new FlexInventoryItemRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public QuestRepository questRepository(QuestStatusMapper statusMapper, QuestProgressMapper progressMapper) {
+        return new FlexQuestRepository(statusMapper, progressMapper);
+    }
+
+    @Bean
+    @Singleton
+    public AiUsageRepository aiUsageRepository(AiUsageMapper mapper) {
+        return new FlexAiUsageRepository(mapper);
     }
 }

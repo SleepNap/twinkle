@@ -121,4 +121,56 @@ class TradeSystemTest {
         versionGate.onReload();
         assertThat(tradeSystem.offer(trade, a, 2_000_000, 5)).isFalse();
     }
+
+    // ---- 架构 5.3：显式中断 + 回滚（可感知极限 = 交易被取消） ----
+
+    @Test
+    @DisplayName("中断 ACTIVE 交易：出价清空、meso 归零、状态 CANCELLED、背包不动")
+    void interrupt_activeTrade_clearsOffersAndCancels() {
+        Character a = player(1000);
+        Character b = player(1000);
+        give(a, 2_000_000, 10);
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        tradeSystem.offer(trade, a, 2_000_000, 5);
+        tradeSystem.offerMeso(trade, b, 300);
+
+        assertThat(tradeSystem.interrupt(trade)).isTrue();
+
+        assertThat(trade.getState()).isEqualTo(Trade.State.CANCELLED);
+        assertThat(trade.getFirst().offeredItems()).isEmpty();
+        assertThat(trade.getFirst().getMeso()).isZero();
+        assertThat(trade.getSecond().offeredItems()).isEmpty();
+        assertThat(trade.getSecond().getMeso()).isZero();
+        // 背包归位：物品未离开背包（offer 只是承诺），meso 未动
+        assertThat(a.getItemCount(2_000_000)).isEqualTo(10);
+        assertThat(a.getMeso()).isEqualTo(1000);
+        assertThat(b.getMeso()).isEqualTo(1000);
+    }
+
+    @Test
+    @DisplayName("中断已结束的交易返回 false（幂等）")
+    void interrupt_doneTrade_returnsFalse() {
+        Character a = player(1000);
+        Character b = player(1000);
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        tradeSystem.lock(trade, a);
+        tradeSystem.lock(trade, b);
+        assertThat(tradeSystem.complete(trade)).isTrue();
+        assertThat(trade.getState()).isEqualTo(Trade.State.DONE);
+
+        assertThat(tradeSystem.interrupt(trade)).isFalse();
+        assertThat(trade.getState()).isEqualTo(Trade.State.DONE);
+    }
+
+    @Test
+    @DisplayName("中断后可重新发起新交易（安全点清空）")
+    void interrupt_clearsStateForNewTrade() {
+        Character a = player(1000);
+        Character b = player(1000);
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        tradeSystem.offerMeso(trade, a, 500);
+        assertThat(tradeSystem.interrupt(trade)).isTrue();
+        assertThat(trade.getState()).isEqualTo(Trade.State.CANCELLED);
+        assertThat(a.getMeso()).isEqualTo(1000);   // 回滚后 meso 归位
+    }
 }

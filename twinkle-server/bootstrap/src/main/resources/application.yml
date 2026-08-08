@@ -34,6 +34,15 @@ twinkle:
   script:
     path: ${TWINKLE_SCRIPT_PATH:./scripts}
 
+  # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
+  http:
+    api:
+      rate-limit:
+        # 令牌桶容量（峰值并发请求数）
+        capacity: ${TWINKLE_HTTP_RATE_CAPACITY:100}
+        # 补满周期（秒）
+        refill-seconds: ${TWINKLE_HTTP_RATE_REFILL:1}
+
 # ============== log4j2 ==============
 log4j2:
   configurationFile: log4j2.xml

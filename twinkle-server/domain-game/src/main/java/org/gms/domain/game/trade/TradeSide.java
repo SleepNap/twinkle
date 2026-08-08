@@ -33,6 +33,11 @@ public final class TradeSide {
         offeredItems.merge(itemId, quantity, Integer::sum);
     }
 
+    /** 清空出价物品（显式中断交易时回滚用：物品从未离背包，清 offer 即归位）。 */
+    public void clearOffer() {
+        offeredItems.clear();
+    }
+
     /** 出价物品（不可变视图：itemId → quantity）。 */
     public Map<Integer, Integer> offeredItems() {
         return Map.copyOf(offeredItems);
