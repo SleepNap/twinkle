@@ -31,3 +31,12 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **M4-4 可靠性三件套**：`ReliableEventBus`（core `org.gms.event`）——发送先落 outbox（bus_outbox V5 表）→ 投递 → 标记；接收侧按 stream 严格 seq+1 按序投递（越序/重复丢弃）+ messageId 幂等去重 = 恰好一次。CC 迁移走可靠总线（stream=`cc:player:{id}`）。**坑**：严格按序须 `seq == last+1`（仅 <= 判定会让越序 seq=3 漏进）；`PayloadCodec` 接口化（M4 用 MARKER，M6 换 JSON）。
 - **M4-5 配置中心形态**：DB 真值 + 版本号广播链路全验证（ConfigCenterE2ETest：admin 写→DB→版本+1→广播→订阅者重读）。单进程"TCP 长连接订阅"= 进程内 EventBus 订阅，接口按 4.6.5 设计，M6 换网络。
 - 迁移 V5__bus_outbox.sql + V6__buddylist.sql；全量测试 29+ 全绿。
+
+**M4 完成范围诚实标注（后续开发必读，详见 tasks/M4-plugin-hotreload-channels.md"完成范围诚实标注"节）**：
+- 插件 HTTP 路由 / AI Tool 贡献点：**未接线**（M5 随管理进程插件宿主做）。
+- 加好友：`buddyListPacket` 是简化版（数量写死 0，未读真实 DB 列表回填）；v83 BUDDYLIST 包逐字节布局未核对。
+- 喇叭：**只有活动公告广播**，喇叭道具 handler（点喇叭消耗道具）未做。
+- CC 迁移：单进程内"重连"= 同进程；真正跨频道端口重连是 M6。
+- 公会/排行完整玩法不在 M4（M5 配套 Web 控制台）。
+- 可靠总线序列化：PayloadCodec.MARKER（单进程投递真实对象）；跨进程 JSON + 接收侧去重落 bus_stream 表是 M6。
+- 技术债：`TradeE2ETest` 偶发失败（`Thread.sleep(100)` 计时脆弱，非功能回归，未修复）。
