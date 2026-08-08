@@ -186,4 +186,35 @@ class PluginManagerTest {
         assertThat(descriptors).hasSize(1);
         assertThat(descriptors.get(0).id()).isEqualTo("com.acme.good");
     }
+
+    /** reload 会换代版本门（L3 纪律，架构 5.3）：旧插件 unload → 版本 +1 → 新插件 load。 */
+    @Test
+    void reloadAdvancesVersionGateAndReapplies() throws Exception {
+        String manifest = """
+                plugin.id=com.acme.demo
+                plugin.name=Demo
+                plugin.version=1.0.0
+                plugin.scope=channel
+                plugin.sdk-version=1
+                """;
+        TestPluginJars.writeManifestOnlyJar(tmp, "com.acme.demo.jar", manifest);
+
+        org.gms.hotreload.versioned.DefaultVersionGate gate = new org.gms.hotreload.versioned.DefaultVersionGate();
+        org.gms.hotreload.EntityReloadCoordinator coordinator = new org.gms.hotreload.EntityReloadCoordinator();
+        org.gms.hotreload.EntityReloadService reloadService =
+                new org.gms.hotreload.EntityReloadService(coordinator, gate);
+        FakeHost host = new FakeHost();
+        PluginManager mgr = new PluginManager(tmp, host, PluginManagerTest.class.getClassLoader(),
+                type -> null, new NoopRouter(), gate, reloadService);
+
+        long v0 = gate.currentVersion();
+        var d = mgr.scan().get(0);
+        mgr.load(d);
+        assertThat(host.applied).containsExactly("com.acme.demo");
+
+        mgr.reload(d);
+        assertThat(gate.currentVersion()).isEqualTo(v0 + 1); // 换代 +1
+        assertThat(host.applied).hasSize(2); // unload 后再 apply
+        assertThat(mgr.loaded("com.acme.demo")).isPresent();
+    }
 }

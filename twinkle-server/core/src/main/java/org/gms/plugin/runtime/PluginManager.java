@@ -2,6 +2,8 @@ package org.gms.plugin.runtime;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.gms.hotreload.EntityReloadService;
+import org.gms.hotreload.versioned.VersionGate;
 import org.gms.plugin.ContributionHandle;
 import org.gms.plugin.Plugin;
 import org.gms.plugin.PluginDescriptor;
@@ -44,17 +46,31 @@ public final class PluginManager implements Closeable {
     private final Function<Class<?>, Object> serviceResolver;
     /** 命令式贡献点路由（装配层提供）。 */
     private final ContributionRouter contributionRouter;
+    /** L3 版本门（reload 换代，旧插件迟到写被拒）。 */
+    private final VersionGate versionGate;
+    /** 按实体渐进重载（插件 reload 时中断在途长操作）。 */
+    private final EntityReloadService entityReloadService;
 
     private final ConcurrentMap<String, LoadedPlugin> loaded = new ConcurrentHashMap<>();
 
     public PluginManager(Path pluginsDir, PluginHost host, ClassLoader hostClassLoader,
                          Function<Class<?>, Object> serviceResolver,
                          ContributionRouter contributionRouter) {
+        this(pluginsDir, host, hostClassLoader, serviceResolver, contributionRouter, null, null);
+    }
+
+    public PluginManager(Path pluginsDir, PluginHost host, ClassLoader hostClassLoader,
+                         Function<Class<?>, Object> serviceResolver,
+                         ContributionRouter contributionRouter,
+                         VersionGate versionGate,
+                         EntityReloadService entityReloadService) {
         this.pluginsDir = pluginsDir;
         this.host = host;
         this.hostClassLoader = hostClassLoader;
         this.serviceResolver = serviceResolver;
         this.contributionRouter = contributionRouter;
+        this.versionGate = versionGate;
+        this.entityReloadService = entityReloadService;
     }
 
     /** 扫描插件目录全部 jar 并解析 manifest。 */
@@ -158,6 +174,31 @@ public final class PluginManager implements Closeable {
 
     public List<LoadedPlugin> loadedPlugins() {
         return List.copyOf(loaded.values());
+    }
+
+    /**
+     * 插件热重载（架构 5.2 L3 / 5.3：插件系统 = 热重载系统，与 L3 纪律对齐）。
+     *
+     * <ol>
+     *   <li>卸载旧版（stop + 贡献点回滚 + 释放 loader）。</li>
+     *   <li><b>换代版本门</b>：{@code versionGate.onReload()}，旧插件迟到写此后被拒
+     *       （红线 12/架构 5.3，配合按实体渐进重载）。</li>
+     *   <li>中断在途长操作（交易等显式中断 + 回滚，兜住插件碰长操作的极端情况）。</li>
+     *   <li>加载新版（新 loader + 贡献点以更高版本注册）。</li>
+     * </ol>
+     *
+     * <p>未注入版本门/渐进重载（M4 测试装配）时退化为 unload + load（纯装卸）。
+     */
+    public LoadedPlugin reload(PluginDescriptor descriptor) {
+        unload(descriptor.id());
+        if (versionGate != null && entityReloadService != null) {
+            // reloadAllInFlight 内部已换代版本门（coordinator.advanceVersion → gate.onReload）
+            // + 中断在途长操作；这里不重复 onReload，避免版本跳两号
+            var result = entityReloadService.reloadAllInFlight(id -> true);
+            LOG.info("插件重载：版本门换代 → v{}（安全切换 {}，中断 {}）",
+                    result.newVersion(), result.safeSwitched(), result.interrupted());
+        }
+        return load(descriptor);
     }
 
     public Optional<LoadedPlugin> loaded(String pluginId) {

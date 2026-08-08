@@ -6,6 +6,7 @@ import io.micronaut.context.annotation.Property;
 import jakarta.inject.Singleton;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
+import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.LogicSystemRegistry;
 import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.packet.HandlerRegistry;
@@ -42,7 +43,8 @@ public class PluginConfig {
             TickScheduler tickScheduler,
             EventBus eventBus,
             VersionGate versionGate,
-            EntityReloadCoordinator entityReloadCoordinator) {
+            EntityReloadCoordinator entityReloadCoordinator,
+            EntityReloadService entityReloadService) {
         Path dir = Path.of(pluginPath);
         TwinklePluginHost host = new TwinklePluginHost(registry, logicSystemRegistry, tickScheduler,
                 eventBus, versionGate, entityReloadCoordinator);
@@ -60,6 +62,8 @@ public class PluginConfig {
         };
         // 宿主服务解析：M4 插件可访问的宿主服务为空（信任边界接口，后续按需开放 AdminService 等）
         Function<Class<?>, Object> serviceResolver = type -> null;
-        return new PluginManager(dir, host, PluginManager.class.getClassLoader(), serviceResolver, router);
+        // 注入版本门 + 按实体渐进重载：插件 reload = L3 换代 + 中断在途（架构 5.3）
+        return new PluginManager(dir, host, PluginManager.class.getClassLoader(), serviceResolver, router,
+                versionGate, entityReloadService);
     }
 }
