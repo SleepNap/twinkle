@@ -3,7 +3,7 @@ package org.gms.channel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gms.domain.game.Character;
-import org.gms.event.EventBus;
+import org.gms.event.ReliableEventBus;
 import org.gms.message.ChangeChannelRequest;
 import org.gms.message.MessageTargets;
 import org.gms.net.packet.InPacket;
@@ -28,14 +28,14 @@ public final class ChangeChannelHandler implements PacketHandler {
 
     private final int channelId;
     private final IntercoordService intercoord;
-    private final EventBus eventBus;
+    private final ReliableEventBus reliableBus;
     private final PlayerSessionRegistry sessions;
 
-    public ChangeChannelHandler(int channelId, IntercoordService intercoord, EventBus eventBus,
+    public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
                                 PlayerSessionRegistry sessions) {
         this.channelId = channelId;
         this.intercoord = intercoord;
-        this.eventBus = eventBus;
+        this.reliableBus = reliableBus;
         this.sessions = sessions;
     }
 
@@ -63,11 +63,12 @@ public final class ChangeChannelHandler implements PacketHandler {
             return; // 同频道，忽略
         }
 
-        // 发 CC 请求（经消息总线发目标频道；M4 单进程 = 本进程，直接走迁移）
+        // 发 CC 请求（经可靠总线发目标频道，架构 4.5：CC 迁移不掉数据、不重复的核心）。
+        // 单一属主序号流：每玩家的 CC 请求流内单调，进程崩了重投未 ACKED。
         ChangeChannelRequest req = new ChangeChannelRequest(chr.getId(), channelId, targetId,
                 ChangeChannelRequest.Reason.PLAYER_CHANGE);
         LOG.info("玩家 {} 换频道 {} → {}（reason={}）", chr.getName(), channelId, targetId, req.reason());
-        eventBus.send(MessageTargets.channel(targetId), req);
+        reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req);
 
         // 迁移执行（M4 单进程内：定位表更新 + 地图清理 + 重新登记）
         intercoord.movePlayer(chr.getId(), targetId);

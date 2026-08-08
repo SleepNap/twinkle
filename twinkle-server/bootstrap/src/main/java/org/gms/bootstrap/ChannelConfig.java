@@ -158,6 +158,7 @@ public class ChannelConfig {
                                                            EntityReloadCoordinator entityReloadCoordinator,
                                                            Map<Integer, ItemData> itemData,
                                                            EventBus eventBus,
+                                                           org.gms.event.ReliableEventBus reliableEventBus,
                                                            IntercoordService intercoordService,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
@@ -172,7 +173,7 @@ public class ChannelConfig {
                 new NpcTalkMoreHandler(),
                 new UseItemHandler(itemSystem, itemData),
                 new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
-                new ChangeChannelHandler(channelId, intercoordService, eventBus, playerSessionRegistry));
+                new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry));
     }
 
     /** 频道消息订阅（跨频道悄悄话/公告投递，架构 4.4 消息总线）。 */

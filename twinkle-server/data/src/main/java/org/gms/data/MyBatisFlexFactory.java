@@ -11,6 +11,7 @@ import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.AiUsageMapper;
+import org.gms.data.mapper.BusOutboxMapper;
 import org.gms.data.mapper.CharacterMapper;
 import org.gms.data.mapper.InventoryItemMapper;
 import org.gms.data.mapper.ParamConfMapper;
@@ -18,9 +19,11 @@ import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AiUsageRepository;
+import org.gms.event.OutboxRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexAiUsageRepository;
+import org.gms.data.repo.FlexBusOutboxRepository;
 import org.gms.data.repo.FlexCharacterRepository;
 import org.gms.data.repo.FlexInventoryItemRepository;
 import org.gms.data.repo.FlexQuestRepository;
@@ -60,8 +63,9 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(QuestStatusMapper.class);
         bootstrap.addMapper(QuestProgressMapper.class);
         bootstrap.addMapper(AiUsageMapper.class);
+        bootstrap.addMapper(BusOutboxMapper.class);
         bootstrap.start();
-        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage 七个 Mapper 已注册");
+        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox 八个 Mapper 已注册");
         return bootstrap;
     }
 
@@ -109,6 +113,12 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public BusOutboxMapper busOutboxMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(BusOutboxMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -142,5 +152,11 @@ public class MyBatisFlexFactory {
     @Singleton
     public AiUsageRepository aiUsageRepository(AiUsageMapper mapper) {
         return new FlexAiUsageRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public OutboxRepository busOutboxRepository(BusOutboxMapper mapper) {
+        return new FlexBusOutboxRepository(mapper);
     }
 }
