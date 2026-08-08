@@ -201,6 +201,11 @@ class LoginFlowE2ETest {
                     public java.util.Optional<org.gms.data.entity.Character> findById(long id) {
                         return java.util.Optional.empty();
                     }
+
+                    @Override
+                    public void save(org.gms.data.entity.Character chr) {
+                        // 登录流程测试不做存档
+                    }
                 });
         HandlerRegistry registry = new HandlerRegistry();
         new LoginHandlerRegistrar(loginService).register(registry, "twinkle", new byte[]{127, 0, 0, 1}, 8484);

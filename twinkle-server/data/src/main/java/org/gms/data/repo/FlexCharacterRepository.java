@@ -32,4 +32,9 @@ public class FlexCharacterRepository implements CharacterRepository {
     public Optional<Character> findById(long id) {
         return Optional.ofNullable(mapper.selectOneById(id));
     }
+
+    @Override
+    public void save(Character chr) {
+        mapper.update(chr);
+    }
 }

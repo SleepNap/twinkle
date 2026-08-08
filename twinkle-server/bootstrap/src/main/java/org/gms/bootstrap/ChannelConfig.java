@@ -105,13 +105,19 @@ public class ChannelConfig {
     @Bean
     @Singleton
     public ChannelServer channelServer(HandlerRegistry registry, PlayerSessionRegistry playerSessionRegistry,
-                                       ChannelEventPublisher eventPublisher) {
+                                       ChannelEventPublisher eventPublisher, PlayerStorage playerStorage,
+                                       org.gms.channel.persist.CharacterSaveQueue saveQueue) {
         return new ChannelServer(registry, session -> {
-            // 断链注销：在线事件发布 + 会话注册表 + 在线表 + 地图（IO 线程快速返回，不做重活）
+            // 断链注销：在线事件 + 会话注册表 + 在线表 + 地图 + 存档（IO 线程快速返回，重活入队）
             org.gms.domain.game.Character chr = session.getAttr("character");
             if (chr != null) {
                 eventPublisher.playerOffline(chr.getId());
                 playerSessionRegistry.unregister(chr.getId());
+                playerStorage.remove(chr);
+                if (chr.getMapObject() != null) {
+                    chr.getMapObject().removeCharacter(chr);
+                }
+                saveQueue.save(chr); // 下线存档（L4 增量 FLUSH 队列，单写执行器）
             }
             org.gms.channel.NpcTalkHandler.closeConversation(session);
         });

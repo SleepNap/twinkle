@@ -96,6 +96,30 @@ class HttpApiE2ETest {
                     HttpResponse.BodyHandlers.ofString());
             assertThat(missing.statusCode()).isEqualTo(404);
 
+            // ---- L1 配置热改：POST /internal/v1/config → DB 真值 + 版本号广播（架构 4.6.5） ----
+            HttpResponse<String> cfgBefore = client.send(
+                    HttpRequest.newBuilder(URI.create(base + "/internal/v1/config"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString("{\"key\":\"game.level.rate\",\"value\":\"3.0\"}"))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(cfgBefore.statusCode()).isEqualTo(200);
+            assertThat(cfgBefore.body()).contains("game.level.rate").contains("3.0");
+
+            // 订阅者重读：ConfigFacade.get 出新值（经广播重读 param_conf）
+            org.gms.config.ConfigFacade config = ctx.getBean(org.gms.config.ConfigFacade.class);
+            assertThat(config.get("game.level.rate", String.class)).contains("3.0");
+            assertThat(config.currentVersion()).isGreaterThan(0);
+
+            // 写非法 body → 400
+            HttpResponse<String> badCfg = client.send(
+                    HttpRequest.newBuilder(URI.create(base + "/internal/v1/config"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString("{\"value\":\"x\"}"))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(badCfg.statusCode()).isEqualTo(400);
+
             // ---- 限流：容量 2，累计请求数已到 2（apiOnline + missing），第 3 个应 429 ----
             HttpResponse<String> r1 = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/api/v1/online")).GET().build(),

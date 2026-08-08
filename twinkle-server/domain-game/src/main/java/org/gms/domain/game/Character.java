@@ -140,12 +140,81 @@ public class Character implements CharacterState {
     @Setter(AccessLevel.NONE)
     private org.gms.domain.game.map.MapleMap mapObject;
 
+    /** 自上次落盘后是否有变更（L4 增量 FLUSH 用，红线 17：只 FLUSH 脏数据）。 */
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private transient volatile boolean dirty;
+
     public org.gms.domain.game.map.MapleMap getMapObject() {
         return mapObject;
     }
 
     public void setMapObject(org.gms.domain.game.map.MapleMap mapObject) {
         this.mapObject = mapObject;
+    }
+
+    /** 标记自上次落盘后已变更（持久化字段 setter / 背包/任务 mutation 内调用）。 */
+    @Override
+    public void markDirty() {
+        this.dirty = true;
+    }
+
+    @Override
+    public boolean isDirty() {
+        return dirty;
+    }
+
+    @Override
+    public void clearDirty() {
+        this.dirty = false;
+    }
+
+    // ---- 持久化字段手写 setter（覆盖 Lombok 生成，赋值后标脏，红线 17 增量 FLUSH 依据） ----
+    // 手写同名方法后 Lombok 不再生成该字段 setter；坐标 x/y 不标脏（运行期不落库，map 已持久化）。
+
+    public void setLevel(int level) {
+        this.level = level;
+        markDirty();
+    }
+
+    public void setExp(long exp) {
+        this.exp = exp;
+        markDirty();
+    }
+
+    public void setHp(int hp) {
+        this.hp = hp;
+        markDirty();
+    }
+
+    public void setMp(int mp) {
+        this.mp = mp;
+        markDirty();
+    }
+
+    public void setMaxHp(int maxHp) {
+        this.maxHp = maxHp;
+        markDirty();
+    }
+
+    public void setMaxMp(int maxMp) {
+        this.maxMp = maxMp;
+        markDirty();
+    }
+
+    public void setMeso(int meso) {
+        this.meso = meso;
+        markDirty();
+    }
+
+    public void setJob(int job) {
+        this.job = job;
+        markDirty();
+    }
+
+    public void setMap(int map) {
+        this.map = map;
+        markDirty();
     }
 
     /**
@@ -255,6 +324,7 @@ public class Character implements CharacterState {
             existing.setQuantity((short) (existing.getQuantity() + add));
             remaining -= add;
             if (remaining == 0) {
+                markDirty();
                 return true;
             }
         }
@@ -265,6 +335,7 @@ public class Character implements CharacterState {
             inv.addItem(item);
             remaining -= put;
         }
+        markDirty();
         return true;
     }
 
@@ -307,9 +378,13 @@ public class Character implements CharacterState {
                     inv.removeItem(item.getPosition());
                 }
                 if (remaining == 0) {
+                    markDirty();
                     return true;
                 }
             }
+        }
+        if (remaining == 0) {
+            markDirty();
         }
         return remaining == 0;
     }
@@ -328,6 +403,7 @@ public class Character implements CharacterState {
         QuestStatus qs = new QuestStatus(questId);
         qs.setState(QuestStatus.State.STARTED);
         quests.put(questId, qs);
+        markDirty();
         return true;
     }
 
@@ -338,6 +414,7 @@ public class Character implements CharacterState {
             return false;
         }
         qs.setState(QuestStatus.State.COMPLETED);
+        markDirty();
         return true;
     }
 
@@ -348,6 +425,7 @@ public class Character implements CharacterState {
             return false;
         }
         qs.setProgress(key, value);
+        markDirty();
         return true;
     }
 

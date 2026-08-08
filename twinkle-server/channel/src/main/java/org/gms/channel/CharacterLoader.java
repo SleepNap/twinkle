@@ -98,6 +98,88 @@ public final class CharacterLoader {
         chr.setLastExpGainTime(db.getLastExpGainTime());
         chr.setPartySearch(db.getPartySearch() != 0);
         chr.setJailExpire(db.getJailexpire());
+        // 加载态即"已落盘"：清除 setter 触发的脏标记（L4 增量 FLUSH 依据）
+        chr.clearDirty();
         return chr;
+    }
+
+    /** domain.Character（内存态权威）→ data.Character（DB 存档，L4 增量 FLUSH 落库用）。 */
+    public org.gms.data.entity.Character toData(Character chr) {
+        org.gms.data.entity.Character db = new org.gms.data.entity.Character();
+        db.setId(chr.getId());
+        db.setAccountid(chr.getAccountId());
+        db.setWorld(chr.getWorld());
+        db.setName(chr.getName());
+        db.setLevel(chr.getLevel());
+        db.setExp(chr.getExp());
+        db.setGachaexp(chr.getGachaExp());
+        db.setStr(chr.getStr());
+        db.setDex(chr.getDex());
+        db.setLuk(chr.getLuk());
+        db.setIntStat(chr.getIntStat());
+        db.setHp((short) chr.getHp());
+        db.setMp((short) chr.getMp());
+        db.setMaxhp((short) chr.getMaxHp());
+        db.setMaxmp((short) chr.getMaxMp());
+        db.setMeso(chr.getMeso());
+        db.setHpMpUsed(chr.getHpMpUsed());
+        db.setJob(chr.getJob());
+        db.setSkincolor(chr.getSkinColor());
+        db.setGender(chr.getGender());
+        db.setFame(chr.getFame());
+        db.setFquest(chr.getFquest());
+        db.setHair(chr.getHair());
+        db.setFace(chr.getFace());
+        db.setAp(chr.getAp());
+        db.setSp(chr.getSp());
+        db.setMap(chr.getMap());
+        db.setSpawnpoint(chr.getSpawnPoint());
+        db.setGm(chr.getGm());
+        db.setParty(chr.getParty());
+        db.setBuddyCapacity(chr.getBuddyCapacity());
+        db.setCreatedate(chr.getCreateDate());
+        db.setRank(chr.getRank());
+        db.setRankMove(chr.getRankMove());
+        db.setJobRank(chr.getJobRank());
+        db.setJobRankMove(chr.getJobRankMove());
+        db.setGuildid(chr.getGuildId());
+        db.setGuildrank(chr.getGuildRank());
+        db.setMessengerid(chr.getMessengerId());
+        db.setMessengerposition(chr.getMessengerPosition());
+        db.setMountlevel(chr.getMountLevel());
+        db.setMountexp(chr.getMountExp());
+        db.setMounttiredness(chr.getMountTiredness());
+        db.setOmokwins(chr.getOmokWins());
+        db.setOmoklosses(chr.getOmokLosses());
+        db.setOmokties(chr.getOmokTies());
+        db.setMatchcardwins(chr.getMatchCardWins());
+        db.setMatchcardlosses(chr.getMatchCardLosses());
+        db.setMatchcardties(chr.getMatchCardTies());
+        db.setMerchantMesos(chr.getMerchantMesos());
+        db.setHasMerchant(chr.isHasMerchant() ? 1 : 0);
+        db.setEquipslots(chr.getEquipSlots());
+        db.setUseslots(chr.getUseSlots());
+        db.setSetupslots(chr.getSetupSlots());
+        db.setEtcslots(chr.getEtcSlots());
+        db.setFamilyId(chr.getFamilyId());
+        db.setMonsterbookcover(chr.getMonsterBookCover());
+        db.setAllianceRank(chr.getAllianceRank());
+        db.setVanquisherStage(chr.getVanquisherStage());
+        db.setAriantPoints(chr.getAriantPoints());
+        db.setDojoPoints(chr.getDojoPoints());
+        db.setLastDojoStage(chr.getLastDojoStage());
+        db.setFinishedDojoTutorial(chr.isFinishedDojoTutorial() ? 1 : 0);
+        db.setVanquisherKills(chr.getVanquisherKills());
+        db.setSummonValue(chr.getSummonValue());
+        db.setPartnerId(chr.getPartnerId());
+        db.setMarriageItemId(chr.getMarriageItemId());
+        db.setReborns(chr.getReborns());
+        db.setPQPoints(chr.getPqPoints());
+        db.setDataString(chr.getDataString());
+        db.setLastLogoutTime(chr.getLastLogoutTime());
+        db.setLastExpGainTime(chr.getLastExpGainTime());
+        db.setPartySearch(chr.isPartySearch() ? 1 : 0);
+        db.setJailexpire(chr.getJailExpire());
+        return db;
     }
 }

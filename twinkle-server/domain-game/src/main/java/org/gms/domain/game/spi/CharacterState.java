@@ -107,4 +107,22 @@ public interface CharacterState extends Versioned {
 
     /** 记录任务进度（仅 STARTED 可写）。 */
     boolean setQuestProgress(int questId, int key, int value);
+
+    // ---- 脏标记（L4 增量 FLUSH，红线 17：只 FLUSH 脏数据） ----
+
+    /**
+     * 标记自上次落盘后已变更（持久化字段 setter / 背包/任务 mutation 内调用）。
+     * 默认空实现避免破坏既有实现；稳定层 Character 覆盖实现。
+     */
+    default void markDirty() {
+    }
+
+    /** 是否自上次落盘后变更（L4 增量 FLUSH 用）。 */
+    default boolean isDirty() {
+        return false;
+    }
+
+    /** 落盘成功后清除脏标记。 */
+    default void clearDirty() {
+    }
 }

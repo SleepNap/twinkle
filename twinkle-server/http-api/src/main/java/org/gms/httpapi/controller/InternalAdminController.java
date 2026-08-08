@@ -2,10 +2,12 @@ package org.gms.httpapi.controller;
 
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
+import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
+import org.gms.data.config.DbConfigFacade;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.httpapi.service.AdminApiService;
@@ -29,14 +31,17 @@ public final class InternalAdminController {
     private final HealthRegistry healthRegistry;
     private final EntityReloadService reloadService;
     private final EntityReloadCoordinator reloadCoordinator;
+    private final DbConfigFacade configFacade;
 
     public InternalAdminController(AdminApiService adminApiService, HealthRegistry healthRegistry,
                                    EntityReloadService reloadService,
-                                   EntityReloadCoordinator reloadCoordinator) {
+                                   EntityReloadCoordinator reloadCoordinator,
+                                   DbConfigFacade configFacade) {
         this.adminApiService = adminApiService;
         this.healthRegistry = healthRegistry;
         this.reloadService = reloadService;
         this.reloadCoordinator = reloadCoordinator;
+        this.configFacade = configFacade;
     }
 
     /** 健康检查（liveness + readiness 聚合）。 */
@@ -72,5 +77,20 @@ public final class InternalAdminController {
                 "safeSwitched", result.safeSwitched(),
                 "interrupted", result.interrupted(),
                 "newVersion", result.newVersion()));
+    }
+
+    /** 写配置（架构 4.6.5 配置中心：DB 真值 + 版本号广播）。body: {key, value}。 */
+    @Post("/config")
+    public HttpResponse<?> setConfig(@Body Map<String, String> body) {
+        String key = body.get("key");
+        String value = body.get("value");
+        if (key == null || key.isBlank() || value == null) {
+            return HttpResponse.badRequest(Map.of("error", "key 与 value 必填"));
+        }
+        configFacade.upsert(key, value); // 写 DB → 版本号 +1 → 广播 ConfigChangeEvent
+        return HttpResponse.ok(Map.of(
+                "key", key,
+                "value", value,
+                "version", configFacade.currentVersion()));
     }
 }
