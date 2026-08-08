@@ -64,6 +64,8 @@ class ArchitectureDependencyTest {
     // 可替换层（org.gms.replaceable..）只能经 org.gms.domain.game.spi【接口包】访问稳定层
     // （架构第三节"经接口访问"，接口不参与 reload、不会 CCE）——spi 是 domain.game 的子包，
     // 精确包模式（不带 ..）不命中子包，故天然放行。
+    // org.gms.plugins..（带 s）= 内置插件实现包，同样属于可替换层，受同一约束。
+    // 注意与 org.gms.plugin..（不带 s，plugin-api SDK / 插件运行时）区分：后者是稳定层，在规则 5 底座名单。
     // 注：ArchUnit 1.5 基础链无 ignoreDependency；新增稳定层具体包须在此列表登记，否则规则按包拦截。
     // allowEmptyShould(true)：M0 无该类 → 空集通过，一旦引入 replaceable 立即生效。
     @Test
@@ -76,6 +78,23 @@ class ArchitectureDependencyTest {
                         "org.gms.domain.game.skill..",
                         "org.gms.data.entity..")
                 .allowEmptyShould(true); // M0 无该类 → 空集通过
+        rule.check(ALL_CLASSES);
+    }
+
+    // ---- 规则 3b：插件 SDK/运行时不得依赖游戏域具体包 ----
+    // plugin-api（org.gms.plugin..，不带 s）是纯净 SPI 面：插件编译期依赖它，若它 import 了
+    // domain-game / data.entity 具体类，等于把稳定层具体类塞进插件可见面（红线 11 的另一个方向）。
+    // allowEmptyShould(true)：当前仅 marker，空集通过。
+    @Test
+    void pluginSdkMustNotDependOnGameConcreteClasses() {
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("org.gms.plugin..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.gms.domain.game",
+                        "org.gms.domain.game.inventory..",
+                        "org.gms.domain.game.skill..",
+                        "org.gms.data.entity..")
+                .allowEmptyShould(true);
         rule.check(ALL_CLASSES);
     }
 
@@ -98,6 +117,8 @@ class ArchitectureDependencyTest {
     // ---- 规则 5：公共底座不得依赖上层业务/游戏域/管理侧模块 ----
     // 底座(core / net-* / data / db-dialect / plugin-api) 是稳定地基，必须保持纯净、不反向依赖任何上层，
     // 这是"依赖单向无环"的更严保证。bootstrap 是装配模块（依赖全部），不在此约束内。
+    // 注：org.gms.plugin..（不带 s）= plugin-api SDK + core 插件运行时，属稳定底座；内置插件实现
+    // org.gms.plugins..（带 s）是可替换层，不在底座名单（由规则 3 约束其不得依赖稳定层具体类）。
     private static final String[] BASE_PACKAGES = {
             "org.gms.core..", "org.gms.net.netty..", "org.gms.net.packet..",
             "org.gms.data..", "org.gms.db.dialect..", "org.gms.plugin.."

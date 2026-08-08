@@ -25,5 +25,10 @@
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-context</artifactId>
         </dependency>
+        <!-- 插件 SDK（plugin-api 纯 SPI，core 插件运行时实现它） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-plugin-api</artifactId>
+        </dependency>
     </dependencies>
 </project>

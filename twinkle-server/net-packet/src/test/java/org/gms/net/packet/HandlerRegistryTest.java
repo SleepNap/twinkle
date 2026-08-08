@@ -65,4 +65,18 @@ class HandlerRegistryTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("须高于");
     }
+
+    @Test
+    void unregisterRemovesSlot() {
+        PacketHandler handler = (session, packet) -> {
+        };
+        registry.register(RecvOpcode.WHISPER, handler);
+
+        assertThat(registry.unregister(RecvOpcode.WHISPER)).isTrue();
+        assertThat(registry.find(RecvOpcode.WHISPER.getValue())).isEmpty();
+        assertThat(registry.registeredCount()).isZero();
+
+        // 重复卸载幂等
+        assertThat(registry.unregister(RecvOpcode.WHISPER)).isFalse();
+    }
 }

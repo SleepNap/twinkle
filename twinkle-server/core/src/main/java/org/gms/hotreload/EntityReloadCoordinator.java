@@ -80,6 +80,26 @@ public final class EntityReloadCoordinator {
     }
 
     /**
+     * 等待所有实体回到安全点（无在途操作）。L4 DRAINING 阶段使用：排空在途操作后再增量 FLUSH。
+     *
+     * <p>轮询实现（2C2G 红线：不引入条件变量 / 显式通知机制）。超时返回 false，调用方决定
+     * 是否显式中断（{@code EntityReloadService#reloadAllInFlight}）。
+     *
+     * @param timeout 最长等待
+     * @return true=超时前全部回到安全点；false=超时仍有在途
+     */
+    public boolean awaitIdle(java.time.Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (inFlightCount() > 0) {
+            if (System.nanoTime() >= deadline) {
+                return false;
+            }
+            Thread.sleep(10);
+        }
+        return true;
+    }
+
+    /**
      * 版本门换代（L3 热重载核心步骤）：版本 +1，旧逻辑迟到写从此被拒。
      *
      * @return 新版本号

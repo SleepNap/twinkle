@@ -68,6 +68,15 @@ public final class HandlerRegistry {
     }
 
     /**
+     * 卸载已注册的 handler（插件 unload / L3 卸载旧逻辑）。
+     *
+     * @return 存在并移除返回 true；无该 opcode 返回 false
+     */
+    public boolean unregister(RecvOpcode opcode) {
+        return slots.remove(opcode.getValue()) != null;
+    }
+
+    /**
      * 已注册的贡献点数。
      */
     public int registeredCount() {

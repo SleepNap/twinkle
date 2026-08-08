@@ -21,19 +21,26 @@ import java.util.Set;
  *       {@link #isStableClass} 提供运行期兜底。</li>
  * </ul>
  *
- * <p>URL 来源：{@code plugins/} 目录下 jar（内置插件按部署作用域分发）或 classes 目录。M0 阶段仅验证
- * 机制（创建 / 加载 / 替换不产生类冲突），M4 接入插件系统。
+ * <p>M4 起 {@link org.gms.plugin.runtime.PluginClassLoader} 继承本类（插件隔离），因此非 final。
+ *
+ * <p>URL 来源：{@code plugins/} 目录下 jar（内置插件按部署作用域分发）或 classes 目录。
  */
-public final class ReloadableClassLoader extends URLClassLoader {
+public class ReloadableClassLoader extends URLClassLoader {
 
     private static final Logger LOG = LogManager.getLogger(ReloadableClassLoader.class);
 
-    /** 稳定层包前缀（与 ArchUnit 架构测试共用，见 core 测试 / data 的 architecture 包）。 */
+    /**
+     * 稳定层包前缀（与 ArchUnit 架构测试共用，见 core 测试 / data 的 architecture 包）。
+     *
+     * <p>M4 新增 {@code org.gms.plugin.}：plugin-api SDK（贡献点类型/PluginContext 等）是可替换层
+     * 经接口访问的稳定面，父优先加载，保证插件换 loader 时 SDK 类身份不变。
+     */
     public static final Set<String> STABLE_PACKAGES = Set.of(
             "org.gms.data.",      // 数据模型 + 仓库
             "org.gms.dialect.",   // 方言（基础设施）
             "org.gms.event.",     // 事件总线（基础设施）
-            "org.gms.config."     // 配置门面（基础设施）
+            "org.gms.config.",    // 配置门面（基础设施）
+            "org.gms.plugin."     // 插件 SDK（可替换层经接口访问的稳定面）
     );
 
     private final String moduleName;
