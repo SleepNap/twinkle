@@ -23,6 +23,7 @@ public final class ChannelHandlerRegistrar {
     private final UseItemHandler useItem;
     private final WhisperHandler whisper;
     private final ChangeChannelHandler changeChannel;
+    private final BuddyHandler buddy;
 
     public ChannelHandlerRegistrar(PlayerLoggedinHandler playerLoggedin,
                                    PlayerMapTransitionHandler mapTransition,
@@ -35,7 +36,7 @@ public final class ChannelHandlerRegistrar {
                                    NpcTalkMoreHandler npcTalkMore,
                                    UseItemHandler useItem) {
         this(playerLoggedin, mapTransition, movePlayer, closeRange, ranged, magic, interaction,
-                npcTalk, npcTalkMore, useItem, null, null);
+                npcTalk, npcTalkMore, useItem, null, null, null);
     }
 
     public ChannelHandlerRegistrar(PlayerLoggedinHandler playerLoggedin,
@@ -49,7 +50,8 @@ public final class ChannelHandlerRegistrar {
                                    NpcTalkMoreHandler npcTalkMore,
                                    UseItemHandler useItem,
                                    WhisperHandler whisper,
-                                   ChangeChannelHandler changeChannel) {
+                                   ChangeChannelHandler changeChannel,
+                                   BuddyHandler buddy) {
         this.playerLoggedin = playerLoggedin;
         this.mapTransition = mapTransition;
         this.movePlayer = movePlayer;
@@ -62,6 +64,7 @@ public final class ChannelHandlerRegistrar {
         this.useItem = useItem;
         this.whisper = whisper;
         this.changeChannel = changeChannel;
+        this.buddy = buddy;
     }
 
     /** 注册全部频道 handler（进图链路 + M3-5 游戏内协议 + M4 三机制玩法）。 */
@@ -81,6 +84,9 @@ public final class ChannelHandlerRegistrar {
         }
         if (changeChannel != null) {
             registry.register(RecvOpcode.CHANGE_CHANNEL, changeChannel);
+        }
+        if (buddy != null) {
+            registry.register(RecvOpcode.BUDDYLIST_MODIFY, buddy);
         }
     }
 }

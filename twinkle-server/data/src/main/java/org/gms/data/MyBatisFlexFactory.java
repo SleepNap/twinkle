@@ -11,6 +11,7 @@ import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.AiUsageMapper;
+import org.gms.data.mapper.BuddyListMapper;
 import org.gms.data.mapper.BusOutboxMapper;
 import org.gms.data.mapper.CharacterMapper;
 import org.gms.data.mapper.InventoryItemMapper;
@@ -19,16 +20,18 @@ import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AiUsageRepository;
-import org.gms.event.OutboxRepository;
+import org.gms.data.repo.BuddyListRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexAiUsageRepository;
+import org.gms.data.repo.FlexBuddyListRepository;
 import org.gms.data.repo.FlexBusOutboxRepository;
 import org.gms.data.repo.FlexCharacterRepository;
 import org.gms.data.repo.FlexInventoryItemRepository;
 import org.gms.data.repo.FlexQuestRepository;
 import org.gms.data.repo.InventoryItemRepository;
 import org.gms.data.repo.QuestRepository;
+import org.gms.event.OutboxRepository;
 
 import javax.sql.DataSource;
 
@@ -64,8 +67,9 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(QuestProgressMapper.class);
         bootstrap.addMapper(AiUsageMapper.class);
         bootstrap.addMapper(BusOutboxMapper.class);
+        bootstrap.addMapper(BuddyListMapper.class);
         bootstrap.start();
-        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox 八个 Mapper 已注册");
+        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox/BuddyList 九个 Mapper 已注册");
         return bootstrap;
     }
 
@@ -119,6 +123,12 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public BuddyListMapper buddyListMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(BuddyListMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -158,5 +168,11 @@ public class MyBatisFlexFactory {
     @Singleton
     public OutboxRepository busOutboxRepository(BusOutboxMapper mapper) {
         return new FlexBusOutboxRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public BuddyListRepository buddyListRepository(BuddyListMapper mapper) {
+        return new FlexBuddyListRepository(mapper);
     }
 }

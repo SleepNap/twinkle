@@ -7,6 +7,7 @@ import jakarta.inject.Singleton;
 import org.gms.channel.admin.ChannelAdminService;
 import org.gms.channel.admin.ChannelEventPublisher;
 import org.gms.channel.AttackHandler;
+import org.gms.channel.BuddyHandler;
 import org.gms.channel.ChangeChannelHandler;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelMapManager;
@@ -160,6 +161,7 @@ public class ChannelConfig {
                                                            EventBus eventBus,
                                                            org.gms.event.ReliableEventBus reliableEventBus,
                                                            IntercoordService intercoordService,
+                                                           org.gms.data.repo.BuddyListRepository buddyListRepository,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
                 new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher),
@@ -173,7 +175,8 @@ public class ChannelConfig {
                 new NpcTalkMoreHandler(),
                 new UseItemHandler(itemSystem, itemData),
                 new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
-                new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry));
+                new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry),
+                new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository));
     }
 
     /** 频道消息订阅（跨频道悄悄话/公告投递，架构 4.4 消息总线）。 */
