@@ -1,6 +1,7 @@
 package org.gms.bootstrap;
 
 import io.micronaut.context.annotation.Bean;
+import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import jakarta.inject.Singleton;
@@ -138,8 +139,16 @@ public class ChannelConfig {
     @Bean
     @Singleton
     public AdminService adminService(PlayerStorage playerStorage, PlayerSessionRegistry playerSessionRegistry,
-                                     @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
-        return new ChannelAdminService(playerStorage, playerSessionRegistry, channelId);
+                                     ScriptManager scriptManager,
+                                     org.gms.channel.persist.RestartService restartService,
+                                     org.gms.hotreload.RestartCoordinator restartCoordinator,
+                                     @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
+                                     @Property(name = "twinkle.admin.restart.exit", defaultValue = "true") boolean exitOnRestart) {
+        // 重启编排完成后是否真正退出进程（L4 兜底）。生产默认 true（编排完 System.exit，由外部启动脚本拉起）；
+        // 测试/开发置 false（只编排不退出，防杀测试 JVM）——进程边界是配置（铁律 1）。
+        Runnable restartProcess = exitOnRestart ? () -> System.exit(0) : () -> { };
+        return new ChannelAdminService(playerStorage, playerSessionRegistry, channelId,
+                scriptManager, restartService, restartCoordinator, restartProcess);
     }
     @Bean
     @Singleton
@@ -198,5 +207,32 @@ public class ChannelConfig {
             IntercoordService intercoordService,
             EventBus eventBus) {
         return new ChannelLocationBinder(channelId, intercoordService, eventBus);
+    }
+
+    /**
+     * 频道启动注册钩子（架构 4.6.4 注册中心：channel 启动向 coordinator 上报）。
+     *
+     * <p>关键：{@code ChannelRegistry.heartbeat} 用 computeIfPresent，频道必须先 register 才能
+     * 心跳续期；此前生产代码无人调 registerChannel，注册表恒空，管理控制台"频道状态"列表拿不到
+     * 任何频道。此 @Context 装配在构造期上报本频道（host 读 twinkle.net.channel.host，端口读
+     * twinkle.net.channel.port），此后 ChannelLocationBinder 心跳即实时续期。
+     */
+    @Bean
+    @Context
+    @Singleton
+    public ChannelRegistryRegistrar channelRegistryRegistrar(
+            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
+            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String channelHost,
+            @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort,
+            IntercoordService intercoordService) {
+        return new ChannelRegistryRegistrar(channelId, channelHost, channelPort, intercoordService);
+    }
+
+    /** 频道启动注册（@Context 强制装配：构造期上报 → 心跳可续期）。 */
+    @Singleton
+    static final class ChannelRegistryRegistrar {
+        ChannelRegistryRegistrar(int channelId, String host, int port, IntercoordService intercoordService) {
+            intercoordService.registerChannel(channelId, host, port, 0);
+        }
     }
 }

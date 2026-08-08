@@ -42,6 +42,13 @@ public interface IntercoordService {
     /** 查询频道信息。 */
     Optional<ChannelInfo> channel(int channelId);
 
+    /**
+     * 全部频道注册表快照（管理控制台"频道状态"列表用，架构 4.6.4 注册中心）。
+     *
+     * @return channelId → 频道信息（未上报/已下线的频道不出现）
+     */
+    Map<Integer, ChannelInfo> channels();
+
     /** 频道信息（M4 进程内：在线会话数；M6 扩展 host:port 网络端点）。 */
     record ChannelInfo(int channelId, String host, int port, int onlineCount) {
     }

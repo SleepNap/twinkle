@@ -66,6 +66,14 @@ public final class CoordinatorService implements IntercoordService {
     }
 
     @Override
+    public Map<Integer, ChannelInfo> channels() {
+        Map<Integer, ChannelInfo> out = new java.util.HashMap<>();
+        channelRegistry.snapshot().forEach((id, info) ->
+                out.put(id, new ChannelInfo(info.channelId(), info.host(), info.port(), info.onlineCount())));
+        return Map.copyOf(out);
+    }
+
+    @Override
     public Optional<StoreEntry> read(String key) {
         return singleOwnerStore.get(key).map(e -> new StoreEntry(e.value(), e.version()));
     }

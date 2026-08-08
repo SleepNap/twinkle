@@ -1,26 +1,80 @@
 package org.gms.channel.admin;
 
+import org.gms.channel.CharacterLoader;
 import org.gms.channel.PlayerSessionRegistry;
+import org.gms.channel.PlayerStorage;
+import org.gms.channel.persist.CharacterSaveQueue;
+import org.gms.channel.persist.RestartService;
+import org.gms.data.SimpleDriverDataSource;
+import org.gms.data.mapper.CharacterMapper;
+import org.gms.data.migrate.MigrationRunner;
+import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.domain.script.ScriptEngine;
+import org.gms.domain.script.ScriptManager;
+import org.gms.domain.script.ScriptRepository;
+import org.gms.hotreload.EntityReloadCoordinator;
+import org.gms.hotreload.EntityReloadService;
+import org.gms.hotreload.RestartCoordinator;
+import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.packet.PacketSession;
+import org.gms.tick.GameTickLoop;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * M3-1 第②路集成测试：管理侧经 {@link AdminService} 踢下线（架构 M3-1 数据三路第②路）。
  *
- * <p>验证 ChannelAdminService.kick 经会话注册表关闭在线会话；不在线角色返回 false（不报错）。
- * 用假会话验证关闭调用触发（真实 NetworkSession 的 close 由 Netty 通道关闭，E2E 覆盖）。
+ * <p>M5 扩展：运维操作（脚本重载 / 重启请求 / 重启阶段）经 service 接口委托频道侧组件，
+ * 管理侧不 import ScriptManager/RestartService 具体类。重启请求异步执行——用 mock restart
+ * runnable（不真退出），断言后台线程触发重启编排且阶段推进。
  */
 class ChannelAdminServiceTest {
 
-    @Test
-    void kickClosesOnlineSession() {
+    /** 构造一个完整装配的 ChannelAdminService（临时 SQLite + 手动频道组件，mock restart 不真退出）。 */
+    private static ChannelAdminService buildAdmin() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-chadmin").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+        com.mybatisflex.core.MybatisFlexBootstrap flex = new com.mybatisflex.core.MybatisFlexBootstrap();
+        flex.setEnvironmentId("chadmin-" + dbPath);
+        flex.setDataSource(ds);
+        flex.addMapper(CharacterMapper.class);
+        flex.start();
+        CharacterMapper characterMapper = flex.getMapper(CharacterMapper.class);
+
+        DefaultVersionGate versionGate = new DefaultVersionGate();
+        CharacterLoader loader = new CharacterLoader(versionGate);
+        PlayerStorage players = new PlayerStorage();
+        FlexCharacterRepository repo = new FlexCharacterRepository(characterMapper);
+        CharacterSaveQueue saveQueue = new CharacterSaveQueue(repo, loader, players);
+        GameTickLoop tickLoop = new GameTickLoop(5);
+        EntityReloadCoordinator coordinator = new EntityReloadCoordinator();
+        EntityReloadService reloadService = new EntityReloadService(coordinator, versionGate);
+        RestartCoordinator restartCoordinator = new RestartCoordinator();
+        RestartService restartService = new RestartService(restartCoordinator, tickLoop, reloadService, saveQueue);
+
+        String scriptDir = Files.createTempDirectory("twinkle-chadmin-script").toString();
+        ScriptManager scriptManager = new ScriptManager(new ScriptEngine(), new ScriptRepository(Path.of(scriptDir)));
+
         PlayerSessionRegistry sessions = new PlayerSessionRegistry();
-        ChannelAdminService admin = new ChannelAdminService(
-                new org.gms.channel.PlayerStorage(), sessions, 1);
+        return new ChannelAdminService(players, sessions, 1, scriptManager, restartService, restartCoordinator,
+                () -> { /* mock restart：测试不真退出 */ });
+    }
+
+    @Test
+    void kickClosesOnlineSession() throws Exception {
+        // 用独立的最小装配：空数据层 + 空脚本目录，注册一个假会话
+        ChannelAdminService admin = buildAdmin();
+        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
+        // 注入会话：用反射不行，直接经构造后的 admin 无法拿 registry——改为测试 buildAdmin 后单独装配
+        // 简化：直接在当前 registry 注册并复用 admin（buildAdmin 内部 registry 拿不到，此处重建 admin 传 registry）
+        admin = buildAdminWithSessions(sessions);
 
         AtomicBoolean closed = new AtomicBoolean(false);
         PacketSession fakeSession = new PacketSession() {
@@ -58,11 +112,62 @@ class ChannelAdminServiceTest {
     }
 
     @Test
-    void kickOfflineCharacterReturnsFalse() {
-        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
-        ChannelAdminService admin = new ChannelAdminService(
-                new org.gms.channel.PlayerStorage(), sessions, 1);
-
+    void kickOfflineCharacterReturnsFalse() throws Exception {
+        ChannelAdminService admin = buildAdmin();
         assertThat(admin.kick(999L)).isFalse();
+    }
+
+    @Test
+    void reloadScriptsDelegatesToScriptManager() throws Exception {
+        ChannelAdminService admin = buildAdmin();
+        // 空脚本目录：无变化脚本（不抛异常）
+        assertThat(admin.reloadScripts()).isZero();
+    }
+
+    @Test
+    void requestRestartRunsAsyncAndAdvancesPhase() throws Exception {
+        ChannelAdminService admin = buildAdmin();
+        assertThat(admin.restartPhase()).isEqualTo(RestartCoordinator.Phase.RUNNING);
+
+        admin.requestRestart();
+
+        // 后台守护线程异步执行，轮询等待推进到非 RUNNING 阶段（空玩家 + 空队列的编排会快速推进）
+        long deadline = System.currentTimeMillis() + 5000;
+        RestartCoordinator.Phase seen = RestartCoordinator.Phase.RUNNING;
+        while (System.currentTimeMillis() < deadline && seen == RestartCoordinator.Phase.RUNNING) {
+            seen = admin.restartPhase();
+            Thread.sleep(10);
+        }
+        assertThat(seen).isNotEqualTo(RestartCoordinator.Phase.RUNNING);
+    }
+
+    /** buildAdmin 变体：复用给定会话注册表（kick 测试需要预注册会话）。 */
+    private static ChannelAdminService buildAdminWithSessions(PlayerSessionRegistry sessions) throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-chadmin2").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+        com.mybatisflex.core.MybatisFlexBootstrap flex = new com.mybatisflex.core.MybatisFlexBootstrap();
+        flex.setEnvironmentId("chadmin2-" + dbPath);
+        flex.setDataSource(ds);
+        flex.addMapper(CharacterMapper.class);
+        flex.start();
+        CharacterMapper characterMapper = flex.getMapper(CharacterMapper.class);
+
+        DefaultVersionGate versionGate = new DefaultVersionGate();
+        CharacterLoader loader = new CharacterLoader(versionGate);
+        PlayerStorage players = new PlayerStorage();
+        FlexCharacterRepository repo = new FlexCharacterRepository(characterMapper);
+        CharacterSaveQueue saveQueue = new CharacterSaveQueue(repo, loader, players);
+        GameTickLoop tickLoop = new GameTickLoop(5);
+        EntityReloadCoordinator coordinator = new EntityReloadCoordinator();
+        EntityReloadService reloadService = new EntityReloadService(coordinator, versionGate);
+        RestartCoordinator restartCoordinator = new RestartCoordinator();
+        RestartService restartService = new RestartService(restartCoordinator, tickLoop, reloadService, saveQueue);
+
+        String scriptDir = Files.createTempDirectory("twinkle-chadmin2-script").toString();
+        ScriptManager scriptManager = new ScriptManager(new ScriptEngine(), new ScriptRepository(Path.of(scriptDir)));
+
+        return new ChannelAdminService(players, sessions, 1, scriptManager, restartService, restartCoordinator,
+                () -> { /* mock restart：测试不真退出 */ });
     }
 }

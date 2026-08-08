@@ -40,3 +40,12 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - 公会/排行完整玩法不在 M4（M5 配套 Web 控制台）。
 - 可靠总线序列化：PayloadCodec.MARKER（单进程投递真实对象）；跨进程 JSON + 接收侧去重落 bus_stream 表是 M6。
 - 技术债：`TradeE2ETest` 偶发失败（`Thread.sleep(100)` 计时脆弱，非功能回归，未修复）。
+
+**M5 完成（后端面，2026-08-09）**：Web 控制台**后端运维 API** + 单库迁移 + 上线切换三块落地（前端页面**未做**——用户决策"前端形态尚未设计"）。
+- **M5-1 admin 后端运维 API**：`AdminConsoleController`（http-api 模块，路由 `/admin/v1`）——health/channels/online/reload-in-flight/config GET+POST/config{key}/kick/reload/logic/reload/scripts/restart/restart-phase 十二端点。数据三路沿用 M3：频道状态②经 `IntercoordService.channels()`（新增），在线玩家③只读镜像，配置①`DbConfigFacade`。运维操作全经 service 接口/core 契约：`AdminService` 扩展 `reloadScripts()/requestRestart()/restartPhase()`（channel 侧 `ChannelAdminService` 委托 ScriptManager/RestartService），管理侧不 import ScriptManager/RestartService 具体类。
+- **关键补齐**：`ChannelRegistryRegistrar`（bootstrap @Context 装配）——此前生产无人调 `registerChannel`，注册表恒空，`/admin/v1/channels` 空列表。构造期上报频道（host 读 `twinkle.net.channel.host` 默认 127.0.0.1，port 读 `twinkle.net.channel.port`）。**这是频道状态列表可用的前提。**
+- **重启测试安全**：`twinkle.admin.restart.exit=false` 供测试（只编排不真退出）；生产默认 true（编排完 System.exit，外部启动脚本拉起）。进程边界是配置（铁律 1）。
+- **M5-2 单库迁移**：`V7__queststatus_newmaple_columns.sql` 补 queststatus 四列（expires/forfeited/completed/info，newmaple 有 twinkle V3 无；每列一条独立 ALTER，红线 2）。`QuestStatusEntity` 加四字段（domain 层不改）。`NewMapleImporter`（data `org.gms.data.tools`，复制引擎，显式列清单+显式主键保 ID 外键）+ `NewMapleImportMain`（bootstrap CLI，`--reset-passwords` 默认把非 BCrypt 老哈希重置为 changeMe123!）。**坑**：COALESCE 表达式列名在 SQLite 不保留原名，`rs.getObject` 必须按索引取。跳过 buddies（与 twinkle buddylist 结构不兼容）。
+- **M5-3 上线切换**：`micronaut.server.host` 默认 127.0.0.1（红线 20 网络平面收敛）；`LoggingDisciplineTest`（静态扫描 src/main/java 禁 printStackTrace/System.out/System.err，CLI 工具包白名单）；`scripts/start.sh`/`migrate-newmaple.sh`/`rollback.sh` + `docs/ops/switch-to-production.md`（profile 清单/迁移/切换/回滚/CC 兜底/已知差异）。
+- **测试**：全量 `mvn -B verify` 17 模块 SUCCESS，bootstrap 33 测试全绿。新增 AdminConsoleE2ETest/MigrationImportE2ETest/LoggingDisciplineTest/NewMapleImporterTest/V7QueststatusColumnsMigrationTest + ChannelAdminServiceTest 扩展。
+- **完成范围诚实标注**：①前端页面未做（留后续，API 不搬家）②`/admin/v1` 无鉴权仅靠 loopback 兜底（强鉴权留后续安全里程碑）③老库密码不保真（reset 为默认口令）④好友列表不迁移（buddies 跳过）⑤queststatus 四列领域层不使用默认 0。

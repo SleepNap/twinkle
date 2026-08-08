@@ -37,7 +37,8 @@ class SqlInjectionScanTest {
             "org/gms/data/", "org/gms/db/dialect/"
     };
 
-    private static final Path REPO_ROOT = findRepoRoot();
+    /** 仓库根（含 twinkle-server/pom.xml），包内共享（LoggingDisciplineTest 复用）。 */
+    static final Path REPO_ROOT = findRepoRoot();
 
     @Test
     void noRawSqlSubstitutionOutsideWhitelist() throws IOException {

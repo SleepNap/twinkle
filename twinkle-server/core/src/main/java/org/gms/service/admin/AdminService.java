@@ -1,5 +1,7 @@
 package org.gms.service.admin;
 
+import org.gms.hotreload.RestartCoordinator;
+
 import java.util.List;
 
 /**
@@ -37,4 +39,23 @@ public interface AdminService {
      * @return 该角色是否在线并已踢出；不在线返回 false（不报错）
      */
     boolean kick(long characterId);
+
+    // ---- M5 admin 控制台运维操作（架构 M5-1：运维操作经 service 接口，管理侧不得直踩游戏内存） ----
+
+    /**
+     * 重载脚本（L2 热重载：ScriptManager.reload 重扫目录）。
+     *
+     * @return 发生变化的脚本数
+     */
+    int reloadScripts();
+
+    /**
+     * 请求一次主动重启（L4：DRAINING → 增量 FLUSH → 退出，红线 17）。
+     *
+     * <p>实现方须异步执行（不阻塞管理 API 线程）；HTTP 侧只读 {@link #restartPhase()} 跟踪进度。
+     */
+    void requestRestart();
+
+    /** 当前重启编排阶段（监控面板展示用）。 */
+    RestartCoordinator.Phase restartPhase();
 }

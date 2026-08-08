@@ -49,6 +49,9 @@ log4j2:
 
 # ============== Micronaut HTTP（管理进程用，默认启用） ==============
 # 单进程档下管理进程内嵌，HTTP 端口 8080 默认；可由 -Dmicronaut.server.port=8080 改
+# 网络平面收敛（红线 20）：管理 HTTP 默认绑定 loopback，禁止默认 0.0.0.0——admin/运维 API
+# 只在 loopback/内网可达；对外暴露仅客户端端口（Netty）与受控 /api/v1（按部署需显式配 host）。
 micronaut:
   server:
+    host: ${TWINKLE_HTTP_HOST:127.0.0.1}
     port: ${TWINKLE_HTTP_PORT:8080}
