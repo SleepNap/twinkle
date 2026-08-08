@@ -25,6 +25,12 @@ public final class Sli {
     /** 登录失败次数（increment）。 */
     public static final String LOGIN_FAIL = "twinkle.login.fail";
 
+    // ---- 插件（M4 起） ----
+    /** 插件成功加载计数（increment，标签 plugin）。 */
+    public static final String PLUGIN_LOADED = "twinkle.plugin.loaded";
+    /** 插件加载失败计数（increment，标签 plugin）。 */
+    public static final String PLUGIN_FAILED = "twinkle.plugin.failed";
+
     private Sli() {
     }
 }

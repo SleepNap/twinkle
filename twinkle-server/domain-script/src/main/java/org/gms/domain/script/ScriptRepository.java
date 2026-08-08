@@ -36,6 +36,9 @@ public final class ScriptRepository {
     /** 当前快照（key = 相对路径无扩展名，如 {@code nps/100}）。 */
     private volatile Map<String, ScriptSource> snapshot;
 
+    /** 插件挂载的命名空间脚本（namespace → 脚本源），reload 时并入快照保留。 */
+    private volatile Map<String, Map<String, ScriptSource>> mounted = Map.of();
+
     /**
      * @param root 脚本目录（架构 6.4：未指定或读不到启动期报错）
      * @throws IllegalArgumentException 目录不存在或不是目录
@@ -85,7 +88,7 @@ public final class ScriptRepository {
     }
 
     /**
-     * 重载：重新扫描目录，更新已变化的条目。
+     * 重载：重新扫描目录，更新已变化的条目（挂载的命名空间脚本保留）。
      *
      * @return 重载条目数（新增 + 修改 + 删除）
      */
@@ -93,11 +96,59 @@ public final class ScriptRepository {
         Map<String, ScriptSource> fresh = scan();
         Map<String, ScriptSource> old = this.snapshot;
         int changed = countDiff(old, fresh);
-        this.snapshot = fresh;
+        this.snapshot = mergedSnapshot(fresh);
         if (changed > 0) {
-            LOG.info("脚本重载: {} 条目变化（新增/修改/删除），总计 {} 条", changed, fresh.size());
+            LOG.info("脚本重载: {} 条目变化（新增/修改/删除），总计 {} 条", changed, this.snapshot.size());
         }
         return changed;
+    }
+
+    /**
+     * 挂载插件脚本命名空间（架构 7.1 Script 命名空间贡献点）。
+     *
+     * <p>插件 jar {@code scripts/} 下的脚本经 {@link ScriptSource} 读出后在此挂载，key 前缀为
+     * 命名空间（如 {@code acme/foo}）。与目录扫描结果合并进同一不可变快照（volatile 整体替换）。
+     *
+     * @param namespace 命名空间（如 {@code acme}）
+     * @param sources   该命名空间下的脚本源（key 为命名空间内相对路径）
+     */
+    public void mount(String namespace, Map<String, ScriptSource> sources) {
+        Objects.requireNonNull(namespace, "namespace");
+        Map<String, Map<String, ScriptSource>> newMounted = new LinkedHashMap<>(this.mounted);
+        newMounted.put(namespace, Map.copyOf(sources));
+        this.mounted = Map.copyOf(newMounted);
+        this.snapshot = mergedSnapshot(baseSnapshot());
+        LOG.info("脚本命名空间挂载: {}（{} 条）", namespace, sources.size());
+    }
+
+    /**
+     * 卸载插件脚本命名空间（插件 unload 时调用，幂等）。
+     */
+    public void unmount(String namespace) {
+        Map<String, Map<String, ScriptSource>> newMounted = new LinkedHashMap<>(this.mounted);
+        if (newMounted.remove(namespace) == null) {
+            return; // 未挂载，幂等
+        }
+        this.mounted = Map.copyOf(newMounted);
+        this.snapshot = mergedSnapshot(baseSnapshot());
+        LOG.info("脚本命名空间卸载: {}", namespace);
+    }
+
+    /** 目录扫描快照（不含挂载）。 */
+    private Map<String, ScriptSource> baseSnapshot() {
+        return scan();
+    }
+
+    /** 目录快照 + 全部挂载命名空间脚本合并为最终快照。 */
+    private Map<String, ScriptSource> mergedSnapshot(Map<String, ScriptSource> base) {
+        Map<String, ScriptSource> merged = new LinkedHashMap<>(base);
+        for (var nsEntry : mounted.entrySet()) {
+            String ns = nsEntry.getKey();
+            for (var srcEntry : nsEntry.getValue().entrySet()) {
+                merged.put(ns + "/" + srcEntry.getKey(), srcEntry.getValue());
+            }
+        }
+        return Map.copyOf(merged);
     }
 
     private int countDiff(Map<String, ScriptSource> old, Map<String, ScriptSource> fresh) {

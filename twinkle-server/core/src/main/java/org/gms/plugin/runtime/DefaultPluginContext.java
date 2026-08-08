@@ -112,18 +112,4 @@ final class DefaultPluginContext implements PluginContext {
         }
         tracked.clear();
     }
-
-    /**
-     * 贡献点注册路由（宿主侧实现按贡献点类型落进各注册表）。
-     *
-     * <p>接口在 core（插件运行时可见），实现放 bootstrap 装配层（宿主看见各注册表）。
-     */
-    @FunctionalInterface
-    interface ContributionRouter {
-        <T> ContributionHandle register(String contributionType, T contribution, int version);
-
-        default <T> ContributionHandle subscribe(String target, Class<T> eventType, Consumer<T> consumer) {
-            throw new UnsupportedOperationException("命令式事件订阅未接线（由装配层宿主提供）");
-        }
-    }
 }

@@ -108,6 +108,23 @@ public final class ScriptManager {
         return changed;
     }
 
+    /**
+     * 挂载插件脚本命名空间（架构 7.1 Script 命名空间贡献点，转发 {@link ScriptRepository#mount}）。
+     *
+     * @param namespace 命名空间（如 {@code acme}）
+     * @param sources   该命名空间下的脚本源
+     */
+    public void mount(String namespace, Map<String, ScriptSource> sources) {
+        repository.mount(namespace, sources);
+    }
+
+    /**
+     * 卸载插件脚本命名空间（插件 unload，幂等，转发 {@link ScriptRepository#unmount}）。
+     */
+    public void unmount(String namespace) {
+        repository.unmount(namespace);
+    }
+
     /** 脚本根目录（用于诊断/启动校验）。 */
     public java.nio.file.Path root() {
         return repository.root();

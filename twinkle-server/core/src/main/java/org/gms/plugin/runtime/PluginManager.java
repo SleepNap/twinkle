@@ -43,13 +43,13 @@ public final class PluginManager implements Closeable {
     /** 宿主服务解析（插件 getService 用；由装配层提供）。 */
     private final Function<Class<?>, Object> serviceResolver;
     /** 命令式贡献点路由（装配层提供）。 */
-    private final DefaultPluginContext.ContributionRouter contributionRouter;
+    private final ContributionRouter contributionRouter;
 
     private final ConcurrentMap<String, LoadedPlugin> loaded = new ConcurrentHashMap<>();
 
     public PluginManager(Path pluginsDir, PluginHost host, ClassLoader hostClassLoader,
                          Function<Class<?>, Object> serviceResolver,
-                         DefaultPluginContext.ContributionRouter contributionRouter) {
+                         ContributionRouter contributionRouter) {
         this.pluginsDir = pluginsDir;
         this.host = host;
         this.hostClassLoader = hostClassLoader;

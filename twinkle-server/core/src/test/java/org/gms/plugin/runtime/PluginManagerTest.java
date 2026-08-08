@@ -36,7 +36,7 @@ class PluginManagerTest {
         }
     }
 
-    static final class NoopRouter implements DefaultPluginContext.ContributionRouter {
+    static final class NoopRouter implements ContributionRouter {
         @Override
         public <T> ContributionHandle register(String contributionType, T contribution, int version) {
             throw new UnsupportedOperationException("测试不接命令式注册");
