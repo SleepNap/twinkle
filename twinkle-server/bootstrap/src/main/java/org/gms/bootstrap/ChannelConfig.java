@@ -7,8 +7,11 @@ import jakarta.inject.Singleton;
 import org.gms.channel.admin.ChannelAdminService;
 import org.gms.channel.admin.ChannelEventPublisher;
 import org.gms.channel.AttackHandler;
+import org.gms.channel.ChangeChannelHandler;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelMapManager;
+import org.gms.channel.ChannelMessageSubscriber;
+import org.gms.channel.ChannelLocationBinder;
 import org.gms.channel.ChannelServer;
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.MonsterSpawnService;
@@ -21,6 +24,7 @@ import org.gms.channel.PlayerMapTransitionHandler;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.UseItemHandler;
+import org.gms.channel.WhisperHandler;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.mob.MobData;
@@ -38,6 +42,7 @@ import org.gms.replaceable.MovementSystem;
 import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.TradeSystem;
 import org.gms.service.admin.AdminService;
+import org.gms.service.intercoord.IntercoordService;
 import org.gms.wz.MapLoader;
 
 import java.nio.file.Path;
@@ -152,6 +157,8 @@ public class ChannelConfig {
                                                            ChannelEventPublisher eventPublisher,
                                                            EntityReloadCoordinator entityReloadCoordinator,
                                                            Map<Integer, ItemData> itemData,
+                                                           EventBus eventBus,
+                                                           IntercoordService intercoordService,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
                 new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher),
@@ -163,6 +170,29 @@ public class ChannelConfig {
                 new PlayerInteractionHandler(tradeSystem, playerSessionRegistry, entityReloadCoordinator),
                 new NpcTalkHandler(scriptManager, itemSystem, questSystem),
                 new NpcTalkMoreHandler(),
-                new UseItemHandler(itemSystem, itemData));
+                new UseItemHandler(itemSystem, itemData),
+                new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
+                new ChangeChannelHandler(channelId, intercoordService, eventBus, playerSessionRegistry));
+    }
+
+    /** 频道消息订阅（跨频道悄悄话/公告投递，架构 4.4 消息总线）。 */
+    @Bean
+    @Singleton
+    public ChannelMessageSubscriber channelMessageSubscriber(
+            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
+            IntercoordService intercoordService,
+            PlayerSessionRegistry playerSessionRegistry,
+            EventBus eventBus) {
+        return new ChannelMessageSubscriber(channelId, intercoordService, playerSessionRegistry, eventBus);
+    }
+
+    /** 玩家定位绑定（进图/下线经事件更新定位表，架构 4.4）。 */
+    @Bean
+    @Singleton
+    public ChannelLocationBinder channelLocationBinder(
+            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
+            IntercoordService intercoordService,
+            EventBus eventBus) {
+        return new ChannelLocationBinder(channelId, intercoordService, eventBus);
     }
 }

@@ -33,7 +33,10 @@ public final class ScriptRepository {
     /** 脚本根目录（对应配置 {@code twinkle.script.path}）。 */
     private final Path root;
 
-    /** 当前快照（key = 相对路径无扩展名，如 {@code nps/100}）。 */
+    /** 纯目录快照（key = 相对路径无扩展名），L2 reload diff 的基线。 */
+    private volatile Map<String, ScriptSource> dirSnapshot;
+
+    /** 合并快照（目录 + 插件挂载命名空间），loadAll 返回它。 */
     private volatile Map<String, ScriptSource> snapshot;
 
     /** 插件挂载的命名空间脚本（namespace → 脚本源），reload 时并入快照保留。 */
@@ -49,7 +52,8 @@ public final class ScriptRepository {
             throw new IllegalArgumentException("脚本目录不存在或不是目录: " + root
                     + "（架构 6.4：twinkle.script.path 未指定或路径无效）");
         }
-        this.snapshot = scan();
+        this.dirSnapshot = scan();
+        this.snapshot = mergedSnapshot(dirSnapshot);
         LOG.info("脚本仓库初始化: {} 条目（根={}）", snapshot.size(), root);
     }
 
@@ -94,8 +98,9 @@ public final class ScriptRepository {
      */
     public int reload() {
         Map<String, ScriptSource> fresh = scan();
-        Map<String, ScriptSource> old = this.snapshot;
-        int changed = countDiff(old, fresh);
+        Map<String, ScriptSource> oldDir = this.dirSnapshot;
+        int changed = countDiff(oldDir, fresh);
+        this.dirSnapshot = fresh;
         this.snapshot = mergedSnapshot(fresh);
         if (changed > 0) {
             LOG.info("脚本重载: {} 条目变化（新增/修改/删除），总计 {} 条", changed, this.snapshot.size());
@@ -117,7 +122,7 @@ public final class ScriptRepository {
         Map<String, Map<String, ScriptSource>> newMounted = new LinkedHashMap<>(this.mounted);
         newMounted.put(namespace, Map.copyOf(sources));
         this.mounted = Map.copyOf(newMounted);
-        this.snapshot = mergedSnapshot(baseSnapshot());
+        this.snapshot = mergedSnapshot(this.dirSnapshot);
         LOG.info("脚本命名空间挂载: {}（{} 条）", namespace, sources.size());
     }
 
@@ -130,13 +135,8 @@ public final class ScriptRepository {
             return; // 未挂载，幂等
         }
         this.mounted = Map.copyOf(newMounted);
-        this.snapshot = mergedSnapshot(baseSnapshot());
+        this.snapshot = mergedSnapshot(this.dirSnapshot);
         LOG.info("脚本命名空间卸载: {}", namespace);
-    }
-
-    /** 目录扫描快照（不含挂载）。 */
-    private Map<String, ScriptSource> baseSnapshot() {
-        return scan();
     }
 
     /** 目录快照 + 全部挂载命名空间脚本合并为最终快照。 */

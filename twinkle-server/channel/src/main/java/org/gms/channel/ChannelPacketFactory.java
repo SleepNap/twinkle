@@ -45,6 +45,18 @@ public final class ChannelPacketFactory {
     }
 
     /**
+     * 服务器公告（SendOpcode.SERVERMESSAGE 0x44）：3 类型 + 短字符串内容。
+     * 广播用（喇叭/活动公告，架构 4.4 消息总线）。思路参考 BeiDou 的 PacketCreator.serverNotice。
+     */
+    public static OutPacket serverNotice(String message) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.SERVERMESSAGE.getValue());
+        p.writeByte(4); // 公告类型（4 = 顶部滚动）
+        p.writeString(message);
+        return p;
+    }
+
+    /**
      * 登录进图核心包（SendOpcode.SET_FIELD + addCharacterInfo）。
      * 空背包/技能/任务等段按 v83 空列表写法占位。
      */
