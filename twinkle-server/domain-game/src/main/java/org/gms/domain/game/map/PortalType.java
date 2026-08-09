@@ -32,7 +32,7 @@ public enum PortalType {
 
     private final byte type;
 
-    PortalType(byte type) {
+    private PortalType(byte type) {
         this.type = type;
     }
 

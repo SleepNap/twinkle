@@ -34,6 +34,17 @@ public class FlexCharacterRepository implements CharacterRepository {
     }
 
     @Override
+    public boolean existsByName(String name) {
+        return mapper.selectCountByQuery(
+                QueryWrapper.create().where(Character::getName).eq(name)) > 0;
+    }
+
+    @Override
+    public void insert(Character chr) {
+        mapper.insertSelective(chr);
+    }
+
+    @Override
     public void save(Character chr) {
         mapper.update(chr);
     }

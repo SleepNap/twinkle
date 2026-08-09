@@ -1,8 +1,7 @@
 package org.gms.data.config;
 
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.config.ConfigChangeEvent;
 import org.gms.config.ConfigFacade;
 import org.gms.data.entity.ParamConf;
@@ -31,9 +30,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * 不影响 facade 本身的逻辑。架构 1.3：内存态是权威，DB 只是持久化 + 查询层。
  */
 @Singleton
+@Log4j2
 public final class DbConfigFacade implements ConfigFacade {
 
-    private static final Logger LOG = LogManager.getLogger(DbConfigFacade.class);
+
 
     /** 广播到全订阅者的逻辑目标。配置中心是基础设施，不是单频道消息。 */
     private static final String BROADCAST_TARGET = "config-center";
@@ -60,7 +60,7 @@ public final class DbConfigFacade implements ConfigFacade {
             if (event.isInitial()) {
                 return;
             }
-            LOG.info("配置变更广播收到，version={}，重读 param_conf", event.version());
+            log.info("配置变更广播收到，version={}，重读 param_conf", event.version());
             loadAll();
         });
     }
@@ -73,7 +73,7 @@ public final class DbConfigFacade implements ConfigFacade {
         }
         cache.clear();
         cache.putAll(fresh);
-        LOG.info("param_conf 加载完成，共 {} 项", cache.size());
+        log.info("param_conf 加载完成，共 {} 项", cache.size());
     }
 
     @Override
@@ -109,7 +109,7 @@ public final class DbConfigFacade implements ConfigFacade {
             }
             return (Optional<T>) Optional.of(raw);
         } catch (NumberFormatException e) {
-            LOG.warn("配置键 {} 类型转换失败:{} → {}", key, raw, type.getSimpleName());
+            log.warn("配置键 {} 类型转换失败:{} → {}", key, raw, type.getSimpleName());
             return Optional.empty();
         }
     }

@@ -6,6 +6,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.gms.net.encryption.CipherPair;
 import org.gms.net.packet.HandlerRegistry;
+import org.gms.net.packet.PacketSession;
 
 import java.util.concurrent.TimeUnit;
 
@@ -39,7 +40,7 @@ public final class V83ServerInitializer extends ChannelInitializer<SocketChannel
 
     @Override
     protected void initChannel(SocketChannel ch) {
-        CipherPair ciphers = new CipherPair(NetworkSession.MAPLE_VERSION);
+        CipherPair ciphers = new CipherPair(PacketSession.MAPLE_VERSION);
         ChannelPipeline p = ch.pipeline();
         // 仅 readerIdle 驱动探测（不再用 allIdle——allIdle 会被服务端持续发包重置，永不触发）
         p.addLast("idle", new IdleStateHandler(heartbeatConfig.readerIdleMillis(), 0, 0, TimeUnit.MILLISECONDS));

@@ -279,7 +279,7 @@ class SessionIdentityE2ETest {
             byte[] recvIv = Arrays.copyOfRange(hello, 7, 11);
             byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
             send = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-            recv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+            recv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
         }
 
         void login() throws IOException {

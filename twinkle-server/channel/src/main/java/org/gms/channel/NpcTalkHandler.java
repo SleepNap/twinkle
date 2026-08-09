@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.script.ConversationScript;
 import org.gms.domain.script.ScriptManager;
@@ -24,9 +23,10 @@ import java.util.Map;
  * <p>对话会话（{@link ConversationScript}）与宿主（{@link NpcConversationHost}）
  * 存 session attr（连接级状态）；多轮由 {@link NpcTalkMoreHandler} 恢复。
  */
+@Log4j2
 public final class NpcTalkHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(NpcTalkHandler.class);
+
 
     private final ScriptManager scriptManager;
     private final ItemSystem itemSystem;
@@ -57,7 +57,7 @@ public final class NpcTalkHandler implements PacketHandler {
                 itemSystem, questSystem, () -> closeConversation(session));
         ConversationScript script = scriptManager.openConversation("nps/" + npcId, Map.of("cm", host));
         if (script == null) {
-            LOG.warn("NPC 对话脚本不存在: nps/{}", npcId);
+            log.warn("NPC 对话脚本不存在: nps/{}", npcId);
             return;
         }
         session.setAttr("npcConversation", script);
@@ -66,7 +66,7 @@ public final class NpcTalkHandler implements PacketHandler {
         try {
             script.invoke("start");
         } catch (RuntimeException e) {
-            LOG.error("NPC 对话 start() 失败: npcId={}", npcId, e);
+            log.error("NPC 对话 start() 失败: npcId={}", npcId, e);
             closeConversation(session);
             return;
         }

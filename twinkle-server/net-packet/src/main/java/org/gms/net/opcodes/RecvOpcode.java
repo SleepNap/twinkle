@@ -201,7 +201,7 @@ public enum RecvOpcode implements Opcode {
 
     private final int code;
 
-    RecvOpcode(int code) {
+    private RecvOpcode(int code) {
         this.code = code;
     }
 

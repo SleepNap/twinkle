@@ -108,7 +108,7 @@ class LoginPacketFactoryTest {
         c.setMap(100000000);
         c.setSpawnPoint(0);
 
-        OutPacket p = LoginPacketFactory.charList(List.of(c), 0, 0);
+        OutPacket p = LoginPacketFactory.charList(List.of(c), 0, 0, null);
         ByteArrayInPacket in = new ByteArrayInPacket(p.getBytes());
 
         assertThat(in.readUnsignedShort()).isEqualTo(SendOpcode.CHARLIST.getValue()); // 0x0B
@@ -190,7 +190,7 @@ class LoginPacketFactoryTest {
         Character c = new Character();
         c.setId(1L);
         c.setName("冒险家");
-        OutPacket p = LoginPacketFactory.charList(List.of(c), 0, 0);
+        OutPacket p = LoginPacketFactory.charList(List.of(c), 0, 0, null);
         ByteArrayInPacket in = new ByteArrayInPacket(p.getBytes());
         in.readUnsignedShort(); // opcode
         in.readByte();          // status

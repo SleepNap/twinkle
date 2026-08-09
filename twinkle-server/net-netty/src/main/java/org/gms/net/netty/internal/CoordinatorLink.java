@@ -1,12 +1,11 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * coordinator 连接封装（架构 4.5：频道/管理进程 → coordinator 的 TCP 长连接生命周期）。
@@ -19,9 +18,10 @@ import java.util.function.Consumer;
  *       （架构 4.2）。</li>
  * </ul>
  */
+@Log4j2
 public final class CoordinatorLink implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(CoordinatorLink.class);
+
 
     private final InternalClient client;
     private final List<Consumer<InternalConnection>> connectListeners = new CopyOnWriteArrayList<>();

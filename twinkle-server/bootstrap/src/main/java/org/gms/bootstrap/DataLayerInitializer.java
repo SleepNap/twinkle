@@ -4,8 +4,7 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.config.ConfigFacade;
 import org.gms.dialect.DbDialectRegistry;
 
@@ -30,9 +29,10 @@ import javax.sql.DataSource;
  * 不能等 HTTP 事件才初始化。
  */
 @Context
+@Log4j2
 public final class DataLayerInitializer implements ApplicationEventListener<ServerStartupEvent> {
 
-    private static final Logger LOG = LogManager.getLogger(DataLayerInitializer.class);
+
 
     private final DataSource dataSource;
     private final ConfigFacade configFacade;
@@ -48,7 +48,7 @@ public final class DataLayerInitializer implements ApplicationEventListener<Serv
     @Override
     public void onApplicationEvent(ServerStartupEvent event) {
         // 构造函数参数注入即强制装配（Bean 实例化时依赖图解析）。
-        LOG.info("数据层装配完成：方言={}, 配置项版本={}",
+        log.info("数据层装配完成：方言={}, 配置项版本={}",
                 dialectRegistry.resolveByUrl("").id() == null ? "?" : currentDialectName(),
                 configFacade.currentVersion());
     }

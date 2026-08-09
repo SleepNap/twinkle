@@ -1,7 +1,6 @@
 package org.gms.channel.persist;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.PlayerStorage;
 import org.gms.data.repo.CharacterRepository;
@@ -27,9 +26,10 @@ import java.util.concurrent.TimeUnit;
  *   <li>{@link #drain}：DRAINING 阶段排空队列 + 在途写完成（主动重开不丢档的前提，架构 5.4 路径 B）。</li>
  * </ul>
  */
+@Log4j2
 public final class CharacterSaveQueue implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(CharacterSaveQueue.class);
+
 
     private final CharacterRepository repository;
     private final CharacterLoader loader;
@@ -65,7 +65,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
                 repository.save(loader.toData(chr));
                 chr.clearDirty();
             } catch (RuntimeException e) {
-                LOG.error("角色存档失败: id={}", chr.getId(), e);
+                log.error("角色存档失败: id={}", chr.getId(), e);
             } finally {
                 pending.remove(chr.getId());
             }
@@ -87,7 +87,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
             repository.save(loader.toData(chr));
             chr.clearDirty();
         } catch (RuntimeException e) {
-            LOG.error("角色同步存档失败: id={}", chr.getId(), e);
+            log.error("角色同步存档失败: id={}", chr.getId(), e);
         }
     }
 
@@ -143,9 +143,9 @@ public final class CharacterSaveQueue implements AutoCloseable {
             Thread.sleep(10);
         }
         if (pendingCount() > 0) {
-            LOG.warn("存档队列排空超时，仍有 {} 个待写角色", pendingCount());
+            log.warn("存档队列排空超时，仍有 {} 个待写角色", pendingCount());
         }
-        LOG.info("存档队列已排空");
+        log.info("存档队列已排空");
     }
 
     /** 当前待写角色数（观测，Sli.WRITE_QUEUE_DEPTH）。 */

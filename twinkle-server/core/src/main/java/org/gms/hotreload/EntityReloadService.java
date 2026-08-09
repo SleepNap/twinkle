@@ -1,7 +1,6 @@
 package org.gms.hotreload;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.versioned.VersionGate;
 
 import java.util.ArrayList;
@@ -26,9 +25,10 @@ import java.util.function.LongPredicate;
  *
  * <p>线程模型：由调用方（管理 API / 运维线程）驱动，同步编排。游戏 tick 单线程不受影响。
  */
+@Log4j2
 public final class EntityReloadService {
 
-    private static final Logger LOG = LogManager.getLogger(EntityReloadService.class);
+
 
     /** 单次重载结果。 */
     public record ReloadResult(int safeSwitched, int interrupted, long newVersion) {
@@ -65,13 +65,13 @@ public final class EntityReloadService {
             if (ok) {
                 interrupted++;
             } else {
-                LOG.warn("实体 {} 在途操作无法中断，本次跳过（等待其自然结束）", entityId);
+                log.warn("实体 {} 在途操作无法中断，本次跳过（等待其自然结束）", entityId);
             }
         }
 
         // 阶段 3：换代版本门——旧逻辑迟到写从此被拒
         long newVersion = coordinator.advanceVersion(versionGate);
-        LOG.info("按实体渐进重载完成：安全切换 {}，中断 {}，新逻辑版本 {}",
+        log.info("按实体渐进重载完成：安全切换 {}，中断 {}，新逻辑版本 {}",
                 safeSwitched, interrupted, newVersion);
         return new ReloadResult(safeSwitched, interrupted, newVersion);
     }

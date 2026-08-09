@@ -3,8 +3,10 @@ package org.gms.login;
 import jakarta.inject.Singleton;
 import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
+import org.gms.data.entity.InventoryItemEntity;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.CharacterRepository;
+import org.gms.data.repo.InventoryItemRepository;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.util.List;
@@ -33,10 +35,21 @@ public final class LoginService {
 
     private final AccountRepository accountRepository;
     private final CharacterRepository characterRepository;
+    private final InventoryItemRepository inventoryItemRepository;
 
-    public LoginService(AccountRepository accountRepository, CharacterRepository characterRepository) {
+    /**
+     * 全参构造（DI 用）。2 参构造仅供测试桩（inventoryItemRepository 为 null 时建角不写装备）。
+     */
+    @jakarta.inject.Inject
+    public LoginService(AccountRepository accountRepository, CharacterRepository characterRepository,
+                        InventoryItemRepository inventoryItemRepository) {
         this.accountRepository = accountRepository;
         this.characterRepository = characterRepository;
+        this.inventoryItemRepository = inventoryItemRepository;
+    }
+
+    public LoginService(AccountRepository accountRepository, CharacterRepository characterRepository) {
+        this(accountRepository, characterRepository, null);
     }
 
     /**
@@ -66,4 +79,103 @@ public final class LoginService {
     public List<Character> charactersFor(long accountId, int world) {
         return characterRepository.findByAccount((int) accountId, world);
     }
+
+    /**
+     * 角色名是否可用（建角前置查重，v83 CHECK_CHAR_NAME）。
+     *
+     * <p>校验规则（思路参考 BeiDou-Server Character.canCreateChar）：
+     * 2~12 位字母/数字/中文，且数据库中不存在同名角色。
+     *
+     * @return true = 名字可用（可建）
+     */
+    public boolean isNameAvailable(String name) {
+        if (name == null) {
+            return false;
+        }
+        if (!NAME_PATTERN.matcher(name).matches()) {
+            return false;
+        }
+        return !characterRepository.existsByName(name);
+    }
+
+    /**
+     * 新建角色（建角，v83 CREATE_CHAR）。
+     *
+     * @return 新建的角色；名字不可用 / 参数非法返回 null（调用方回建角失败包）
+     */
+    public Character createCharacter(long accountId, int world, String name, int job, int face,
+                                     int hair, int skinColor, int top, int bottom, int shoes,
+                                     int weapon, int gender) {
+        if (!isNameAvailable(name)) {
+            return null;
+        }
+        Character chr = new Character();
+        chr.setAccountId(accountId);
+        chr.setWorld(world);
+        chr.setName(name);
+        chr.setJob(job);
+        chr.setLevel(1);
+        chr.setHp((short) 50);
+        chr.setMaxHp((short) 50);
+        chr.setMp((short) 5);
+        chr.setMaxMp((short) 5);
+        chr.setStr((short) 12);
+        chr.setDex((short) 5);
+        chr.setLuk((short) 4);
+        chr.setIntStat((short) 4);
+        chr.setFace(face);
+        chr.setHair(hair);
+        chr.setSkinColor(skinColor);
+        chr.setGender(gender);
+        chr.setAp(0);
+        chr.setMap(10000);          // 蘑菇村（新手出生地，思路参考 BeiDou MapId.MUSHROOM_TOWN）
+        chr.setSpawnPoint(0);
+        chr.setBuddyCapacity(20);
+        characterRepository.insert(chr);
+        // 建角默认装备：v83 新手套（位置负值 = 已穿戴，思路参考 BeiDou CharacterFactory）
+        // top=-5 / bottom=-6 / shoes=-7 / weapon=-11。inventory_type=1（EQUIP）。
+        if (inventoryItemRepository != null) {
+            insertDefaultEquip(chr, top, -5);
+            insertDefaultEquip(chr, bottom, -6);
+            insertDefaultEquip(chr, shoes, -7);
+            insertDefaultEquip(chr, weapon, -11);
+        }
+        return chr;
+    }
+
+    private void insertDefaultEquip(Character chr, int itemId, int position) {
+        if (itemId <= 0) {
+            return;
+        }
+        InventoryItemEntity item = new InventoryItemEntity();
+        item.setType(1);            // equip 行
+        item.setCharacterId(chr.getId().intValue());
+        item.setAccountId(chr.getAccountId().intValue());
+        item.setItemId(itemId);
+        item.setInventoryType(1);   // EQUIP
+        item.setPosition(position); // 负值 = 已穿戴
+        item.setQuantity(1);
+        item.setOwner("");
+        item.setPetId(0);
+        item.setFlag(0);
+        item.setExpiration(0);
+        item.setGiftFrom("");
+        inventoryItemRepository.insert(item);
+    }
+
+    /**
+     * 某角色已穿戴装备（inventory_items 中 position &lt; 0 的行，建角/选角外观编码用）。
+     */
+    public List<InventoryItemEntity> equippedItems(long characterId) {
+        if (inventoryItemRepository == null) {
+            return List.of();
+        }
+        return inventoryItemRepository.findByCharacterId(characterId).stream()
+                .filter(e -> e.getPosition() < 0)
+                .toList();
+    }
+
+    /** 建角名字校验：2~12 位字母/数字/中文（思路参考 BeiDou）。 */
+    private static final java.util.regex.Pattern NAME_PATTERN =
+            java.util.regex.Pattern.compile("[a-zA-Z0-9\\u4e00-\\u9fa5]{2,12}");
 }

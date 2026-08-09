@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.message.MessageTargets;
 import org.gms.message.NoticeMessage;
@@ -21,9 +20,10 @@ import org.gms.service.intercoord.IntercoordService;
  *
  * <p>M6 分布式时本订阅改由网络 EventBus 实现驱动（接口不变），派发逻辑同构。
  */
+@Log4j2
 public final class ChannelMessageSubscriber {
 
-    private static final Logger LOG = LogManager.getLogger(ChannelMessageSubscriber.class);
+
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -42,7 +42,7 @@ public final class ChannelMessageSubscriber {
     private void deliverWhisper(WhisperRequest req) {
         // 定位校验：目标必须在本频道（防跨频道消息投到错误频道）
         if (intercoord.locate(req.toId()).orElse(-1) != channelId) {
-            LOG.warn("悄悄话投递目标不在本频道: toId={} channel={}", req.toId(), channelId);
+            log.warn("悄悄话投递目标不在本频道: toId={} channel={}", req.toId(), channelId);
             return;
         }
         PacketSession target = sessions.get(req.toId());
@@ -57,6 +57,6 @@ public final class ChannelMessageSubscriber {
         for (PacketSession s : sessions.all()) {
             s.send(packet);
         }
-        LOG.info("频道 {} 收到公告: {}", channelId, notice.content());
+        log.info("频道 {} 收到公告: {}", channelId, notice.content());
     }
 }

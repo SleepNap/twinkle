@@ -56,8 +56,9 @@ class BootstrapContextTest {
             // M1/M2：网络装配——handler 注册 + 登录服/频道服启动
             assertThat(ctx.containsBean(HandlerRegistry.class)).isTrue();
             HandlerRegistry handlers = ctx.getBean(HandlerRegistry.class);
-            // 登录 4 + 频道 14（进图 2 + M3-5 游戏内 8 + M4 三机制 3：WHISPER/CHANGE_CHANNEL/BUDDYLIST_MODIFY + 阶段 B MOVE_LIFE 1）
-            assertThat(handlers.registeredCount()).isEqualTo(18);
+            // 登录 12（密码/ToS/性别/服务器状态/HPMP警报/服务器列表/角色列表/查名/建角/查看所有/总览选角/选角）+
+            // 频道 14（进图 2 + M3-5 游戏内 8 + M4 三机制 3：WHISPER/CHANGE_CHANNEL/BUDDYLIST_MODIFY + 阶段 B MOVE_LIFE 1）
+            assertThat(handlers.registeredCount()).isEqualTo(26);
             assertThat(ctx.containsBean(LoginServer.class)).isTrue();
             LoginServer loginServer = ctx.getBean(LoginServer.class);
             assertThat(loginServer.boundPort()).isGreaterThan(0);

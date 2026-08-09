@@ -1,7 +1,5 @@
 package org.gms.data.migrate;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import javax.sql.DataSource;
 import java.io.InputStream;
@@ -14,6 +12,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 自研迁移器（架构 6.2 决策：Flyway 社区版不支持 SQLite，三库统一自研迁移器）。
@@ -43,9 +42,10 @@ import java.util.TreeMap;
  * <h2>2C2G 预算</h2>
  * 启动时一次性顺序执行，毫秒级关闭；不挂后台线程。
  */
+@Log4j2
 public final class MigrationRunner {
 
-    private static final Logger LOG = LogManager.getLogger(MigrationRunner.class);
+
 
     private static final String VERSION_TABLE = "schema_version";
     private static final String MIGRATE_DIR = "db/migrate/";
@@ -69,7 +69,7 @@ public final class MigrationRunner {
         ensureVersionTable();
         TreeMap<Integer, String> files = discoverMigrations();
         if (files.isEmpty()) {
-            LOG.info("无可用迁移脚本");
+            log.info("无可用迁移脚本");
             return 0;
         }
 
@@ -82,7 +82,7 @@ public final class MigrationRunner {
                 if (isApplied(conn, version)) {
                     continue;
                 }
-                LOG.info("应用迁移 V{}: {}", version, name);
+                log.info("应用迁移 V{}: {}", version, name);
                 String sql = loadResource(name);
                 List<String> statements = splitStatements(sql);
                 for (String stmt : statements) {
@@ -97,9 +97,9 @@ public final class MigrationRunner {
             conn.commit();
         }
         if (applied == 0) {
-            LOG.info("数据库已是最新（跳过 {} 个已应用迁移）", files.size());
+            log.info("数据库已是最新（跳过 {} 个已应用迁移）", files.size());
         } else {
-            LOG.info("本次共应用 {} 个迁移", applied);
+            log.info("本次共应用 {} 个迁移", applied);
         }
         return applied;
     }
@@ -175,7 +175,7 @@ public final class MigrationRunner {
                 }
             }
         } catch (Exception e) {
-            LOG.error("扫描迁移目录失败: {}", dir, e);
+            log.error("扫描迁移目录失败: {}", dir, e);
         }
     }
 
@@ -189,7 +189,7 @@ public final class MigrationRunner {
             int version = Integer.parseInt(filename.substring(1, filename.indexOf("__")));
             map.put(version, fullResourcePath);
         } catch (NumberFormatException e) {
-            LOG.warn("迁移文件名格式异常: {}", filename);
+            log.warn("迁移文件名格式异常: {}", filename);
         }
     }
 
@@ -208,7 +208,7 @@ public final class MigrationRunner {
     /**
      * 简单 SQL 切分：按 {@code ;} 分行；不处理字符串内的分号（迁移脚本里 {@code ;} 极少出现在引号内）。
      */
-    static List<String> splitStatements(String sql) {
+    private static List<String> splitStatements(String sql) {
         List<String> result = new ArrayList<>();
         for (String stmt : sql.split(";")) {
             String trimmed = stmt.trim();

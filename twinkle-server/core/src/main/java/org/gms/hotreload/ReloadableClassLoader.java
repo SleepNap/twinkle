@@ -1,12 +1,11 @@
 package org.gms.hotreload;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Objects;
 import java.util.Set;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 可重载模块 classloader（架构 5.1：可重载逻辑隔离在模块 classloader，状态不进该 classloader）。
@@ -25,9 +24,10 @@ import java.util.Set;
  *
  * <p>URL 来源：{@code plugins/} 目录下 jar（内置插件按部署作用域分发）或 classes 目录。
  */
+@Log4j2
 public class ReloadableClassLoader extends URLClassLoader {
 
-    private static final Logger LOG = LogManager.getLogger(ReloadableClassLoader.class);
+
 
     /**
      * 稳定层包前缀（与 ArchUnit 架构测试共用，见 core 测试 / data 的 architecture 包）。
@@ -91,12 +91,12 @@ public class ReloadableClassLoader extends URLClassLoader {
 
     /** 卸载钩子：释放到模块的引用（GC 接管旧 loader 及其实例）。 */
     public void dispose() {
-        LOG.info("卸载可重载模块 loader: {}", moduleName);
+        log.info("卸载可重载模块 loader: {}", moduleName);
         // URLClassLoader.close() 关闭打开的 jar 文件句柄
         try {
             close();
         } catch (Exception e) {
-            LOG.warn("关闭模块 loader 异常: {}", moduleName, e);
+            log.warn("关闭模块 loader 异常: {}", moduleName, e);
         }
     }
 

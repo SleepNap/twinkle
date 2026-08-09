@@ -50,7 +50,7 @@ public interface IntercoordService {
     Map<Integer, ChannelInfo> channels();
 
     /** 频道信息（M4 进程内：在线会话数；M6 扩展 host:port 网络端点）。 */
-    record ChannelInfo(int channelId, String host, int port, int onlineCount) {
+    public record ChannelInfo(int channelId, String host, int port, int onlineCount) {
     }
 
     // ---- 单一属主存储（共享状态真值只在 coordinator） ----
@@ -72,6 +72,6 @@ public interface IntercoordService {
     Map<String, StoreEntry> storeSnapshot();
 
     /** 单条存储项：值 + 版本号。 */
-    record StoreEntry(Object value, long version) {
+    public record StoreEntry(Object value, long version) {
     }
 }

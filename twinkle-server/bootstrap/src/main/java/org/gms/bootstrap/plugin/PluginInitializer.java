@@ -3,8 +3,7 @@ package org.gms.bootstrap.plugin;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.LogicSystemRegistry;
 import org.gms.hotreload.versioned.VersionGate;
@@ -32,9 +31,10 @@ import java.nio.file.Path;
 @Singleton
 @Context
 @Requires(condition = ChannelProcessCondition.class)
+@Log4j2
 public final class PluginInitializer {
 
-    private static final Logger LOG = LogManager.getLogger(PluginInitializer.class);
+
 
     private final PluginManager pluginManager;
     private final Metrics metrics;
@@ -60,14 +60,14 @@ public final class PluginInitializer {
                 loaded++;
                 metrics.increment(Sli.PLUGIN_LOADED);
             } catch (PluginManager.PluginLoadException e) {
-                LOG.error("插件启动加载失败: {}（{}）", descriptor.id(), e.getMessage());
+                log.error("插件启动加载失败: {}（{}）", descriptor.id(), e.getMessage());
                 metrics.increment(Sli.PLUGIN_FAILED);
             }
         }
         if (loaded > 0) {
-            LOG.info("插件启动加载完成: {} 个", loaded);
+            log.info("插件启动加载完成: {} 个", loaded);
         } else {
-            LOG.info("插件启动加载: 无可用插件（目录可能为空或不存在）");
+            log.info("插件启动加载: 无可用插件（目录可能为空或不存在）");
         }
     }
 }

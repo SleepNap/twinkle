@@ -1,7 +1,6 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.service.admin.AdminService;
 
@@ -19,9 +18,10 @@ import java.util.concurrent.TimeUnit;
  * <p>只暴露纯 DTO（接口 {@code OnlinePlayer} 等），不泄漏游戏内存对象（红线 4.1）。
  * 频道未连接时降级：在线快照空、kick 返回 false、脚本重载 0。
  */
+@Log4j2
 public final class RemoteAdminService implements AdminService {
 
-    private static final Logger LOG = LogManager.getLogger(RemoteAdminService.class);
+
 
     private final CoordinatorLink link;
     private final int channelId;
@@ -92,7 +92,7 @@ public final class RemoteAdminService implements AdminService {
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {
         InternalConnection conn = link.connection();
         if (conn == null) {
-            LOG.warn("AdminService RPC 时 coordinator 未连接: method={}", method);
+            log.warn("AdminService RPC 时 coordinator 未连接: method={}", method);
             return null;
         }
         try {
@@ -109,7 +109,7 @@ public final class RemoteAdminService implements AdminService {
             InternalFrame reply = fut.get(timeoutMillis, TimeUnit.MILLISECONDS);
             return JsonCodec.decode(reply.payloadText(), InternalProtocol.RpcResponse.class.getName());
         } catch (Exception e) {
-            LOG.warn("AdminService RPC 失败: method={}", method);
+            log.warn("AdminService RPC 失败: method={}", method);
             return null;
         }
     }

@@ -1,5 +1,8 @@
 package org.gms.event;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * 可靠总线负载编解码（架构 4.5：outbox 持久化队列的负载序列化）。
  *
@@ -27,8 +30,7 @@ public interface PayloadCodec {
             try {
                 return Class.forName(payloadType).getDeclaredConstructor().newInstance();
             } catch (ReflectiveOperationException e) {
-                org.apache.logging.log4j.LogManager.getLogger(ReliableEventBus.class)
-                        .error("可靠总线重投重建失败: type={}", payloadType, e);
+                LogManager.getLogger(PayloadCodec.class).error("可靠总线重投重建失败: type={}", payloadType, e);
                 return null;
             }
         }

@@ -59,3 +59,6 @@ CLAUDE.local.md
 # ===== 运行时数据目录（WZ 缓存 / DB，运行期生成不入仓） =====
 data/
 bootstrap/data/
+
+# ===== 前端（twinkle-web，形态未设计，暂不入仓） =====
+twinkle-web/

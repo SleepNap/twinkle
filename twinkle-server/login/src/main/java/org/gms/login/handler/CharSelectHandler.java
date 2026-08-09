@@ -1,7 +1,6 @@
 package org.gms.login.handler;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.Character;
 import org.gms.login.LoginPacketFactory;
 import org.gms.net.packet.InPacket;
@@ -18,9 +17,9 @@ import java.util.List;
  * 校验角色属于当前账号（防越权），成功后回 {@code SERVER_IP} 让客户端连频道服
  * （地址经构造注入：单进程自连本进程地址，M6 分布式按配置取）。
  */
+@Log4j2
 public final class CharSelectHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(CharSelectHandler.class);
 
     private final byte[] channelIp;
     private final int channelPort;
@@ -52,7 +51,7 @@ public final class CharSelectHandler implements PacketHandler {
 
         session.setAttr("selectedChar", selected);
         session.transition(SessionStage.SELECTED);
-        LOG.info("选中角色: {} (id={})", selected.getName(), charId);
+        log.info("选中角色: {} (id={})", selected.getName(), charId);
         session.send(LoginPacketFactory.serverIp(channelIp, channelPort, (int) charId));
     }
 }

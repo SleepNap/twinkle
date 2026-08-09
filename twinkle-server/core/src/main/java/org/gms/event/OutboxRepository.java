@@ -11,7 +11,7 @@ import java.util.List;
 public interface OutboxRepository {
 
     /** outbox 行（发送侧先落 PENDING → 投递 → DELIVERED → ack → ACKED）。 */
-    record OutboxRow(long id, String streamId, long seq, String messageId, String target,
+    public record OutboxRow(long id, String streamId, long seq, String messageId, String target,
                      String payloadType, String payload, String status) {
 
         public static final String PENDING = "PENDING";

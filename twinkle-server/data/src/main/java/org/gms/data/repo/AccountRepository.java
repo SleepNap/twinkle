@@ -15,4 +15,9 @@ public interface AccountRepository {
      * 按账号名查询。不存在返回 {@link Optional#empty()}。
      */
     Optional<Account> findByName(String name);
+
+    /**
+     * 更新账号（登录前置流程落库用：接受服务条款 tos、设置性别 gender 等）。
+     */
+    void update(Account account);
 }

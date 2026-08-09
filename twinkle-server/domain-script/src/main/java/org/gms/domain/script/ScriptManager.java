@@ -1,7 +1,6 @@
 package org.gms.domain.script;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.script.host.Cm;
 import org.gms.domain.script.host.Em;
 import org.gms.domain.script.host.Im;
@@ -28,9 +27,9 @@ import java.util.Optional;
  *
  * <p><b>宿主对象契约</b>：5 个接口（cm/qm/em/rm/im，架构 M0 第 9 项）。本管理器用绑定注入脚本。
  */
+@Log4j2
 public final class ScriptManager {
 
-    private static final Logger LOG = LogManager.getLogger(ScriptManager.class);
 
     private final ScriptEngine engine;
     private final ScriptRepository repository;
@@ -50,7 +49,7 @@ public final class ScriptManager {
     public Optional<Value> run(String key, Map<String, Object> bindings) {
         ScriptSource src = repository.loadAll().get(key);
         if (src == null) {
-            LOG.warn("脚本不存在: {}", key);
+            log.warn("脚本不存在: {}", key);
             return Optional.empty();
         }
         // 注入 cm/qm/em/rm/im 等宿主契约 + 用户传入的额外绑定
@@ -92,7 +91,7 @@ public final class ScriptManager {
     public ConversationScript openConversation(String key, Map<String, Object> bindings) {
         ScriptSource src = repository.loadAll().get(key);
         if (src == null) {
-            LOG.warn("对话脚本不存在: {}", key);
+            log.warn("对话脚本不存在: {}", key);
             return null;
         }
         return ConversationScript.open(key, src.content(), bindings);
@@ -104,7 +103,7 @@ public final class ScriptManager {
      */
     public int reload() {
         int changed = repository.reload();
-        LOG.info("ScriptManager L2 热重载：{} 条目变化", changed);
+        log.info("ScriptManager L2 热重载：{} 条目变化", changed);
         return changed;
     }
 

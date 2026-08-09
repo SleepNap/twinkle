@@ -3,10 +3,10 @@ package org.gms.channel;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.net.netty.V83ServerInitializer;
 import org.gms.net.netty.DisconnectListener;
 import org.gms.net.netty.HeartbeatConfig;
@@ -23,9 +23,9 @@ import java.net.InetSocketAddress;
  * <p>生命周期：{@link #start} 绑定端口（v83 客户端经典频道端口 8484），
  * {@link #close} 优雅关闭。bootstrap 装配时调用。
  */
+@Log4j2
 public final class ChannelServer implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(ChannelServer.class);
 
     private final HandlerRegistry registry;
     private final DisconnectListener disconnectListener;
@@ -51,14 +51,14 @@ public final class ChannelServer implements AutoCloseable {
 
     /** 启动并绑定端口。 */
     public void start(int port) {
-        bossGroup = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup(2);
+        bossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+        workerGroup = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
                 .childHandler(new V83ServerInitializer(registry, disconnectListener, heartbeatConfig));
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        LOG.info("频道服启动，监听端口: {}", port);
+        log.info("频道服启动，监听端口: {}", port);
     }
 
     public int boundPort() {
@@ -76,6 +76,6 @@ public final class ChannelServer implements AutoCloseable {
         if (workerGroup != null) {
             workerGroup.shutdownGracefully().syncUninterruptibly();
         }
-        LOG.info("频道服已停止");
+        log.info("频道服已停止");
     }
 }

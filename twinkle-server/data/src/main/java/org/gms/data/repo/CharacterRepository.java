@@ -24,6 +24,19 @@ public interface CharacterRepository {
     Optional<Character> findById(long id);
 
     /**
+     * 按角色名查重（建角前置，v83 CHECK_CHAR_NAME）。存在返回 true。
+     */
+    boolean existsByName(String name);
+
+    /**
+     * 新建角色落库（建角，v83 CREATE_CHAR）。
+     *
+     * <p>{@code insertSelective}：null 字段用 DB 默认值填充（character_records 全列有默认）。
+     * 插入后实体 id 回填。
+     */
+    void insert(Character chr);
+
+    /**
      * 落库角色存档（L4 增量 FLUSH，红线 17：只刷脏数据，不做全量落盘）。
      *
      * <p>MyBatis-Flex {@code updateById}，全 74 列参数化 UPDATE（红线 7：复杂原生 SQL 兜底参数化）。

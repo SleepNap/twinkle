@@ -1,12 +1,14 @@
 package org.gms.login;
 
 import org.gms.data.entity.Character;
+import org.gms.data.entity.InventoryItemEntity;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.OutPacket;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * v83 登录侧响应包构造（字节级兼容红线 1，包布局对齐参考项目，实现自研）。
@@ -33,6 +35,17 @@ public final class LoginPacketFactory {
         p.writeByte(reason);
         p.writeByte(0);
         p.writeInt(0);
+        return p;
+    }
+
+    /**
+     * 服务器状态响应（RecvOpcode.SERVERSTATUS_REQUEST 的回复）。
+     * status：0=正常 / 1=繁忙 / 2=满（M1 单世界恒 0）。
+     */
+    public static OutPacket serverStatus(int status) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.SERVERSTATUS.getValue());
+        p.writeShort(status);
         return p;
     }
 
@@ -101,14 +114,19 @@ public final class LoginPacketFactory {
 
     /**
      * 角色列表（选角）。status 0 = 成功；末尾 PIC 模式 2（关闭）+ 角色槽位 3。
+     *
+     * @param equippedByChar 角色 id → 已穿戴装备（inventory_items position&lt;0 行，可为空）
      */
-    public static OutPacket charList(List<Character> characters, int serverId, int status) {
+    public static OutPacket charList(List<Character> characters, int serverId, int status,
+                                     Map<Long, List<InventoryItemEntity>> equippedByChar) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.CHARLIST.getValue());
         p.writeByte(status);
         p.writeByte(characters.size());
         for (Character c : characters) {
-            addCharEntry(p, c);
+            List<InventoryItemEntity> equipped = equippedByChar == null
+                    ? null : equippedByChar.get(c.getId());
+            addCharEntry(p, c, equipped);
         }
         p.writeByte(2);             // PIC 关闭
         p.writeInt(3);              // 角色槽位
@@ -131,12 +149,100 @@ public final class LoginPacketFactory {
         return p;
     }
 
+    /* ---------- 建角（SendOpcode.CHAR_NAME_RESPONSE / ADD_NEW_CHAR_ENTRY） ---------- */
+
+    /**
+     * 角色名检查响应（SendOpcode.CHAR_NAME_RESPONSE 0x0D，建角前置）。
+     * {@code nameUsed}：1 = 已占用 / 0 = 可用（思路参考 BeiDou charNameResponse）。
+     */
+    public static OutPacket charNameResponse(String name, boolean nameUsed) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.CHAR_NAME_RESPONSE.getValue());
+        p.writeString(name);
+        p.writeByte(nameUsed ? 1 : 0);
+        return p;
+    }
+
+    /**
+     * 新建角色条目（SendOpcode.ADD_NEW_CHAR_ENTRY 0x0E，建角成功）。
+     * 首字节 0（成功）；随后角色条目布局与选角列表一致（思路参考 BeiDou addNewCharEntry）。
+     *
+     * @param equipped 新角色已穿戴装备（建角默认装备，客户端立即显示全身外观）
+     */
+    public static OutPacket addNewCharEntry(Character c, List<InventoryItemEntity> equipped) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.ADD_NEW_CHAR_ENTRY.getValue());
+        p.writeByte(0);
+        addCharEntry(p, c, equipped);
+        return p;
+    }
+
+    /**
+     * 新建角色条目（无装备，兼容旧调用）。
+     */
+    public static OutPacket addNewCharEntry(Character c) {
+        return addNewCharEntry(c, null);
+    }
+
+    /**
+     * 建角失败（SendOpcode.DELETE_CHAR_RESPONSE 0x0F 复用做建角错误弹窗）。
+     * {@code state} 语义：9 = 未知错误（参考 BeiDou deleteCharResponse 的建角失败路径）。
+     */
+    public static OutPacket createCharFailed(int state) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.DELETE_CHAR_RESPONSE.getValue());
+        p.writeInt(0);
+        p.writeByte(state);
+        return p;
+    }
+
+    /* ---------- 查看所有角色（SendOpcode.VIEW_ALL_CHAR 0x08） ---------- */
+
+    /**
+     * 查看所有角色总览头（"查看所有角色"界面的 world 数 + 角色总数）。
+     * 首个 byte：1=有角色 / 5=找不到任何角色（思路参考 BeiDou showAllCharacter）。
+     */
+    public static OutPacket showAllCharacter(int totalWorlds, int totalChrs) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.VIEW_ALL_CHAR.getValue());
+        p.writeByte(totalChrs > 0 ? 1 : 5);
+        p.writeInt(totalWorlds);
+        p.writeInt(totalChrs);
+        return p;
+    }
+
+    /**
+     * 查看所有角色：单个 world 的角色列表段（总览头之后逐 world 发）。
+     * 每条目用 viewall=true 布局（无普通列表的额外 1 字节，思路参考 BeiDou showAllCharacterInfo）。
+     */
+    public static OutPacket showAllCharacterInfo(int worldId, List<Character> characters,
+                                                 Map<Long, List<InventoryItemEntity>> equippedByChar) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.VIEW_ALL_CHAR.getValue());
+        p.writeByte(0);             // 段标记
+        p.writeByte(worldId);
+        p.writeByte(characters.size());
+        for (Character c : characters) {
+            List<InventoryItemEntity> equipped = equippedByChar == null
+                    ? null : equippedByChar.get(c.getId());
+            addCharEntry(p, c, equipped, true);
+        }
+        p.writeByte(2);             // PIC 关闭
+        return p;
+    }
+
     /* ---------- 角色条目编码（addCharStats + addCharLook + rank） ---------- */
 
-    private static void addCharEntry(OutPacket p, Character c) {
+    private static void addCharEntry(OutPacket p, Character c, List<InventoryItemEntity> equipped) {
+        addCharEntry(p, c, equipped, false);
+    }
+
+    private static void addCharEntry(OutPacket p, Character c, List<InventoryItemEntity> equipped, boolean viewall) {
         addCharStats(p, c);
-        addCharLook(p, c);
-        p.writeByte(0);             // viewall 分支的额外字节
+        addCharLook(p, c, equipped);
+        if (!viewall) {
+            p.writeByte(0);         // 普通列表的额外字节（查看所有角色模式省略）
+        }
         p.writeByte(1);             // 世界排名启用
         p.writeInt((int) c.getRank());
         p.writeInt(c.getRankMove());
@@ -174,16 +280,46 @@ public final class LoginPacketFactory {
         p.writeInt(0);
     }
 
-    private static void addCharLook(OutPacket p, Character c) {
+    private static void addCharLook(OutPacket p, Character c, List<InventoryItemEntity> equipped) {
         p.writeByte(c.getGender());
         p.writeByte(c.getSkinColor());
         p.writeInt(c.getFace());
         p.writeBool(true);          // !mega
         p.writeInt(c.getHair());
-        // 装备（M1 角色无 inventory 数据 → 空装备列表，字节级对齐空列表写法）
+        addCharEquips(p, equipped);
+    }
+
+    /**
+     * 已穿戴装备外观（v83 addCharEquips）。
+     *
+     * <p>每件写 {@code byte 槽位 + int 物品id}，普通装备与 masked（现金覆盖）分别以 0xFF 收尾；
+     * 随后武器 int + 宠物 int×3。槽位取正（-5→5）。思路参考自 BeiDou-Server PacketCreator。
+     */
+    private static void addCharEquips(OutPacket p, List<InventoryItemEntity> equipped) {
+        if (equipped == null || equipped.isEmpty()) {
+            p.writeByte(0xFF);      // 普通装备结束
+            p.writeByte(0xFF);      // masked 装备结束
+            p.writeInt(0);          // 武器
+            p.writeInt(0);          // 宠物 x3
+            p.writeInt(0);
+            p.writeInt(0);
+            return;
+        }
+        int weapon = 0;
+        boolean hasWeapon = false;
+        for (InventoryItemEntity e : equipped) {
+            int pos = -e.getPosition();       // 负位置转正（-5→5 帽、-6→6 脸饰、-7→7、-11→11 武器）
+            if (pos == 11) {                  // 武器槽位
+                weapon = e.getItemId();
+                hasWeapon = true;
+                continue;
+            }
+            p.writeByte((byte) pos);
+            p.writeInt(e.getItemId());
+        }
         p.writeByte(0xFF);          // 普通装备结束
-        p.writeByte(0xFF);          // masked 装备结束
-        p.writeInt(0);              // 武器
+        p.writeByte(0xFF);          // masked 装备结束（无现金覆盖）
+        p.writeInt(hasWeapon ? weapon : 0);
         p.writeInt(0);              // 宠物 x3
         p.writeInt(0);
         p.writeInt(0);

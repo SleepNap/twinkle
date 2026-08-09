@@ -1,7 +1,6 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.util.Optional;
@@ -16,9 +15,10 @@ import java.util.Optional;
  * <p>返回值约定：返回值 JSON 字符串；{@code void}/{@code null}/{@code Optional.empty} 一律
  * 返回 {@code "null"}（避免调用方反序列化歧义）。参数每个已 JSON 序列化为字符串。
  */
+@Log4j2
 public final class IntercoordRpcDispatcher {
 
-    private static final Logger LOG = LogManager.getLogger(IntercoordRpcDispatcher.class);
+
 
     private final IntercoordService intercoord;
 
@@ -36,7 +36,7 @@ public final class IntercoordRpcDispatcher {
             String value = invoke(method, args);
             return InternalProtocol.RpcResponse.ok(value);
         } catch (Exception e) {
-            LOG.error("RPC 分发失败: method={}", method, e);
+            log.error("RPC 分发失败: method={}", method, e);
             return InternalProtocol.RpcResponse.fail(e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }

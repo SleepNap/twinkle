@@ -16,7 +16,7 @@ public interface HealthIndicator {
     Status status();
 
     /** 健康状态。 */
-    enum Status {
+    public enum Status {
         /** 正常。 */
         UP,
         /** 异常（依赖未就绪 / 超时）。 */

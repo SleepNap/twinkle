@@ -1,13 +1,12 @@
 package org.gms.hotreload;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 重启协调器状态机（架构 5.4 L4：DRAINING → 增量 FLUSH → 重启 → 恢复）。
@@ -27,9 +26,10 @@ import java.util.function.Consumer;
  * <p>线程模型：{@link #beginRestart(Runnable, Runnable, Runnable)} 是同步编排——调用方（运维命令 / 管理
  * API 线程）阻塞直到完成。若要在后台异步执行，由调用方包 {@code Thread}。不在这里引入线程。
  */
+@Log4j2
 public final class RestartCoordinator {
 
-    private static final Logger LOG = LogManager.getLogger(RestartCoordinator.class);
+
 
     /** 重启阶段状态机。 */
     public enum Phase {
@@ -102,7 +102,7 @@ public final class RestartCoordinator {
         this.lastFailure = cause;
         transition(Phase.FAILED);
         // 日志红线 9：log.error("描述", e)
-        LOG.error("重启编排失败，进程保持运行等待人工介入", cause);
+        log.error("重启编排失败，进程保持运行等待人工介入", cause);
     }
 
     /** 复位到 RUNNING（恢复成功 / 人工确认后）。 */
@@ -118,24 +118,24 @@ public final class RestartCoordinator {
     private void transition(Phase next) {
         Phase prev = phase;
         phase = next;
-        LOG.info("RestartCoordinator 状态: {} → {}", prev, next);
+        log.info("RestartCoordinator 状态: {} → {}", prev, next);
         for (Consumer<Phase> l : listeners) {
             try {
                 l.accept(next);
             } catch (RuntimeException e) {
                 // 监听器异常不影响状态机
-                LOG.error("状态监听器异常", e);
+                log.error("状态监听器异常", e);
             }
         }
     }
 
     /** 测试辅助：直接强制设阶段。 */
-    void forcePhase(Phase p) {
+    public void forcePhase(Phase p) {
         transition(p);
     }
 
     /** 测试辅助。 */
-    List<String> transitionLog() {
+    public List<String> transitionLog() {
         return new ArrayList<>();
     }
 }

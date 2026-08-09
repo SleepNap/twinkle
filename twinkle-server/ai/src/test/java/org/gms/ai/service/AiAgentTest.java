@@ -59,6 +59,11 @@ class AiAgentTest {
         public java.util.Optional<org.gms.data.entity.Account> findByName(String name) {
             return java.util.Optional.empty();
         }
+
+        @Override
+        public void update(org.gms.data.entity.Account account) {
+            // 测试桩：无需落库
+        }
     }
 
     private LocalRuleChatModel model() {

@@ -21,11 +21,11 @@ import java.util.List;
 public interface AdminService {
 
     /** 在线玩家只读快照（DTO，不含会话/角色内存对象）。 */
-    record OnlinePlayer(long characterId, String name, int mapId, int level, int job) {
+    public record OnlinePlayer(long characterId, String name, int mapId, int level, int job) {
     }
 
     /** 频道在线概览。 */
-    record ChannelSummary(int onlineCount, long channelId, List<OnlinePlayer> players) {
+    public record ChannelSummary(int onlineCount, long channelId, List<OnlinePlayer> players) {
     }
 
     /**

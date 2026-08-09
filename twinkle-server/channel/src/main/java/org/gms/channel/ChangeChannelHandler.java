@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.domain.game.Character;
 import org.gms.event.ReliableEventBus;
@@ -24,9 +23,10 @@ import org.gms.service.intercoord.IntercoordService;
  * （玩家状态落 DB，目标频道重连后从 DB 加载最新态，不掉数据）；目标频道经
  * {@link ChannelChangeReceiver} 消费 CC 请求（恰好一次）。
  */
+@Log4j2
 public final class ChangeChannelHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(ChangeChannelHandler.class);
+
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -82,7 +82,7 @@ public final class ChangeChannelHandler implements PacketHandler {
         // 单一属主序号流：每玩家的 CC 请求流内单调，进程崩了重投未 ACKED。
         ChangeChannelRequest req = new ChangeChannelRequest(chr.getId(), channelId, targetId,
                 ChangeChannelRequest.Reason.PLAYER_CHANGE);
-        LOG.info("玩家 {} 换频道 {} → {}（reason={}）", chr.getName(), channelId, targetId, req.reason());
+        log.info("玩家 {} 换频道 {} → {}（reason={}）", chr.getName(), channelId, targetId, req.reason());
         reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req);
 
         // 迁移执行（M4 单进程内：定位表更新 + 地图清理 + 会话注销（compare-and-remove））
@@ -92,6 +92,6 @@ public final class ChangeChannelHandler implements PacketHandler {
         }
         sessions.unregister(chr.getId(), session);
         // 玩家重连目标频道端口 → PlayerLoggedinHandler 重新进图（v83 loading 界面）
-        LOG.info("玩家 {} 换频道完成，等待重连频道 {}（{} 端口）", chr.getName(), targetId, targetId);
+        log.info("玩家 {} 换频道完成，等待重连频道 {}（{} 端口）", chr.getName(), targetId, targetId);
     }
 }

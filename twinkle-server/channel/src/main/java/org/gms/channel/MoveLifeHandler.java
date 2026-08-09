@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.lease.ControllerLeaseService;
 import org.gms.domain.game.lease.LeaseOwner;
@@ -27,9 +26,10 @@ import java.util.Arrays;
  * 录包确认）：{@code oid(4) + moveId(4) + startX(2) + startY(2) + skill(1) +
  * [skill!=0: skillLevel(1) + skillId(4)] + movement[]}。本 handler 只在 IN_GAME 生效。
  */
+@Log4j2
 public final class MoveLifeHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(MoveLifeHandler.class);
+
 
     private final ControllerLeaseService leaseService;
     private final PlayerSessionRegistry sessions;
@@ -80,7 +80,7 @@ public final class MoveLifeHandler implements PacketHandler {
 
         // 已验证续租（fail-closed）：归属校验不过 → 丢弃整包
         if (!leaseService.renew(map.getMapId(), oid, owner)) {
-            LOG.debug("MOVE_LIFE 续租被拒（非控制者/旧代际），角色 {} 丢弃怪物 {} 的移动包",
+            log.debug("MOVE_LIFE 续租被拒（非控制者/旧代际），角色 {} 丢弃怪物 {} 的移动包",
                     chr.getId(), oid);
             return;
         }

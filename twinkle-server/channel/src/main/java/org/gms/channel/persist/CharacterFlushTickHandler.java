@@ -1,7 +1,6 @@
 package org.gms.channel.persist;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.observability.Metrics;
 import org.gms.observability.Sli;
 import org.gms.tick.TickHandler;
@@ -12,9 +11,10 @@ import org.gms.tick.TickHandler;
  * <p>注册进 GameTickLoop，每 {@code everyTicks} tick 调 {@link CharacterSaveQueue#flushAll()}。
  * 满足红线 12（逻辑无状态——只读状态 → 入队，不持有跨 tick 状态）。
  */
+@Log4j2
 public final class CharacterFlushTickHandler implements TickHandler {
 
-    private static final Logger LOG = LogManager.getLogger(CharacterFlushTickHandler.class);
+
 
     /** 每 N tick 刷一次（10 tick × 100ms = 1s）。 */
     private static final int EVERY_TICKS = 10;
@@ -32,7 +32,7 @@ public final class CharacterFlushTickHandler implements TickHandler {
         if (tickCount % EVERY_TICKS == 0) {
             int dirty = saveQueue.flushAll();
             if (dirty > 0) {
-                LOG.debug("增量 FLUSH: {} 个脏角色入队", dirty);
+                log.debug("增量 FLUSH: {} 个脏角色入队", dirty);
             }
             metrics.gauge(Sli.WRITE_QUEUE_DEPTH, saveQueue.pendingCount());
         }

@@ -303,7 +303,7 @@ class TradeE2ETest {
             byte[] recvIv = Arrays.copyOfRange(hello, 7, 11);
             byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
             AesCipher send = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-            AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+            AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
             Client c = new Client(in, out, send, recv);
             ByteArrayOutPacket loggedin = new ByteArrayOutPacket();
             loggedin.writeShort(RecvOpcode.PLAYER_LOGGEDIN.getValue());

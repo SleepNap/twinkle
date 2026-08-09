@@ -5,8 +5,7 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
@@ -49,9 +48,10 @@ import javax.sql.DataSource;
  * repository 缺依赖在启动期暴露，而非运行期才炸。
  */
 @Factory
+@Log4j2
 public class MyBatisFlexFactory {
 
-    private static final Logger LOG = LogManager.getLogger(MyBatisFlexFactory.class);
+
 
     @Bean
     @Singleton
@@ -71,7 +71,7 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(BusStreamMapper.class);
         bootstrap.addMapper(BuddyListMapper.class);
         bootstrap.start();
-        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox/BusStream/BuddyList 十个 Mapper 已注册");
+        log.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox/BusStream/BuddyList 十个 Mapper 已注册");
         return bootstrap;
     }
 

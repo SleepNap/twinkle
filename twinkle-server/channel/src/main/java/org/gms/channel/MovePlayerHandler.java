@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.net.packet.InPacket;
@@ -25,9 +24,10 @@ import java.io.ByteArrayOutputStream;
  * <p>handler 只做"收包 → 解析落点 → 调 {@link MovementSystem} → 广播"，判定在 system
  * （版本门 + 落地），不写逻辑（红线 8/11/12）。广播透传原始移动段，回显排除自己。
  */
+@Log4j2
 public final class MovePlayerHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(MovePlayerHandler.class);
+
 
     private final MovementSystem movementSystem;
     private final PlayerSessionRegistry sessions;
@@ -118,7 +118,7 @@ public final class MovePlayerHandler implements PacketHandler {
                 case 14 -> pos += 9;         // 下跳未定，跳过
                 case 21 -> pos += 3;         // Aran 特殊，跳过
                 default -> {
-                    LOG.warn("未知移动片段 command={}，丢弃移动包", command);
+                    log.warn("未知移动片段 command={}，丢弃移动包", command);
                     return null;
                 }
             }

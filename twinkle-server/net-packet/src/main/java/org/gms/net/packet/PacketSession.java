@@ -8,6 +8,12 @@ package org.gms.net.packet;
  */
 public interface PacketSession {
 
+    /** 协议版本单源（v83 = 83）：握手 hello 明文、加密 header 生成/校验（CipherPair 收发 key）共用。
+     * 定义在协议层（net-packet），IO 层（net-netty）与本连接的加解密引用同一常量——避免 hello 里的
+     * 版本号与加密用的版本 key 分叉。 */
+
+    short MAPLE_VERSION = 83;
+
     /**
      * 发送一个包到对端。
      */

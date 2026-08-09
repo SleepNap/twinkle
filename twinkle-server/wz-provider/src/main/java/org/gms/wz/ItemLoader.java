@@ -1,7 +1,6 @@
 package org.gms.wz;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.item.ItemData;
 
 import java.io.IOException;
@@ -21,9 +20,9 @@ import java.util.Set;
  *
  * <p>读不到的目录跳过（各发行版解包范围不一），解析失败抛 {@link IllegalStateException}。
  */
+@Log4j2
 public final class ItemLoader {
 
-    private static final Logger LOG = LogManager.getLogger(ItemLoader.class);
 
     /** 装备能力键（Equip info 节点，M2-3 预留，Equip 数据就绪时生效）。 */
     private static final Set<String> EQUIP_STATS = Set.of(
@@ -54,7 +53,7 @@ public final class ItemLoader {
                 throw new IllegalStateException("遍历 Item.wz/" + category + " 失败: " + dir, e);
             }
         }
-        LOG.info("Item.wz 解析完成：{} 个物品（根={}）", items.size(), wzRoot);
+        log.info("Item.wz 解析完成：{} 个物品（根={}）", items.size(), wzRoot);
         return items;
     }
 

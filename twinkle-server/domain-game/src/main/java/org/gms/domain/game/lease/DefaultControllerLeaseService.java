@@ -1,7 +1,6 @@
 package org.gms.domain.game.lease;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.tick.TickHandler;
 
 import java.util.Map;
@@ -39,23 +38,24 @@ import java.util.function.LongSupplier;
  * （热重载 DRAINING/停服）时 handler 不被调用→不扫不误释放；恢复后检测 gap 超过
  * 3×周期即为暂停，对活跃 owner 统一加宽限（报告 §5.3-5）。
  */
+@Log4j2
 public final class DefaultControllerLeaseService implements ControllerLeaseService, TickHandler {
 
-    private static final Logger LOG = LogManager.getLogger(DefaultControllerLeaseService.class);
+
 
     /** 怪物定位键（mapId, oid）。 */
-    record MonsterKey(int mapId, int monsterOid) {
+    private record MonsterKey(int mapId, int monsterOid) {
     }
 
     /** 当前代际投影（角色 → 认领它的连接身份）。 */
-    record CurrentClaim(long sessionId, long generation) {
+    private record CurrentClaim(long sessionId, long generation) {
     }
 
     /** 每 owner 租约状态（受控怪集合 + 期限；冷却独立存 cooldowns，不随 owner 清除丢失）。 */
     private static final class OwnerLease {
-        final Set<MonsterKey> monsters = ConcurrentHashMap.newKeySet();
-        long lastRenewAtNanos;
-        long expiryAtNanos;
+        private final Set<MonsterKey> monsters = ConcurrentHashMap.newKeySet();
+        private long lastRenewAtNanos;
+        private long expiryAtNanos;
     }
 
     /** 每怪归属。 */
@@ -247,7 +247,7 @@ public final class DefaultControllerLeaseService implements ControllerLeaseServi
                         lease.expiryAtNanos += grace;
                     }
                 }
-                LOG.info("检测到 tick 暂停（{}ms），对 {} 个活跃 owner 加宽限 {}ms",
+                log.info("检测到 tick 暂停（{}ms），对 {} 个活跃 owner 加宽限 {}ms",
                         gap / 1_000_000L, owners.size(), grace / 1_000_000L);
             }
         }

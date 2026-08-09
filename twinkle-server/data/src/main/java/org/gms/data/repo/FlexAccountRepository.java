@@ -25,4 +25,9 @@ public class FlexAccountRepository implements AccountRepository {
         return Optional.ofNullable(mapper.selectOneByQuery(
                 QueryWrapper.create().where(Account::getName).eq(name)));
     }
+
+    @Override
+    public void update(Account account) {
+        mapper.update(account);
+    }
 }

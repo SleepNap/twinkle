@@ -1,5 +1,6 @@
 package org.gms.plugin.runtime;
 
+import lombok.extern.log4j.Log4j2;
 import org.gms.plugin.ContributionHandle;
 import org.gms.plugin.ContributionRegistrar;
 import org.gms.plugin.PluginContext;
@@ -18,8 +19,12 @@ import java.util.function.Function;
  * <p>贡献点注册门面在此落地：{@code register} 经宿主 {@link org.gms.plugin.PluginHost} 落进对应注册表，
  * 返回的 {@link ContributionHandle} 被 {@code tracked} 收集——卸载时统一回滚（配合 track 的
  * 插件自有句柄一起关闭）。
+ *
+ * <p>public：实现公共契约 {@link PluginContext}（plugin-api 可替换层），不得为包私有
+ * （红线 12：可见性显式声明，禁止无修饰符裸声明）。
  */
-final class DefaultPluginContext implements PluginContext {
+@Log4j2
+public final class DefaultPluginContext implements PluginContext {
 
     private final PluginDescriptor descriptor;
     private final ClassLoader classLoader;
@@ -101,13 +106,12 @@ final class DefaultPluginContext implements PluginContext {
     }
 
     /** 关闭全部已跟踪句柄（插件卸载时调用；先 stop 后关句柄）。 */
-    void closeTracked() {
+    public void closeTracked() {
         for (AutoCloseable h : tracked) {
             try {
                 h.close();
             } catch (Exception e) {
-                org.apache.logging.log4j.LogManager.getLogger(DefaultPluginContext.class)
-                        .warn("关闭插件句柄异常: {}（插件 {}）", h, pluginId(), e);
+                log.warn("关闭插件句柄异常: {}（插件 {}）", h, pluginId(), e);
             }
         }
         tracked.clear();

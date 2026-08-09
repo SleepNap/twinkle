@@ -1,7 +1,6 @@
 package org.gms.login.handler;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
 import org.gms.login.LoginPacketFactory;
@@ -18,9 +17,9 @@ import java.util.List;
  *
  * <p>包结构：{@code skip 1 + byte serverId}。回 {@code CHARLIST}（选角列表）。
  */
+@Log4j2
 public final class CharlistRequestHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(CharlistRequestHandler.class);
 
     private final LoginService loginService;
 
@@ -39,9 +38,16 @@ public final class CharlistRequestHandler implements PacketHandler {
         Account account = session.getAttr("account");
         List<Character> characters = loginService.charactersFor(account.getId(), serverId);
 
+        // 每个角色查已穿戴装备（选角列表外观编码用；无装备 = 内衣）
+        java.util.Map<Long, java.util.List<org.gms.data.entity.InventoryItemEntity>> equippedByChar =
+                new java.util.HashMap<>();
+        for (Character c : characters) {
+            equippedByChar.put(c.getId(), loginService.equippedItems(c.getId()));
+        }
+
         session.setAttr("characters", characters);
         session.transition(SessionStage.CHARLIST);
-        LOG.info("发送角色列表: 账号={}, 角色数={}", account.getName(), characters.size());
-        session.send(LoginPacketFactory.charList(characters, serverId, 0));
+        log.info("发送角色列表: 账号={}, 角色数={}", account.getName(), characters.size());
+        session.send(LoginPacketFactory.charList(characters, serverId, 0, equippedByChar));
     }
 }

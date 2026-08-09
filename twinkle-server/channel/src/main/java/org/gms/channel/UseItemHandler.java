@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
@@ -27,9 +26,10 @@ import java.util.Map;
  *
  * <p>handler 只做"收包→调 system→发包"；物品 id 校验、扣量在 system（版本门）。
  */
+@Log4j2
 public final class UseItemHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(UseItemHandler.class);
+
 
     private final ItemSystem itemSystem;
     private final Map<Integer, ItemData> itemData;

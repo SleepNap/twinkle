@@ -1,7 +1,6 @@
 package org.gms.httpapi.mirror;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.service.admin.OnlinePlayerEvents;
 
@@ -19,9 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>实现细节：{@code Map<characterId, PlayerOnline>} 只读快照；订阅由 bootstrap 接线
  * （{@code EventBus.subscribe}）。并发用 ConcurrentHashMap（进图/断链可并行到达）。
  */
+@Log4j2
 public final class OnlinePlayerMirror implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(OnlinePlayerMirror.class);
+
 
     private final Map<Long, OnlinePlayerEvents.PlayerOnline> byId = new ConcurrentHashMap<>();
     private final AutoCloseable subscriptionOnline;
@@ -58,7 +58,7 @@ public final class OnlinePlayerMirror implements AutoCloseable {
             subscriptionOnline.close();
             subscriptionOffline.close();
         } catch (Exception e) {
-            LOG.warn("关闭在线镜像订阅异常", e);
+            log.warn("关闭在线镜像订阅异常", e);
         }
     }
 }

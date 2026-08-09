@@ -1,7 +1,5 @@
 package org.gms.event;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -9,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 可靠事件总线（架构 4.5 可靠性三件套：持久化队列 + 幂等去重 + 单一属主序号 = 恰好一次）。
@@ -33,9 +32,10 @@ import java.util.function.Consumer;
  * <p>本类只负责发送侧可靠性（落库 + 投递 + 重投）；接收侧去重/ack 由 {@link ReliableReceiver} 承担，
  * 两者经共享 outbox/bus_stream 表协作（单机多进程同库即协作；跨机经网络 ack 帧，M6 后续）。
  */
+@Log4j2
 public final class ReliableEventBus {
 
-    private static final Logger LOG = LogManager.getLogger(ReliableEventBus.class);
+
 
     private final EventBus delegate;
     private final OutboxRepository outbox;
@@ -61,7 +61,7 @@ public final class ReliableEventBus {
         // 启动重投：取出未 ACKED 的 in-flight 消息（进程崩了重发，架构 4.5）。
         // 注意：ACKED = 接收方已确认应用，重投只重投未确认的。
         for (OutboxRepository.OutboxRow row : outbox.findPending()) {
-            LOG.info("可靠总线启动重投: messageId={} stream={} seq={}", row.messageId(), row.streamId(), row.seq());
+            log.info("可靠总线启动重投: messageId={} stream={} seq={}", row.messageId(), row.streamId(), row.seq());
             deliver(row);
         }
     }
@@ -91,23 +91,23 @@ public final class ReliableEventBus {
     }
 
     /** 投递一条 outbox 消息到 delegate（发送侧重投去重；package-private 供测试直接驱动重投）。 */
-    void deliver(OutboxRepository.OutboxRow row) {
+    public void deliver(OutboxRepository.OutboxRow row) {
         String stream = row.streamId();
         // 幂等去重：同 messageId 已投递过则不重复投（发送侧重投保护；接收侧另有 ReliableReceiver 去重）
         if (processedMessageIds.putIfAbsent(row.messageId(), Boolean.TRUE) != null) {
-            LOG.info("可靠总线幂等去重（发送侧）: messageId={} 已投递", row.messageId());
+            log.info("可靠总线幂等去重（发送侧）: messageId={} 已投递", row.messageId());
             return;
         }
         long last = deliveredSeq.getOrDefault(stream, 0L);
         if (row.seq() <= last) {
-            LOG.info("可靠总线重复序号丢弃: messageId={} seq={}（last={}）", row.messageId(), row.seq(), last);
+            log.info("可靠总线重复序号丢弃: messageId={} seq={}（last={}）", row.messageId(), row.seq(), last);
             return;
         }
         deliveredSeq.put(stream, row.seq());
         // 反序列化 + 投递（发送侧真实投递；接收侧按 bus_stream 判序去重）
         Object payload = codec.decode(row.payload(), row.payloadType());
         if (payload == null) {
-            LOG.error("可靠总线负载反序列化失败: messageId={} type={}", row.messageId(), row.payloadType());
+            log.error("可靠总线负载反序列化失败: messageId={} type={}", row.messageId(), row.payloadType());
             return;
         }
         try {
@@ -121,7 +121,7 @@ public final class ReliableEventBus {
             // 投递成功 → DELIVERED（等接收方 ack 落定 ACKED）
             outbox.markDelivered(row.id());
         } catch (RuntimeException e) {
-            LOG.error("可靠总线投递失败: messageId={}", row.messageId(), e);
+            log.error("可靠总线投递失败: messageId={}", row.messageId(), e);
         }
     }
 

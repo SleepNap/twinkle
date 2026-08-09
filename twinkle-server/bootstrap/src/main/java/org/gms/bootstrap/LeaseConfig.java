@@ -58,7 +58,7 @@ public class LeaseConfig {
 
     /** 启动装配：注册两个 TickHandler → 启动 tick 循环（幂等）。 */
     @Singleton
-    static final class LeaseTickRegistrar {
+    public static final class LeaseTickRegistrar {
         LeaseTickRegistrar(TickScheduler tickScheduler, ControllerLeaseService controllerLeaseService,
                            MonsterReassignTickHandler reassignHandler) {
             if (controllerLeaseService instanceof DefaultControllerLeaseService dcl) {

@@ -1,12 +1,11 @@
 package org.gms.event;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 可靠消息接收方（架构 4.5 恰好一次的接收侧：bus_stream 持久化去重 + ack 闭环）。
@@ -21,9 +20,10 @@ import java.util.function.Consumer;
  * <p>使用场景：CC 迁移目标频道订阅 {@code ChangeChannelRequest} 流（{@code cc:player:{id}}），
  * 重启重投不重复迁移玩家。
  */
+@Log4j2
 public final class ReliableReceiver {
 
-    private static final Logger LOG = LogManager.getLogger(ReliableReceiver.class);
+
 
     private final OutboxRepository outbox;
 
@@ -59,13 +59,13 @@ public final class ReliableReceiver {
             long last = deliveredSeq.computeIfAbsent(stream, k -> outbox.lastDeliveredSeq(stream));
             if (seq <= last) {
                 // 已应用过（重复投递/重投）——幂等去重，直接 ack 落定
-                LOG.info("可靠接收方重复投递丢弃: messageId={} seq={}（last={}）", messageId, seq, last);
+                log.info("可靠接收方重复投递丢弃: messageId={} seq={}（last={}）", messageId, seq, last);
                 outbox.markAcked(messageId);
                 return;
             }
             if (seq != last + 1) {
                 // 越序：暂存等待前序
-                LOG.info("可靠接收方越序暂存: messageId={} seq={}（last={}）", messageId, seq, last);
+                log.info("可靠接收方越序暂存: messageId={} seq={}（last={}）", messageId, seq, last);
                 buffered.computeIfAbsent(stream, k -> new ConcurrentHashMap<>())
                         .put(seq, new BufferedMessage(messageId, message));
                 return;
@@ -82,13 +82,13 @@ public final class ReliableReceiver {
         try {
             applier.accept(message);
         } catch (RuntimeException e) {
-            LOG.error("可靠接收方应用失败: messageId={} seq={}", messageId, seq, e);
+            log.error("可靠接收方应用失败: messageId={} seq={}", messageId, seq, e);
             return;
         }
         deliveredSeq.put(stream, seq);
         outbox.advanceLastDeliveredSeq(stream, seq);
         outbox.markAcked(messageId);
-        LOG.debug("可靠接收方应用完成: stream={} seq={} messageId={}", stream, seq, messageId);
+        log.debug("可靠接收方应用完成: stream={} seq={} messageId={}", stream, seq, messageId);
     }
 
     @SuppressWarnings("unchecked")

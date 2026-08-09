@@ -46,7 +46,7 @@
 | 数据迁移 | **自研迁移器**（M0 决策，替换 Flyway） | 每数据源独立版本表；Flyway 社区版自 V10 撤 SQLite（商业版才有），架构默认 SQLite，故三库统一自研（见 6.2） |
 | 日志 | log4j2 | 保留 |
 | 限流 | Bucket4j | 第三方 API |
-| UI | **Web 控制台**（北斗式） | JavaFX 明确移除 |
+| UI | **Web 控制台**：前端 **React 19 + Vite + TypeScript**，组件层 **shadcn/ui**（基于 Radix UI + Tailwind CSS），样式底层 **Tailwind CSS**；独立工程 `twinkle-web/`，浏览器端不受 2C2G 红线约束；设计系统 **Notion 风格**（见 `DESIGN-CANDIDATES.md`） | JavaFX 明确移除 |
 | 缓存 / 对象 / MQ | **不默认引入** | 内存态权威，进程内实现即可；standalone 不常驻重服务 |
 
 ### 2.2 关键取舍记录
@@ -57,6 +57,7 @@
 - **SQLite 规模验证（搜索核证）**：WAL 下实测 70K reads/s + 3.6K writes/s，读吞吐 2 倍于 MySQL、p99 读延迟低 19 倍；极限是"持续 >10 并发写/秒"而非"人数"——本架构低频批量写天然避开。**三件套做对即稳**：WAL + 单写连接 + busy_timeout。
 - **AI 选定 LangChain4j**：流式 + 工具调用同时支持是硬需求。
 - **框架选定 Micronaut 4**：轻量 + 中间件全主流。Vert.x 因响应式风格与命令式游戏逻辑割裂被否。
+- **前端框架选定 React 19 + Vite + TypeScript + shadcn/ui**：运维后台以表格 / 状态标签为主场，shadcn/ui（基于 Radix UI + Tailwind CSS）提供可拷贝、可定制的无样式组件原语，天然契合「设计令牌驱动、组件库先行」的打法；Tailwind CSS 以原子类承载 Notion 风格令牌，浅 / 深双主题通过 CSS 变量令牌切换、状态持久化到 localStorage；Vite 提供极快冷启与按需构建，TypeScript 保证大型后台的类型安全。前端为独立工程 `twinkle-web/`，与 Java 服务端通过 `http-api` 模块（`/api/v1`）解耦，浏览器端不受 2C2G 红线约束。设计系统采用 **Notion 风格**（详见 `DESIGN-CANDIDATES.md`）。
 
 ---
 

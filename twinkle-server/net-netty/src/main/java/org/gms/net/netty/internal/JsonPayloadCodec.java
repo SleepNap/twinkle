@@ -1,8 +1,7 @@
 package org.gms.net.netty.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.PayloadCodec;
 
 /**
@@ -15,9 +14,10 @@ import org.gms.event.PayloadCodec;
  *
  * <p>装配由 bootstrap 注入 {@link org.gms.event.ReliableEventBus}（替换 MARKER）。
  */
+@Log4j2
 public final class JsonPayloadCodec implements PayloadCodec {
 
-    private static final Logger LOG = LogManager.getLogger(JsonPayloadCodec.class);
+
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -36,10 +36,10 @@ public final class JsonPayloadCodec implements PayloadCodec {
             Class<?> type = Class.forName(payloadType);
             return MAPPER.readValue(payload, type);
         } catch (ClassNotFoundException e) {
-            LOG.error("可靠总线负载类型不存在: {}", payloadType);
+            log.error("可靠总线负载类型不存在: {}", payloadType);
             return null;
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            LOG.error("可靠总线负载 JSON 反序列化失败: type={}", payloadType, e);
+            log.error("可靠总线负载 JSON 反序列化失败: type={}", payloadType, e);
             return null;
         }
     }

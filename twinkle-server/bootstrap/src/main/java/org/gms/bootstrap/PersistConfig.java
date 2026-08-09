@@ -67,8 +67,8 @@ public class PersistConfig {
 
     /** 启动装配：注册 L4 增量 FLUSH handler → 启动 tick 循环。 */
     @Singleton
-    static final class TickStartupRegistrar {
-        TickStartupRegistrar(TickScheduler tickScheduler, CharacterFlushTickHandler flushHandler) {
+    public static final class TickStartupRegistrar {
+        public TickStartupRegistrar(TickScheduler tickScheduler, CharacterFlushTickHandler flushHandler) {
             tickScheduler.register(flushHandler);
             tickScheduler.start();
         }

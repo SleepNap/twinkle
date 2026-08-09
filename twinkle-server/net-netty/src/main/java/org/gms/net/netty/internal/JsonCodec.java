@@ -1,8 +1,7 @@
 package org.gms.net.netty.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 内部通信 JSON 编解码工具（架构 4.5：内部帧负载序列化）。
@@ -11,9 +10,10 @@ import org.apache.logging.log4j.Logger;
  * 反序列化需携带类型名（类全名），经 {@link #decode(String, String)} 恢复真实对象——网络帧
  * 重投的序列化基础（M4 {@code PayloadCodec.MARKER} 只存字符串标记，M6 换真实序列化）。
  */
+@Log4j2
 public final class JsonCodec {
 
-    private static final Logger LOG = LogManager.getLogger(JsonCodec.class);
+
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -36,10 +36,10 @@ public final class JsonCodec {
             Class<?> type = Class.forName(typeName);
             return (T) MAPPER.readValue(json, type);
         } catch (ClassNotFoundException e) {
-            LOG.error("JSON 反序列化类型不存在: {}", typeName);
+            log.error("JSON 反序列化类型不存在: {}", typeName);
             return null;
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            LOG.error("JSON 反序列化失败: type={}", typeName, e);
+            log.error("JSON 反序列化失败: type={}", typeName, e);
             return null;
         }
     }
@@ -49,7 +49,7 @@ public final class JsonCodec {
         try {
             return MAPPER.readValue(json, typeRef);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            LOG.error("JSON 反序列化失败（泛型）: {}", typeRef.getType().getTypeName(), e);
+            log.error("JSON 反序列化失败（泛型）: {}", typeRef.getType().getTypeName(), e);
             return null;
         }
     }

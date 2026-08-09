@@ -1,6 +1,8 @@
 package org.gms.channel;
 
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
@@ -31,7 +33,7 @@ public final class ChannelPacketFactory {
     private static final long ZERO_TIME = 94354848000000000L;
     private static final long PERMANENT = 150841440000000000L;
 
-    static long getTime(long utcTimestamp) {
+    private static long getTime(long utcTimestamp) {
         if (utcTimestamp < 0 && utcTimestamp >= -3) {
             if (utcTimestamp == -1) {
                 return DEFAULT_TIME;
@@ -88,8 +90,11 @@ public final class ChannelPacketFactory {
         addSkillInfo(p);
         addQuestInfo(p);
         p.writeShort(0);                // miniGame
+        // v83 addRingInfo：crush rings + friendship rings + marriageRing 三段各一个 short
+        // （参考项目 partnerId<=0 时也写 writeShort(0)，缺此段会让后续字段错位 2 字节导致客户端断连）
         p.writeShort(0);                // crush rings
-        p.writeShort(0);                // friendship rings（partnerId<=0 无结婚段）
+        p.writeShort(0);                // friendship rings
+        p.writeShort(0);                // marriageRing 段（partnerId<=0 无戒指）
         addTeleportInfo(p);
         addMonsterBookInfo(p, chr);
         p.writeShort(0);                // newYear
@@ -127,7 +132,10 @@ public final class ChannelPacketFactory {
         p.writeInt(0);
     }
 
-    /** 空背包：5 槽位上限 + 时间 + 各背包结束/起始分隔（宽度差异是 v83 协议固有）。 */
+    /**
+     * 背包信息：5 槽位上限 + 时间 + 各背包段。已穿戴装备（EQUIP 背包负位置行）
+     * 用 addItemInfo 编码进 equipped 段（思路参考 BeiDou addInventoryInfo）。
+     */
     private static void addInventoryInfo(ByteArrayOutPacket p, Character chr) {
         p.writeByte(chr.getEquipSlots());
         p.writeByte(chr.getUseSlots());
@@ -135,13 +143,64 @@ public final class ChannelPacketFactory {
         p.writeByte(chr.getEtcSlots());
         p.writeByte(CASH_SLOT_LIMIT);
         p.writeLong(getTime(-2));       // ZERO_TIME
+        // equipped 段：EQUIP 背包中 position < 0（已穿戴）的行
+        for (Item item : chr.getInventory(InventoryType.EQUIP).items()) {
+            if (item.getPosition() >= 0) {
+                continue;
+            }
+            addEquipItemInfo(p, item);
+        }
         p.writeShort(0);                // equipped 结束（equip cash 起始）
         p.writeShort(0);                // equip cash 结束（equip 背包起始）
+        // equip 背包段（未穿戴，M2-2 前为空）
         p.writeInt(0);                  // equip 背包结束（use 起始）
         p.writeByte(0);                 // use 结束（setup 起始）
         p.writeByte(0);                 // setup 结束（etc 起始）
         p.writeByte(0);                 // etc 结束（cash 起始）
         // cash 背包无结束标记
+    }
+
+    /**
+     * 已穿戴装备项编码（v83 addItemInfo 的装备分支，属性从 WZ 取默认 0——M2-2 装备
+     * 属性系统落地前按 0 编码，客户端仍能正确显示外观）。
+     *
+     * <p>布局：short 槽位（负转正）+ byte 类型1 + int 物品id + bool cash + 过期时间 +
+     * byte 升级槽 + byte 等级 + short×14 属性 + owner + flag + 非 cash 属性段 + 时间 + int -1。
+     */
+    private static void addEquipItemInfo(ByteArrayOutPacket p, Item item) {
+        short pos = item.getPosition();
+        p.writeShort((short) Math.abs(pos));   // 槽位正数
+        p.writeByte(1);                        // 类型 EQUIP
+        p.writeInt(item.getId());
+        p.writeBool(false);                    // 非现金
+        p.writeLong(getTime(-2));              // 过期（永久）
+        p.writeByte(0);                        // 升级槽
+        p.writeByte(0);                        // 装备等级
+        p.writeShort(0);                       // str
+        p.writeShort(0);                       // dex
+        p.writeShort(0);                       // int
+        p.writeShort(0);                       // luk
+        p.writeShort(0);                       // hp
+        p.writeShort(0);                       // mp
+        p.writeShort(0);                       // watk
+        p.writeShort(0);                       // matk
+        p.writeShort(0);                       // wdef
+        p.writeShort(0);                       // mdef
+        p.writeShort(0);                       // acc
+        p.writeShort(0);                       // avoid
+        p.writeShort(0);                       // hands
+        p.writeShort(0);                       // speed
+        p.writeShort(0);                       // jump
+        p.writeString("");                     // owner
+        p.writeShort(0);                       // flag
+        // 非现金：itemLevel 段（0 + 0 + exp 0 + vicious 0 + long 0）
+        p.writeByte(0);
+        p.writeByte(0);
+        p.writeInt(0);
+        p.writeInt(0);
+        p.writeLong(0);
+        p.writeLong(getTime(-2));              // 过期
+        p.writeInt(-1);
     }
 
     /** 空技能。 */

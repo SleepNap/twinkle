@@ -1,11 +1,10 @@
 package org.gms.domain.script;
 
+import lombok.extern.log4j.Log4j2;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
@@ -21,9 +20,10 @@ import java.util.Map;
  * <p>GraalVM 引擎启动约 150-250ms（首次），常驻原生内存约 60-100M（见 ARCHITECTURE.md 9.1：
  * 原生 512M 预算内含 GraalVM JS 引擎）。context 复用单例，避免每次创建。
  */
+@Log4j2
 public final class ScriptEngine {
 
-    private static final Logger LOG = LogManager.getLogger(ScriptEngine.class);
+
 
     private final Context context;
 
@@ -66,7 +66,7 @@ public final class ScriptEngine {
         try {
             context.close();
         } catch (Exception e) {
-            LOG.warn("关闭 GraalVM 上下文异常", e);
+            log.warn("关闭 GraalVM 上下文异常", e);
         }
     }
 }

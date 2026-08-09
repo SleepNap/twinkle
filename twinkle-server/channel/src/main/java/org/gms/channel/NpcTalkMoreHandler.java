@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.script.ConversationScript;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
@@ -18,9 +17,10 @@ import org.gms.net.packet.SessionStage;
  * <p>路由：会话路由上下文 levelType 非 null → 按 nextlevel 类型派发 {@code level{xxx}}；
  * 否则经典 {@code action(mode, type, selection)} 重入（脚本内 status 推进）。
  */
+@Log4j2
 public final class NpcTalkMoreHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(NpcTalkMoreHandler.class);
+
 
     private static final byte MODE_NEXT = 1;
     private static final byte MODE_BACK = 0;
@@ -65,7 +65,7 @@ public final class NpcTalkMoreHandler implements PacketHandler {
             try {
                 script.invoke("action", mode, (int) lastMsg, selection);
             } catch (RuntimeException e) {
-                LOG.error("NPC 对话 action() 失败", e);
+                log.error("NPC 对话 action() 失败", e);
                 NpcTalkHandler.closeConversation(session);
             }
         }
@@ -131,7 +131,7 @@ public final class NpcTalkMoreHandler implements PacketHandler {
         try {
             script.invoke(fn, args);
         } catch (RuntimeException e) {
-            LOG.error("nextlevel 函数 {} 失败", fn, e);
+            log.error("nextlevel 函数 {} 失败", fn, e);
             host.dispose();
         }
     }

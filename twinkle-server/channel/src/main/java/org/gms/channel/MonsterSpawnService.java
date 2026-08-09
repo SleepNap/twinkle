@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.lease.ControllerLeaseService;
 import org.gms.domain.game.lease.LeaseOwner;
 import org.gms.domain.game.map.MapleMap;
@@ -37,9 +36,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * 与快照查询（{@link #stats()}），做 Web/M5 管理端时直接可读，不依赖未装配的
  * Metrics bean。重生调度器的生命周期/异常经 {@link #close} 与计数暴露。
  */
+@Log4j2
 public final class MonsterSpawnService {
 
-    private static final Logger LOG = LogManager.getLogger(MonsterSpawnService.class);
+
 
     private final Map<Integer, MobData> mobData;
     private final PlayerSessionRegistry sessions;
@@ -132,7 +132,7 @@ public final class MonsterSpawnService {
         MobData data = mobData.get(sp.getMonsterId());
         if (data == null) {
             missingMobData.incrementAndGet();
-            LOG.warn("刷怪缺 MobData: monsterId={}", sp.getMonsterId());
+            log.warn("刷怪缺 MobData: monsterId={}", sp.getMonsterId());
             return null;
         }
         MapleMonster monster = new MapleMonster(data);

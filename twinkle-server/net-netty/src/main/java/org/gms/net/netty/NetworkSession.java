@@ -6,8 +6,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.net.encryption.CipherPair;
 import org.gms.net.opcodes.RecvOpcode;
 import org.gms.net.opcodes.SendOpcode;
@@ -40,12 +39,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>连接级状态（当前账号、已选角色等）经 {@link #setAttr} 存储，handler 之间传递
  * 不依赖跨操作静态字段（红线 12：可替换层不得持有跨操作状态）。
  */
+@Log4j2
 public final class NetworkSession extends ChannelInboundHandlerAdapter implements PacketSession {
-
-    private static final Logger LOG = LogManager.getLogger(NetworkSession.class);
-
-    /** v83 客户端版本（字节级兼容红线 1）。 */
-    public static final short MAPLE_VERSION = 83;
 
     /** 会话 id 分配（全局单调；同一 TCP 连接创建即得、全程不变，事故报告阶段 B）。 */
     private static final AtomicLong SESSION_ID_SEQ = new AtomicLong();
@@ -81,7 +76,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
         return sessionId;
     }
 
-    /** 心跳观测快照（测试/运维读，报告 §七 心跳指标）。 */
+    /** 心跳观测快照（测试/运维读，报告 §七 心跳指标；返回类型 public，红线 12 合法）。 */
     public HeartbeatGuard.HeartbeatStats heartbeatStats() {
         return heartbeat.stats();
     }
@@ -119,7 +114,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
         this.channel = ctx.channel();
         writeHello(ctx);
         transition(SessionStage.LOGIN);
-        LOG.info("客户端连入: {}", ctx.channel().remoteAddress());
+        log.info("客户端连入: {}", ctx.channel().remoteAddress());
     }
 
     /**
@@ -128,7 +123,9 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     private void writeHello(ChannelHandlerContext ctx) {
         ByteArrayOutPacket hello = new ByteArrayOutPacket();
         hello.writeShort(0x0E);
-        hello.writeShort(MAPLE_VERSION);
+        // 版本号直接取本连接加密器持有的版本（CipherPair 由 PacketSession.MAPLE_VERSION 构造），
+        // 与加密 header 的版本 key 恒一致——杜绝 hello 与加密版本分叉。
+        hello.writeShort(ciphers.mapleVersion());
         hello.writeShort(1);
         hello.writeByte(49);
         hello.writeBytes(ciphers.receive().getInitialIv());
@@ -149,7 +146,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
             heartbeat.onInboundPacket(stage(), false);
             registry.find(opcode).ifPresentOrElse(
                     handler -> handler.handle(this, packet),
-                    () -> LOG.warn("未注册的收包 opcode: 0x{}", Integer.toHexString(opcode)));
+                    () -> log.warn("未注册的收包 opcode: 0x{}", Integer.toHexString(opcode)));
         }
     }
 
@@ -173,7 +170,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        LOG.info("连接关闭: {}", ctx.channel().remoteAddress());
+        log.info("连接关闭: {}", ctx.channel().remoteAddress());
         DisconnectListener listener = disconnectListener;
         if (listener != null) {
             listener.onDisconnect(this);
@@ -183,7 +180,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // 日志红线 9：log.error("描述", e)
-        LOG.error("连接异常，断开: {}", ctx.channel().remoteAddress(), cause);
+        log.error("连接异常，断开: {}", ctx.channel().remoteAddress(), cause);
         ctx.close();
     }
 
@@ -197,7 +194,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     @Override
     public void close(String reason) {
-        LOG.info("主动断开连接，原因: {}", reason);
+        log.info("主动断开连接，原因: {}", reason);
         Channel c = channel;
         if (c != null) {
             c.close();

@@ -1,10 +1,9 @@
 package org.gms.net.encryption;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * v83 会话加密核心（AES-OFB 变种，字节级兼容，红线 1）。
@@ -22,9 +21,9 @@ import javax.crypto.spec.SecretKeySpec;
  *
  * <p>算法与常量参考 BeiDou-Server（OdinMS 系）理解，实现为自研组织。
  */
+@Log4j2
 public final class AesCipher {
 
-    private static final Logger LOG = LogManager.getLogger(AesCipher.class);
 
     /** v83 固定 AES-256 密钥（协议常量）。 */
     private static final SecretKeySpec SESSION_KEY = new SecretKeySpec(new byte[]{
@@ -88,7 +87,7 @@ public final class AesCipher {
             aesBlock.init(javax.crypto.Cipher.ENCRYPT_MODE, SESSION_KEY);
         } catch (Exception e) {
             // 日志红线 9：log.error("描述", e)
-            LOG.error("AES 加密器初始化失败", e);
+            log.error("AES 加密器初始化失败", e);
             throw new IllegalStateException("AES 加密器初始化失败", e);
         }
         this.iv = iv.getBytes();
@@ -171,7 +170,7 @@ public final class AesCipher {
             byte[] result = aesBlock.doFinal(block);
             return result.length == block.length ? result : java.util.Arrays.copyOf(result, block.length);
         } catch (Exception e) {
-            LOG.error("AES 块变换失败", e);
+            log.error("AES 块变换失败", e);
             throw new IllegalStateException("AES 块变换失败", e);
         }
     }

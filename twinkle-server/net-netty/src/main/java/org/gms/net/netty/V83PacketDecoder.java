@@ -3,8 +3,7 @@ package org.gms.net.netty;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.net.encryption.AesCipher;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketCodec;
@@ -20,9 +19,9 @@ import java.util.List;
  * <p>v83 header 4 字节按大端 int 读取（与 {@link AesCipher#isValidHeader} 约定一致）。
  * 握手阶段服务端直发明文 hello，此后客户端所有包均走本解码器（加密）。
  */
+@Log4j2
 public final class V83PacketDecoder extends ByteToMessageDecoder {
 
-    private static final Logger LOG = LogManager.getLogger(V83PacketDecoder.class);
 
     /** 单包最大负载（防御值：v83 常规包远小于此，超过视为异常/攻击）。 */
     private static final int MAX_PACKET_LENGTH = 0x10000;
@@ -41,13 +40,13 @@ public final class V83PacketDecoder extends ByteToMessageDecoder {
         in.markReaderIndex();
         int header = in.readInt();
         if (!receiveCipher.isValidHeader(header)) {
-            LOG.warn("非法包 header（可能错序/篡改），断开连接: {}", Integer.toHexString(header));
+            log.warn("非法包 header（可能错序/篡改），断开连接: {}", Integer.toHexString(header));
             ctx.close();
             return;
         }
         int length = AesCipher.decodePacketLength(header);
         if (length <= 0 || length > MAX_PACKET_LENGTH) {
-            LOG.warn("异常包长度 {}，断开连接", length);
+            log.warn("异常包长度 {}，断开连接", length);
             ctx.close();
             return;
         }

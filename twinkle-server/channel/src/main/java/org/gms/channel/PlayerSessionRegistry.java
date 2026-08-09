@@ -27,8 +27,13 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class PlayerSessionRegistry {
 
-    /** 会话登记（连接不可变 sessionId + 认领代际 + 会话引用，报告 §5.4 归属三元组）。 */
-    record Entry(long sessionId, long generation, PacketSession session) {
+    /**
+     * 会话登记（连接不可变 sessionId + 认领代际 + 会话引用，报告 §5.4 归属三元组）。
+     *
+     * <p>public：{@link #entry(long)} 为 public 返回它，公共方法不得返回包私有/私有类型
+     * （红线 12），故须为 public。
+     */
+    public record Entry(long sessionId, long generation, PacketSession session) {
     }
 
     private final ConcurrentMap<Long, Entry> sessions = new ConcurrentHashMap<>();
@@ -87,7 +92,7 @@ public final class PlayerSessionRegistry {
         return e == null ? null : e.session();
     }
 
-    /** 当前有效登记（sessionId + generation，代际比对用）。 */
+    /** 当前有效登记（sessionId + generation，代际比对用；返回类型 public，红线 12 合法）。 */
     public Optional<Entry> entry(long characterId) {
         return Optional.ofNullable(sessions.get(characterId));
     }

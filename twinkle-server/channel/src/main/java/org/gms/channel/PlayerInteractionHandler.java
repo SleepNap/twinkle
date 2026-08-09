@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.Inventory;
 import org.gms.domain.game.inventory.InventoryType;
@@ -31,9 +30,10 @@ import org.gms.replaceable.TradeSystem;
  * <p>简化：SET_ITEMS 按槽位取物品；物品展示广播发 itemId+quantity 简化段
  * （完整 addItemInfo 待后续）；加物品不校验槽位重复（take 时按 offer 累计扣）。
  */
+@Log4j2
 public final class PlayerInteractionHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(PlayerInteractionHandler.class);
+
 
     /** 交易操作码（收/发共用子动作值）。 */
     private static final int ACTION_CREATE = 0x00;
@@ -51,7 +51,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
     private static final int RESULT_UNSUCCESSFUL = 8;
 
     /** 会话 attr key。 */
-    static final String TRADE_ATTR = "trade";
+    private static final String TRADE_ATTR = "trade";
 
     private final TradeSystem tradeSystem;
     private final PlayerSessionRegistry sessions;
@@ -89,7 +89,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
             case ACTION_SET_ITEMS -> setItems(session, chr, packet);
             case ACTION_SET_MESO -> setMeso(session, chr, packet);
             case ACTION_CONFIRM -> confirm(session, chr);
-            default -> LOG.debug("未处理的互动动作: {}", action);
+            default -> log.debug("未处理的互动动作: {}", action);
         }
     }
 

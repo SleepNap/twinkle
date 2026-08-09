@@ -69,8 +69,9 @@ public class ChannelConfig {
 
     @Bean
     @Singleton
-    public CharacterLoader characterLoader(VersionGate versionGate) {
-        return new CharacterLoader(versionGate);
+    public CharacterLoader characterLoader(VersionGate versionGate,
+                                           org.gms.data.repo.InventoryItemRepository inventoryItemRepository) {
+        return new CharacterLoader(versionGate, inventoryItemRepository);
     }
 
     @Bean
@@ -250,8 +251,8 @@ public class ChannelConfig {
 
     /** 频道启动注册（@Context 强制装配：构造期上报 → 心跳可续期）。 */
     @Singleton
-    static final class ChannelRegistryRegistrar {
-        ChannelRegistryRegistrar(int channelId, String host, int port, IntercoordService intercoordService) {
+    public static final class ChannelRegistryRegistrar {
+        public ChannelRegistryRegistrar(int channelId, String host, int port, IntercoordService intercoordService) {
             intercoordService.registerChannel(channelId, host, port, 0);
         }
     }

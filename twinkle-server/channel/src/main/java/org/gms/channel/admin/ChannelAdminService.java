@@ -1,7 +1,6 @@
 package org.gms.channel.admin;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.persist.RestartService;
@@ -24,9 +23,10 @@ import org.gms.service.admin.AdminService;
  *
  * <p>装配由 bootstrap 接线（本类不加 @Singleton，避免与 @Bean 双份）。
  */
+@Log4j2
 public final class ChannelAdminService implements AdminService {
 
-    private static final Logger LOG = LogManager.getLogger(ChannelAdminService.class);
+
 
     private final PlayerStorage players;
     private final PlayerSessionRegistry sessions;
@@ -71,18 +71,18 @@ public final class ChannelAdminService implements AdminService {
     @Override
     public int reloadScripts() {
         int changed = scriptManager.reload();
-        LOG.info("管理侧触发脚本重载，变化脚本数: {}", changed);
+        log.info("管理侧触发脚本重载，变化脚本数: {}", changed);
         return changed;
     }
 
     @Override
     public void requestRestart() {
-        LOG.info("管理侧请求重启，后台执行 DRAINING → FLUSH_DIRTY → 退出");
+        log.info("管理侧请求重启，后台执行 DRAINING → FLUSH_DIRTY → 退出");
         Thread daemon = new Thread(() -> {
             try {
                 restartService.restart(restartProcess);
             } catch (Exception e) {
-                LOG.error("管理侧重启编排异常", e);
+                log.error("管理侧重启编排异常", e);
             }
         }, "admin-requested-restart");
         daemon.setDaemon(true);

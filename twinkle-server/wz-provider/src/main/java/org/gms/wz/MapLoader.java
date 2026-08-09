@@ -43,9 +43,10 @@ public final class MapLoader {
 
     private Path mapFile(int mapId) {
         int segment = mapId / 100_000_000;
+        // v83 地图文件名 9 位零填充（如 4→000000004、10000→000010000、100000000→100000000）
         return wzRoot.resolve("Map.wz").resolve("Map")
                 .resolve("Map" + segment)
-                .resolve(mapId + ".img.xml");
+                .resolve(String.format("%09d", mapId) + ".img.xml");
     }
 
     private MapleMap fill(int mapId, WzNode root) {

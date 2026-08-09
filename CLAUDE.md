@@ -66,12 +66,13 @@ Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM 
 3. **游戏对象不进容器**：Character/MapleMap/Item 手动 new，容器只管基础设施 + Service。
 4. **HTTP 与游戏 Netty 隔离 EventLoop**：第三方 API 流量不挤占游戏 tick 线程。
 5. `accounts.banned` 只有值 `1` 明确表示已封禁，查询未封禁必须用 `banned <> 1`（兼容 NULL）。
-6. 日志用 log4j2 `log.error("描述", e)`，禁用 `e.printStackTrace()`。
+6. 日志统一用 Lombok `@Log4j2` 注解（`log.error("描述", e)`），**禁止手写 `LogManager.getLogger` / `Logger` 字段**；调用统一 `log.xxx(...)`（不用 `LOG.xxx`），禁用 `e.printStackTrace()`。
 7. 全限定类名必须 import 后用短名（除非类名冲突）。
 8. **可替换层不得引用稳定层具体类**（用接口或数据投影，防 classloader 换代后 CCE）；**不得持有跨操作状态**。
 9. **贡献点（PacketHandler/HTTP/Script/Task/Event）从第一天版本化**——可装卸即兼容面。
 10. **JDK 锁定 GraalVM CE for JDK 21**。
 11. **实体类选型**：一次性初始化、不可变的值对象用 `record`；需要运行时更新的可变实体类用 Lombok（`@Getter`/`@Setter`）代替手写 getter/setter。自定义 `equals`/`hashCode`/`copy` 等仍手写（不被 Lombok 生成覆盖）。
+12. **可见性显式声明（必须有头）**：所有类型（顶层/嵌套 `class`/`interface`/`enum`/`record`）与成员（方法/字段/构造器）**必须显式写可见性修饰符**（`private`/`protected`/`public`），**禁止无修饰符的裸声明**。Java 的包私有（default）就是省略修饰符，本项目禁用这种写法：需要"仅同包访问"语义时，把该成员/嵌套类型显式写 `public`，或把只在单类内使用的实现细节收紧为 `private`、把需要子类访问的写 `protected`（语义该是哪个就写哪个）。**禁止 public 成员暴露包私有/私有类型的返回值/参数**（如 `public` 方法返回包私有 `record`）——触发 IDE 警告且泄漏内部类型，应把该类型提升为 `public`，不得靠删成员回避。
 
 ## 里程碑
 

@@ -1,7 +1,6 @@
 package org.gms.plugin.runtime;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.plugin.PluginDescriptor;
 
 import java.io.IOException;
@@ -27,9 +26,10 @@ import java.util.Properties;
  * </pre>
  * 解析失败 / 字段非法 → {@link PluginDescriptorException}（调用方拒载 + 明确日志，不静默跳过）。
  */
+@Log4j2
 public final class ManifestPluginDescriptorParser {
 
-    private static final Logger LOG = LogManager.getLogger(ManifestPluginDescriptorParser.class);
+
 
     /** manifest 文件名（jar 内路径）。 */
     public static final String MANIFEST_PATH = "META-INF/twinkle-plugin.properties";
@@ -141,7 +141,7 @@ public final class ManifestPluginDescriptorParser {
                 java.util.List.copyOf(eventListeners), java.util.List.copyOf(scriptNamespaces),
                 java.util.List.copyOf(logicSystems), java.util.List.copyOf(aiTools),
                 java.util.List.copyOf(httpEndpoints));
-        LOG.info("解析插件 manifest: {} v{}（scope={}，贡献点 {} 类）", id, version, scope,
+        log.info("解析插件 manifest: {} v{}（scope={}，贡献点 {} 类）", id, version, scope,
                 packetHandlers.size() + tickHandlers.size() + eventListeners.size()
                         + scriptNamespaces.size() + logicSystems.size() + aiTools.size() + httpEndpoints.size());
         return descriptor;

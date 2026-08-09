@@ -1,7 +1,6 @@
 package org.gms.plugin.runtime;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.versioned.VersionGate;
 import org.gms.plugin.ContributionHandle;
@@ -34,9 +33,10 @@ import java.util.function.Function;
  *
  * <p>线程安全：加载/卸载为管理侧低频操作，{@code ConcurrentMap} 兜底并发访问。
  */
+@Log4j2
 public final class PluginManager implements Closeable {
 
-    private static final Logger LOG = LogManager.getLogger(PluginManager.class);
+
 
     /** 插件目录（配置 {@code twinkle.plugin.path}）。 */
     private final Path pluginsDir;
@@ -83,7 +83,7 @@ public final class PluginManager implements Closeable {
                 descriptors.add(parser.parse(jar));
             } catch (ManifestPluginDescriptorParser.PluginDescriptorException e) {
                 // 单个插件解析失败：记录日志，不拖垮整批（可人工修复后 reload）
-                LOG.error("插件解析失败，拒载: {}", jar, e);
+                log.error("插件解析失败，拒载: {}", jar, e);
             }
         }
         return descriptors;
@@ -131,7 +131,7 @@ public final class PluginManager implements Closeable {
 
             LoadedPlugin loadedPlugin = new LoadedPlugin(descriptor, loader, instance, contributions);
             loaded.put(descriptor.id(), loadedPlugin);
-            LOG.info("插件已加载: {} v{}（scope={}，贡献点 {} 项）", descriptor.id(), descriptor.version(),
+            log.info("插件已加载: {} v{}（scope={}，贡献点 {} 项）", descriptor.id(), descriptor.version(),
                     descriptor.scope(), contributions.size());
             return loadedPlugin;
         } catch (PluginLoadException e) {
@@ -156,7 +156,7 @@ public final class PluginManager implements Closeable {
             try {
                 plugin.instance().stop(contextFor(plugin));
             } catch (Exception e) {
-                LOG.error("插件 stop 异常: {}", pluginId, e);
+                log.error("插件 stop 异常: {}", pluginId, e);
             }
         }
         // 2) 声明式 + 命令式贡献点统一回滚
@@ -164,12 +164,12 @@ public final class PluginManager implements Closeable {
             try {
                 handle.close();
             } catch (Exception e) {
-                LOG.error("插件贡献点回滚异常: {}", pluginId, e);
+                log.error("插件贡献点回滚异常: {}", pluginId, e);
             }
         }
         // 3) 释放 classloader（关闭 jar 句柄）
         plugin.classLoader().dispose();
-        LOG.info("插件已卸载: {}", pluginId);
+        log.info("插件已卸载: {}", pluginId);
     }
 
     public List<LoadedPlugin> loadedPlugins() {
@@ -195,7 +195,7 @@ public final class PluginManager implements Closeable {
             // reloadAllInFlight 内部已换代版本门（coordinator.advanceVersion → gate.onReload）
             // + 中断在途长操作；这里不重复 onReload，避免版本跳两号
             var result = entityReloadService.reloadAllInFlight(id -> true);
-            LOG.info("插件重载：版本门换代 → v{}（安全切换 {}，中断 {}）",
+            log.info("插件重载：版本门换代 → v{}（安全切换 {}，中断 {}）",
                     result.newVersion(), result.safeSwitched(), result.interrupted());
         }
         return load(descriptor);

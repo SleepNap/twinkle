@@ -7,8 +7,7 @@ import io.micronaut.context.annotation.Primary;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
 import org.gms.net.netty.internal.AdminRpcDispatcher;
@@ -49,9 +48,10 @@ import java.util.Map;
  * 不启内部通信（现状语义完全保留，铁律 1：同一套代码配置切换）。
  */
 @Factory
+@Log4j2
 public class SplitConfig {
 
-    private static final Logger LOG = LogManager.getLogger(SplitConfig.class);
+
 
     // ==================== coordinator 角色（管理进程） ====================
 
@@ -92,7 +92,7 @@ public class SplitConfig {
                                          @Property(name = "twinkle.coordinator.port", defaultValue = "8510") int port) {
         InternalServer server = new InternalServer(router.connectionHandler());
         server.start(port);
-        LOG.info("coordinator 内部通信已启动，监听端口: {}", port);
+        log.info("coordinator 内部通信已启动，监听端口: {}", port);
         return server;
     }
 
@@ -129,7 +129,7 @@ public class SplitConfig {
             conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
                     conn.nextMessageId(), JsonCodec.encode(
                     new InternalProtocol.RegisterPayload(channelId, channelHost, channelPort, false, 0))));
-            LOG.info("频道 {} 已上报 coordinator: {}:{}", channelId, channelHost, channelPort);
+            log.info("频道 {} 已上报 coordinator: {}:{}", channelId, channelHost, channelPort);
         });
         link.start();
         return link;
@@ -167,8 +167,8 @@ public class SplitConfig {
 
     /** 频道进程挂接 AdminService RPC 分发（管理进程运维操作落到频道真值）。 */
     @Singleton
-    static final class ChannelAdminRpcBinder {
-        ChannelAdminRpcBinder(CoordinatorLink link, AdminService adminService) {
+    public static final class ChannelAdminRpcBinder {
+        public ChannelAdminRpcBinder(CoordinatorLink link, AdminService adminService) {
             AdminRpcDispatcher dispatcher = new AdminRpcDispatcher(adminService);
             link.addConnectListener(conn -> conn.onRpcRequest(env ->
                     conn.replyRpc(env.messageId(), dispatcher.dispatch(env.request().method(), env.request().args()))));

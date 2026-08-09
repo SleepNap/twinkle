@@ -1,7 +1,6 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
 import org.gms.event.ReliableDelivery;
@@ -31,9 +30,10 @@ import java.util.function.Consumer;
  * 转发帧带 {@code streamId/seq/messageId}，接收侧目标进程可经 {@link ReliableReceiver}
  * 做恰好一次判定（bus_stream 持久化去重）。
  */
+@Log4j2
 public final class RemoteEventBus implements EventBus, ReliableDelivery {
 
-    private static final Logger LOG = LogManager.getLogger(RemoteEventBus.class);
+
 
     private final InProcessEventBus local;
     private final CoordinatorLink link;
@@ -66,7 +66,7 @@ public final class RemoteEventBus implements EventBus, ReliableDelivery {
         // 2) 跨进程转发 coordinator（低频控制消息，架构 4.5）；未连接仅本地派发（单频道可玩）
         InternalConnection conn = link.connection();
         if (conn == null) {
-            LOG.debug("coordinator 未连接，事件仅本地派发: target={}", target);
+            log.debug("coordinator 未连接，事件仅本地派发: target={}", target);
             return CompletableFuture.completedFuture(null);
         }
         InternalProtocol.EventPayload event = new InternalProtocol.EventPayload(
@@ -85,12 +85,12 @@ public final class RemoteEventBus implements EventBus, ReliableDelivery {
     private void dispatchRemote(InternalFrame frame) {
         InternalProtocol.EventPayload event = JsonCodec.decode(frame.payloadText(), InternalProtocol.EventPayload.class.getName());
         if (event == null) {
-            LOG.warn("EVENT 帧负载解析失败: messageId={}", frame.messageId());
+            log.warn("EVENT 帧负载解析失败: messageId={}", frame.messageId());
             return;
         }
         Object payload = JsonCodec.decode(event.payload(), event.type());
         if (payload == null) {
-            LOG.warn("EVENT 负载反序列化失败: type={}", event.type());
+            log.warn("EVENT 负载反序列化失败: type={}", event.type());
             return;
         }
         // 可靠序号存在 → 携带派发（订阅方若用 ReliableReceiver 可恰好一次）；

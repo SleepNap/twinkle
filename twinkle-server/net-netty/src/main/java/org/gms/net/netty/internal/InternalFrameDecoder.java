@@ -3,10 +3,9 @@ package org.gms.net.netty.internal;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 内部通信帧解码器（架构 4.5：进程间自定义二进制帧线格式）。
@@ -15,9 +14,10 @@ import java.util.List;
  * {@code [magic 2B 0x5457 | type 1B | messageId 8B | payloadLen 4B | payload]}。
  * 处理 TCP 流累积拆包（半包等待、粘包切分）；magic 不符或超长直接断开（防串包/恶意帧）。
  */
+@Log4j2
 public final class InternalFrameDecoder extends ByteToMessageDecoder {
 
-    private static final Logger LOG = LogManager.getLogger(InternalFrameDecoder.class);
+
 
     /** 帧头固定长度：magic(2) + type(1) + messageId(8) + payloadLen(4)。 */
     private static final int HEADER_LEN = 15;
@@ -31,7 +31,7 @@ public final class InternalFrameDecoder extends ByteToMessageDecoder {
         in.markReaderIndex();
         short magic = in.readShort();
         if (magic != InternalFrameEncoder.MAGIC) {
-            LOG.warn("内部帧 magic 不符: {}，断开连接", Integer.toHexString(magic));
+            log.warn("内部帧 magic 不符: {}，断开连接", Integer.toHexString(magic));
             ctx.close();
             return;
         }
@@ -39,7 +39,7 @@ public final class InternalFrameDecoder extends ByteToMessageDecoder {
         long messageId = in.readLong();
         int payloadLen = in.readInt();
         if (payloadLen < 0 || payloadLen > InternalFrameEncoder.MAX_PAYLOAD) {
-            LOG.warn("内部帧负载长度非法: {}，断开连接", payloadLen);
+            log.warn("内部帧负载长度非法: {}，断开连接", payloadLen);
             ctx.close();
             return;
         }
@@ -50,7 +50,7 @@ public final class InternalFrameDecoder extends ByteToMessageDecoder {
         }
         InternalFrame.MessageType type = fromOrdinal(typeOrdinal);
         if (type == null) {
-            LOG.warn("内部帧类型非法: {}", typeOrdinal);
+            log.warn("内部帧类型非法: {}", typeOrdinal);
             ctx.close();
             return;
         }

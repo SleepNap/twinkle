@@ -61,9 +61,11 @@ class NettyIntegrationTest {
                 assertThat(recvIv[0]).isEqualTo((byte) 70); // 'F' 接收方向
                 assertThat(sendIv[0]).isEqualTo((byte) 82); // 'R' 发送方向
 
-                // 3. 客户端方向：发用 recvIv 加密，收用 sendIv 解密
+                // 3. 客户端方向：发用 recvIv 加密，收用 sendIv 解密。
+                //    接收版本 key 用 0xFFFF-83：真实客户端以 0xFFFF-version 校验服务端
+                //    发出的包头（镜像 CipherPair 发送侧），测试须对齐才是一致真值。
                 AesCipher clientSend = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-                AesCipher clientRecv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+                AesCipher clientRecv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
 
                 // 4. 发加密 WHISPER（替代 PONG 回环，PONG 已被传输心跳拦截）
                 ByteArrayOutPacket pong = new ByteArrayOutPacket();

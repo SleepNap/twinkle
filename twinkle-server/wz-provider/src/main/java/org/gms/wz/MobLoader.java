@@ -1,7 +1,6 @@
 package org.gms.wz;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.mob.MobData;
 
 import java.io.IOException;
@@ -17,9 +16,9 @@ import java.util.Objects;
  * <p>遍历 {@code Mob.wz} 下所有 {@code *.img.xml}（一个文件一个怪物），
  * 填 {@link MobData} 的 info 字段（v83 字段名：maxHP/PADamage/PDDamage 等）。
  */
+@Log4j2
 public final class MobLoader {
 
-    private static final Logger LOG = LogManager.getLogger(MobLoader.class);
 
     private final Path wzRoot;
 
@@ -40,7 +39,7 @@ public final class MobLoader {
         } catch (IOException e) {
             throw new IllegalStateException("遍历 Mob.wz 失败: " + mobWz, e);
         }
-        LOG.info("Mob.wz 解析完成：{} 个怪物（根={}）", mobs.size(), wzRoot);
+        log.info("Mob.wz 解析完成：{} 个怪物（根={}）", mobs.size(), wzRoot);
         return mobs;
     }
 

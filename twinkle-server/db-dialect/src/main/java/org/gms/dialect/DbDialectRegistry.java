@@ -1,12 +1,11 @@
 package org.gms.dialect;
 
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 方言注册表（架构 6.3：运行时按配置选）。
@@ -16,9 +15,10 @@ import java.util.stream.Collectors;
  * 的执行底盘。
  */
 @Singleton
+@Log4j2
 public final class DbDialectRegistry {
 
-    private static final Logger LOG = LogManager.getLogger(DbDialectRegistry.class);
+
 
     private final Map<DbDialect.DialectId, DbDialect> dialects;
 
@@ -26,7 +26,7 @@ public final class DbDialectRegistry {
         this.dialects = all.stream()
                 .collect(Collectors.toUnmodifiableMap(DbDialect::id, d -> d));
         if (dialects.size() < 3) {
-            LOG.warn("方言注册表不完整（注册了 {} 个）", dialects.size());
+            log.warn("方言注册表不完整（注册了 {} 个）", dialects.size());
         }
     }
 

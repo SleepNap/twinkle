@@ -332,7 +332,7 @@ public enum SendOpcode implements Opcode {
 
     private final int code;
 
-    SendOpcode(int code) {
+    private SendOpcode(int code) {
         this.code = code;
     }
 

@@ -1,10 +1,9 @@
 package org.gms.tick;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 游戏循环单线程实现（架构 5.1：游戏 tick 单线程，换点干净——tick 帧边界暂停、卸载、
@@ -16,9 +15,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>{@link #pause()} 在安全点暂停：当前 tick 完成后不再启动下一个，循环空转直到
  * {@link #resume()}。L3 热重载换代流程 = pause → unregister 旧 → register 新 → resume。
  */
+@Log4j2
 public final class GameTickLoop implements TickScheduler {
-
-    private static final Logger LOG = LogManager.getLogger(GameTickLoop.class);
 
     private final long intervalMillis;
     private final CopyOnWriteArrayList<TickHandler> handlers = new CopyOnWriteArrayList<>();
@@ -57,7 +55,7 @@ public final class GameTickLoop implements TickScheduler {
         }
         running = true;
         thread = Thread.ofPlatform().name("game-tick").daemon(true).start(this::loop);
-        LOG.info("GameTickLoop 启动，间隔 {}ms", intervalMillis);
+        log.info("GameTickLoop 启动，间隔 {}ms", intervalMillis);
     }
 
     @Override
@@ -67,19 +65,19 @@ public final class GameTickLoop implements TickScheduler {
             thread.interrupt();
             thread = null;
         }
-        LOG.info("GameTickLoop 停止，共 {} ticks", tickCount.get());
+        log.info("GameTickLoop 停止，共 {} ticks", tickCount.get());
     }
 
     @Override
     public synchronized void pause() {
         paused = true;
-        LOG.info("GameTickLoop 暂停（安全点，tick={}）", tickCount.get());
+        log.info("GameTickLoop 暂停（安全点，tick={}）", tickCount.get());
     }
 
     @Override
     public synchronized void resume() {
         paused = false;
-        LOG.info("GameTickLoop 恢复（tick={}）", tickCount.get());
+        log.info("GameTickLoop 恢复（tick={}）", tickCount.get());
     }
 
     @Override
@@ -109,14 +107,14 @@ public final class GameTickLoop implements TickScheduler {
     /**
      * 执行一次 tick（package-private，供测试手动驱动；循环线程也调用它）。
      */
-    void tickOnce() {
+    public void tickOnce() {
         long count = tickCount.incrementAndGet();
         for (TickHandler handler : handlers) {
             try {
                 handler.tick(count);
             } catch (RuntimeException e) {
                 lastTickError = e;
-                LOG.error("tick handler 异常（记录并继续）", e);
+                log.error("tick handler 异常（记录并继续）", e);
             }
         }
     }

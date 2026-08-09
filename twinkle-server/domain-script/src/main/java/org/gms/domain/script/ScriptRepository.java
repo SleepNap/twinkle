@@ -1,7 +1,5 @@
 package org.gms.domain.script;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 脚本仓库（架构 6.4：{@code twinkle.script.path} 直接指定脚本目录，单份数据，读不到启动报错）。
@@ -26,9 +25,9 @@ import java.util.Objects;
  * <p>线程安全：{@link #loadAll()} 返回的 Map 是不可变快照；{@link #reload()} 整体替换内部
  * 引用（{@code volatile}），保证读路径无需加锁。
  */
+@Log4j2
 public final class ScriptRepository {
 
-    private static final Logger LOG = LogManager.getLogger(ScriptRepository.class);
 
     /** 脚本根目录（对应配置 {@code twinkle.script.path}）。 */
     private final Path root;
@@ -54,7 +53,7 @@ public final class ScriptRepository {
         }
         this.dirSnapshot = scan();
         this.snapshot = mergedSnapshot(dirSnapshot);
-        LOG.info("脚本仓库初始化: {} 条目（根={}）", snapshot.size(), root);
+        log.info("脚本仓库初始化: {} 条目（根={}）", snapshot.size(), root);
     }
 
     /** 扫描目录树，构建新快照（递归所有 *.js，不修改内部状态）。 */
@@ -103,7 +102,7 @@ public final class ScriptRepository {
         this.dirSnapshot = fresh;
         this.snapshot = mergedSnapshot(fresh);
         if (changed > 0) {
-            LOG.info("脚本重载: {} 条目变化（新增/修改/删除），总计 {} 条", changed, this.snapshot.size());
+            log.info("脚本重载: {} 条目变化（新增/修改/删除），总计 {} 条", changed, this.snapshot.size());
         }
         return changed;
     }
@@ -123,7 +122,7 @@ public final class ScriptRepository {
         newMounted.put(namespace, Map.copyOf(sources));
         this.mounted = Map.copyOf(newMounted);
         this.snapshot = mergedSnapshot(this.dirSnapshot);
-        LOG.info("脚本命名空间挂载: {}（{} 条）", namespace, sources.size());
+        log.info("脚本命名空间挂载: {}（{} 条）", namespace, sources.size());
     }
 
     /**
@@ -136,7 +135,7 @@ public final class ScriptRepository {
         }
         this.mounted = Map.copyOf(newMounted);
         this.snapshot = mergedSnapshot(this.dirSnapshot);
-        LOG.info("脚本命名空间卸载: {}", namespace);
+        log.info("脚本命名空间卸载: {}", namespace);
     }
 
     /** 目录快照 + 全部挂载命名空间脚本合并为最终快照。 */

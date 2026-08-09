@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.mob.MapleMonster;
@@ -31,9 +30,10 @@ import java.util.Set;
  * <p>伤害经 {@link CombatSystem}（版本门 + v83 物理公式 + 目标扣血）。魔法当前走物理
  * 公式（DamageCalculator 只含物理），魔法公式待扩展。handler 只做"收包→调 system→发包"。
  */
+@Log4j2
 public final class AttackHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(AttackHandler.class);
+
 
     /** 带 charge 字段的技能集（v83 值，思路参考自 BeiDou；命中即多读 4 字节）。 */
     private static final Set<Integer> CHARGE_SKILLS = Set.of(

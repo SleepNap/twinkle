@@ -5,15 +5,15 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 内部通信客户端（架构 4.5：channel → coordinator 主动 TCP 长连接）。
@@ -24,11 +24,12 @@ import java.util.function.Consumer;
  *
  * <p>生命周期：{@link #connect} 建立连接（重连在后台循环），{@link #close} 停止。
  */
+@Log4j2
 public final class InternalClient implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(InternalClient.class);
 
-    private final EventLoopGroup workerGroup = new NioEventLoopGroup(1);
+
+    private final EventLoopGroup workerGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
     private final InetSocketAddress coordinatorAddress;
     private final Consumer<InternalConnection> connectionHandler;
     private final long reconnectDelayMillis;
@@ -85,9 +86,9 @@ public final class InternalClient implements AutoCloseable {
                 holder[0] = InternalConnection.attach(ch, () -> onDisconnect(holder[0]));
                 this.connection = holder[0];
                 reconnectScheduled.set(false);
-                LOG.info("内部通信已连接 coordinator: {}", coordinatorAddress);
+                log.info("内部通信已连接 coordinator: {}", coordinatorAddress);
                 connectionHandler.accept(holder[0]);
-            } else {                LOG.warn("内部通信连接 coordinator 失败: {}（{}），{}ms 后重试",
+            } else {                log.warn("内部通信连接 coordinator 失败: {}（{}），{}ms 后重试",
                         coordinatorAddress, future.cause().getMessage(), reconnectDelayMillis);
                 scheduleReconnect();
             }
@@ -109,7 +110,7 @@ public final class InternalClient implements AutoCloseable {
             return;
         }
         if (reconnectScheduled.compareAndSet(false, true)) {
-            LOG.info("内部通信重连 coordinator（{}ms 后）", reconnectDelayMillis);
+            log.info("内部通信重连 coordinator（{}ms 后）", reconnectDelayMillis);
             workerGroup.schedule(this::doConnect, reconnectDelayMillis, TimeUnit.MILLISECONDS);
         }
     }
@@ -122,6 +123,6 @@ public final class InternalClient implements AutoCloseable {
             conn.close();
         }
         workerGroup.shutdownGracefully().syncUninterruptibly();
-        LOG.info("内部通信客户端已停止");
+        log.info("内部通信客户端已停止");
     }
 }

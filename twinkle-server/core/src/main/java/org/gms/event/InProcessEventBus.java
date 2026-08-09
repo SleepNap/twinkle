@@ -1,8 +1,6 @@
 package org.gms.event;
 
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -10,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 进程内 EventBus 实现（函数调用 + 同步派发）。
@@ -30,9 +29,10 @@ import java.util.function.Consumer;
  * </ul>
  */
 @Singleton
+@Log4j2
 public final class InProcessEventBus implements EventBus, ReliableDelivery {
 
-    private static final Logger LOG = LogManager.getLogger(InProcessEventBus.class);
+
 
     /** 精确目标匹配，未来可能扩展通配（"channel:*"）。 */
     private final ConcurrentMap<String, ConcurrentMap<Class<?>, CopyOnWriteArrayList<HandlerEntry<?>>>> routes = new ConcurrentHashMap<>();
@@ -100,14 +100,14 @@ public final class InProcessEventBus implements EventBus, ReliableDelivery {
             ((HandlerEntry<T>) entry).handler.accept(payload);
         } catch (RuntimeException e) {
             // 日志红线 9：log.error("描述", e)，禁用 printStackTrace
-            LOG.error("EventBus 订阅者异常: target={}, type={}", entry, payload.getClass().getName(), e);
+            log.error("EventBus 订阅者异常: target={}, type={}", entry, payload.getClass().getName(), e);
         }
     }
 
     private static final class HandlerEntry<T> {
-        final Consumer<T> handler;
+        private final Consumer<T> handler;
 
-        HandlerEntry(Consumer<T> handler) {
+        private HandlerEntry(Consumer<T> handler) {
             this.handler = handler;
         }
     }

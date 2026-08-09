@@ -21,7 +21,7 @@ public enum ContributionType {
 
     private final String code;
 
-    ContributionType(String code) {
+    private ContributionType(String code) {
         this.code = code;
     }
 

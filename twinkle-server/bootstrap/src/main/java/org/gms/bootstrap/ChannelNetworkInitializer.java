@@ -4,8 +4,7 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelServer;
 import org.gms.net.packet.HandlerRegistry;
@@ -23,16 +22,16 @@ import org.gms.role.ChannelProcessCondition;
 @Singleton
 @Context
 @Requires(condition = ChannelProcessCondition.class)
+@Log4j2
 public final class ChannelNetworkInitializer {
 
-    private static final Logger LOG = LogManager.getLogger(ChannelNetworkInitializer.class);
 
     public ChannelNetworkInitializer(HandlerRegistry registry,
                                      ChannelHandlerRegistrar channelHandlers,
                                      ChannelServer channelServer,
                                      @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int port) {
         channelHandlers.register(registry);
-        LOG.info("频道 handler 注册完成，共 {} 个贡献点", registry.registeredCount());
+        log.info("频道 handler 注册完成，共 {} 个贡献点", registry.registeredCount());
         channelServer.start(port);
     }
 }

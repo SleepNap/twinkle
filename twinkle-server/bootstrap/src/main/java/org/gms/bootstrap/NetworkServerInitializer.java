@@ -4,8 +4,7 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.login.handler.LoginHandlerRegistrar;
 import org.gms.net.netty.LoginServer;
 import org.gms.net.packet.HandlerRegistry;
@@ -19,7 +18,7 @@ import org.gms.role.ManagementProcessCondition;
  * 不依赖 {@code ServerStartupEvent}（无 HTTP server 时该事件不发布）。
  *
  * <p>HTTP 与游戏 Netty 隔离 EventLoop（红线 4）：LoginServer 用独立
- * NioEventLoopGroup，不共享 Micronaut HTTP 的 EventLoop。
+ * {@link io.netty.channel.MultiThreadIoEventLoopGroup}，不共享 Micronaut HTTP 的 EventLoop。
  *
  * <p>登录服是管理进程专属（single 全内嵌；split 下仅 coordinator 角色装配，
  * 频道进程不启登录服）。
@@ -27,9 +26,9 @@ import org.gms.role.ManagementProcessCondition;
 @Singleton
 @Context
 @Requires(condition = ManagementProcessCondition.class)
+@Log4j2
 public final class NetworkServerInitializer {
 
-    private static final Logger LOG = LogManager.getLogger(NetworkServerInitializer.class);
 
     /** 单进程自连频道服地址（M6 split 档由 coordinator 注册表下发，此处仅 single 自连用）。 */
     private static final byte[] CHANNEL_IP = new byte[]{127, 0, 0, 1};
@@ -41,7 +40,7 @@ public final class NetworkServerInitializer {
                                     @Property(name = "twinkle.server.name", defaultValue = "twinkle") String serverName,
                                     @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
         loginHandlers.register(registry, serverName, CHANNEL_IP, channelPort);
-        LOG.info("登录 handler 注册完成，共 {} 个贡献点", registry.registeredCount());
+        log.info("登录 handler 注册完成，共 {} 个贡献点", registry.registeredCount());
         loginServer.start(port);
     }
 }

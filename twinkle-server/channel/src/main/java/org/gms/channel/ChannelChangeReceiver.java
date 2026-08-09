@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.event.ReliableReceiver;
 import org.gms.message.ChangeChannelRequest;
@@ -21,9 +20,10 @@ import org.gms.service.intercoord.IntercoordService;
  * <p>装配：ChannelConfig 接线（channel 进程）。single 档同进程内生效（InProcessEventBus
  * 携带序号，ReliableReceiver 判序）。
  */
+@Log4j2
 public final class ChannelChangeReceiver {
 
-    private static final Logger LOG = LogManager.getLogger(ChannelChangeReceiver.class);
+
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -50,7 +50,7 @@ public final class ChannelChangeReceiver {
     private void apply(ChangeChannelRequest req) {
         // 定位表确认迁移（幂等：目标频道 = 本频道）
         intercoord.movePlayer(req.playerId(), channelId);
-        LOG.info("玩家 {} 迁移到本频道 {}（from={}, reason={}）",
+        log.info("玩家 {} 迁移到本频道 {}（from={}, reason={}）",
                 req.playerId(), channelId, req.fromChannel(), req.reason());
     }
 

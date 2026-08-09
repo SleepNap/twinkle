@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.event.EventBus;
 import org.gms.message.MessageTargets;
@@ -24,9 +23,10 @@ import org.gms.service.intercoord.IntercoordService;
  * <p>v83 收包：opcode(2) + 4B 未知头 + 目标名（短字符串） + 内容（短字符串）。
  * 布局思路参考自 BeiDou-Server 的 WhisperHandler，实现自研。
  */
+@Log4j2
 public final class WhisperHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(WhisperHandler.class);
+
 
     /** 本频道 id（进图装配传入，M4 单频道多为 1）。 */
     private final int channelId;

@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.service.admin.OnlinePlayerEvents;
 import org.gms.service.intercoord.IntercoordService;
@@ -17,9 +16,10 @@ import org.gms.service.intercoord.IntercoordService;
  *
  * <p>换频道（CC）由 {@link ChangeChannelHandler} 直接调 {@code movePlayer}，不经本绑定。
  */
+@Log4j2
 public final class ChannelLocationBinder {
 
-    private static final Logger LOG = LogManager.getLogger(ChannelLocationBinder.class);
+
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -34,12 +34,12 @@ public final class ChannelLocationBinder {
     private void onOnline(OnlinePlayerEvents.PlayerOnline event) {
         intercoord.registerPlayer(event.characterId(), channelId);
         intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
-        LOG.debug("定位表登记: player={} channel={}", event.characterId(), channelId);
+        log.debug("定位表登记: player={} channel={}", event.characterId(), channelId);
     }
 
     private void onOffline(OnlinePlayerEvents.PlayerOffline event) {
         intercoord.unregisterPlayer(event.characterId());
         intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
-        LOG.debug("定位表注销: player={}", event.characterId());
+        log.debug("定位表注销: player={}", event.characterId());
     }
 }

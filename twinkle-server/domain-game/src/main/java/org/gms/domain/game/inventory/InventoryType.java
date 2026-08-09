@@ -23,7 +23,7 @@ public enum InventoryType {
 
     private final byte type;
 
-    InventoryType(byte type) {
+    private InventoryType(byte type) {
         this.type = type;
     }
 

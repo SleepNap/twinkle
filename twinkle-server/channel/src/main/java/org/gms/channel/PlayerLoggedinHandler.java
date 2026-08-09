@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.map.MapleMap;
@@ -17,9 +16,9 @@ import org.gms.net.packet.SessionStage;
  * 投影为内存态角色（CharacterLoader）→ 注册频道在线表 + 会话注册表 →
  * 放入目标地图 → 回 getCharInfo（SET_FIELD，客户端据此刻画角色并进入地图）。
  */
+@Log4j2
 public final class PlayerLoggedinHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(PlayerLoggedinHandler.class);
 
     private final CharacterRepository characterRepo;
     private final CharacterLoader characterLoader;
@@ -96,7 +95,7 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         if (eventPublisher != null) {
             eventPublisher.playerOnline(chr);
         }
-        LOG.info("玩家进图: {} (id={}) 地图={}", chr.getName(), chr.getId(), map.getMapId());
+        log.info("玩家进图: {} (id={}) 地图={}", chr.getName(), chr.getId(), map.getMapId());
     }
 
     /** 移除地图/在线表里同 id 的非自身旧 Character（重复登录，防广播双发；旧代际断链迟到清理由 compare-and-remove 短路）。 */

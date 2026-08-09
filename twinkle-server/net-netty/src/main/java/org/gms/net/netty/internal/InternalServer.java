@@ -5,14 +5,14 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 内部通信服务端（架构 4.5：coordinator 端监听，接收各进程 TCP 长连接）。
@@ -23,9 +23,10 @@ import java.util.function.Consumer;
  *
  * <p>生命周期：{@link #start} 绑定端口（0 = 动态分配，测试用），{@link #close} 优雅关闭。
  */
+@Log4j2
 public final class InternalServer implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(InternalServer.class);
+
 
     private final Consumer<InternalConnection> connectionHandler;
     private EventLoopGroup bossGroup;
@@ -41,8 +42,8 @@ public final class InternalServer implements AutoCloseable {
     }
 
     public void start(int port) {
-        bossGroup = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup(2);
+        bossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+        workerGroup = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
@@ -59,7 +60,7 @@ public final class InternalServer implements AutoCloseable {
                     }
                 });
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        LOG.info("内部通信服务端启动，监听端口: {}", port);
+        log.info("内部通信服务端启动，监听端口: {}", port);
     }
 
     public int boundPort() {
@@ -82,6 +83,6 @@ public final class InternalServer implements AutoCloseable {
         if (workerGroup != null) {
             workerGroup.shutdownGracefully().syncUninterruptibly();
         }
-        LOG.info("内部通信服务端已停止");
+        log.info("内部通信服务端已停止");
     }
 }

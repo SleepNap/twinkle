@@ -1,7 +1,6 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.event.InProcessEventBus;
 import org.gms.message.MessageTargets;
 import org.gms.service.intercoord.IntercoordService;
@@ -23,9 +22,10 @@ import java.util.function.Consumer;
  * <p>星形拓扑：coordinator 是中心路由器（架构 4.5），本类不持任何共享状态——
  * 频道注册/定位真值全在进程内 {@link IntercoordService}（无状态 + 可重建，架构 4.2）。
  */
+@Log4j2
 public final class CoordinatorFrameRouter {
 
-    private static final Logger LOG = LogManager.getLogger(CoordinatorFrameRouter.class);
+
 
     private final ChannelConnectionRegistry registry;
     private final IntercoordService intercoord;
@@ -63,7 +63,7 @@ public final class CoordinatorFrameRouter {
             case EVENT -> handleEvent(conn, frame);
             case RPC -> handleRpc(conn, frame);
             case RPC_RESPONSE -> handleRpcResponse(conn, frame);
-            default -> LOG.warn("coordinator 收到不可路由帧类型: {} messageId={}", frame.type(), frame.messageId());
+            default -> log.warn("coordinator 收到不可路由帧类型: {} messageId={}", frame.type(), frame.messageId());
         }
     }
 
@@ -132,13 +132,13 @@ public final class CoordinatorFrameRouter {
         InternalProtocol.RegisterPayload reg = JsonCodec.decode(frame.payloadText(),
                 InternalProtocol.RegisterPayload.class.getName());
         if (reg == null) {
-            LOG.warn("REGISTER 帧负载解析失败");
+            log.warn("REGISTER 帧负载解析失败");
             return;
         }
         if (reg.admin()) {
             registry.registerAdmin(conn);
             // 注册表里有频道连接时，把已有频道信息回给管理进程（admin 查询 channels 用）
-            LOG.info("管理进程已注册（连接数={}）", registry.channelsSnapshot().size());
+            log.info("管理进程已注册（连接数={}）", registry.channelsSnapshot().size());
         } else {
             registry.registerChannel(reg.channelId(), reg.host(), reg.port(), conn);
             intercoord.registerChannel(reg.channelId(), reg.host(), reg.port(), reg.onlineCount());
@@ -158,7 +158,7 @@ public final class CoordinatorFrameRouter {
         InternalProtocol.EventPayload event = JsonCodec.decode(frame.payloadText(),
                 InternalProtocol.EventPayload.class.getName());
         if (event == null) {
-            LOG.warn("EVENT 帧负载解析失败");
+            log.warn("EVENT 帧负载解析失败");
             return;
         }
         // 先本地派发（管理进程 = coordinator 进程，架构 4.6.2：OnlinePlayerMirror 等订阅者在此）。
@@ -183,10 +183,10 @@ public final class CoordinatorFrameRouter {
                 if (conn != null && conn.isActive()) {
                     forwardEvent(conn, event);
                 } else {
-                    LOG.debug("EVENT 目标频道未连接，丢弃: target={}", target);
+                    log.debug("EVENT 目标频道未连接，丢弃: target={}", target);
                 }
             } catch (NumberFormatException e) {
-                LOG.warn("EVENT target 非法: {}", target);
+                log.warn("EVENT target 非法: {}", target);
             }
             return;
         }
@@ -198,7 +198,7 @@ public final class CoordinatorFrameRouter {
         }
         // 其它 target（如 online-player-events）→ 管理进程已本地派发（架构 4.6.2 管理进程=coordinator）。
         // 若未来管理进程独立部署，此处补转发管理进程连接（当前不转发防镜像重复）。
-        LOG.debug("EVENT 非频道 target 仅本地派发: {}", target);
+        log.debug("EVENT 非频道 target 仅本地派发: {}", target);
     }
 
     private void forwardEvent(InternalConnection conn, InternalProtocol.EventPayload event) {

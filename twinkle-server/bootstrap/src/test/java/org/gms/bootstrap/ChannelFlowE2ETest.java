@@ -123,6 +123,7 @@ class ChannelFlowE2ETest {
         acc.setPassword(BCrypt.hashpw("secret", BCrypt.gensalt()));
         acc.setBanned(0);
         acc.setGender(0);
+        acc.setTos(1); // 已接受服务条款，跳过 v83 登录前置 ToS 门
         accountMapper.insertSelective(acc);
 
         Character hero = new Character();
@@ -196,10 +197,11 @@ class ChannelFlowE2ETest {
         int channelPort = channelServer.boundPort();
 
         // ---- 登录服（频道地址指向频道服端口）----
+        FlexAccountRepository accountRepository = new FlexAccountRepository(accountMapper);
         LoginService loginService = new LoginService(
-                new FlexAccountRepository(accountMapper), new FlexCharacterRepository(characterMapper));
+                accountRepository, new FlexCharacterRepository(characterMapper));
         HandlerRegistry loginRegistry = new HandlerRegistry();
-        new LoginHandlerRegistrar(loginService)
+        new LoginHandlerRegistrar(loginService, accountRepository)
                 .register(loginRegistry, "twinkle", new byte[]{127, 0, 0, 1}, channelPort);
         LoginServer loginServer = new LoginServer(loginRegistry);
         loginServer.start(0);
@@ -215,7 +217,7 @@ class ChannelFlowE2ETest {
                 byte[] recvIv = Arrays.copyOfRange(hello, 7, 11);
                 byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
                 AesCipher loginSend = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-                AesCipher loginRecv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+                AesCipher loginRecv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
 
                 ByteArrayOutPacket loginPkt = new ByteArrayOutPacket();
                 loginPkt.writeShort(RecvOpcode.LOGIN_PASSWORD.getValue());
@@ -267,7 +269,7 @@ class ChannelFlowE2ETest {
                 byte[] recvIv = Arrays.copyOfRange(hello, 7, 11);
                 byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
                 AesCipher chSend = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-                AesCipher chRecv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+                AesCipher chRecv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
 
                 // PLAYER_LOGGEDIN
                 ByteArrayOutPacket loggedin = new ByteArrayOutPacket();

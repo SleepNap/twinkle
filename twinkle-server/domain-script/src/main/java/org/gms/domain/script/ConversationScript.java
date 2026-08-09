@@ -1,7 +1,6 @@
 package org.gms.domain.script;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
@@ -23,9 +22,10 @@ import java.util.Map;
  * <p>引擎预算：对话级 Context 较 ScriptEngine 单例更重（每次新建），但 2C2G 下对话
  * 并发低（每玩家同时至多一个），可接受；后续可引入 Context 池优化。
  */
+@Log4j2
 public final class ConversationScript implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(ConversationScript.class);
+
 
     private final Context context;
 
@@ -56,7 +56,7 @@ public final class ConversationScript implements AutoCloseable {
             session.context.eval(Source.create("js", source));
             return session;
         } catch (RuntimeException e) {
-            LOG.error("对话脚本加载失败: {}", key, e);
+            log.error("对话脚本加载失败: {}", key, e);
             session.close();
             return null;
         }
@@ -87,7 +87,7 @@ public final class ConversationScript implements AutoCloseable {
         try {
             context.close();
         } catch (Exception e) {
-            LOG.warn("关闭对话脚本上下文异常", e);
+            log.warn("关闭对话脚本上下文异常", e);
         }
     }
 }

@@ -26,6 +26,11 @@ public class FlexInventoryItemRepository implements InventoryItemRepository {
     }
 
     @Override
+    public void insert(InventoryItemEntity item) {
+        mapper.insert(item);
+    }
+
+    @Override
     public void replaceAll(long characterId, List<InventoryItemEntity> items) {
         mapper.deleteByQuery(QueryWrapper.create()
                 .where(InventoryItemEntity::getCharacterId).eq(characterId));

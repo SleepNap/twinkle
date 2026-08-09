@@ -31,7 +31,7 @@
 ### 2. net-netty（IO 层，不依赖业务）
 
 - [x] Netty 4 服务端：客户端 v83 连接接入（V83ServerInitializer + LoginServer）
-- [x] HTTP 与游戏 Netty 隔离 EventLoop（红线 4：游戏独立 NioEventLoopGroup，不共享 Micronaut HTTP）
+- [x] HTTP 与游戏 Netty 隔离 EventLoop（红线 4：游戏独立 MultiThreadIoEventLoopGroup，不共享 Micronaut HTTP）
 - [x] 内部通信复用同一模块（帧格式 `[帧头 | 消息类型 | 消息ID | 负载]`，M6 用，此处定义帧接口 InternalFrame）
 - [x] TCP 长连接 + 心跳（供 coordinator 注册中心，M6 用，此处定义心跳接口 Heartbeat）
 - [x] 端到端测试：真实 Netty 服务端 + Socket 客户端，握手 + 加密往返 + 分发全链路通过

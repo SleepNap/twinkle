@@ -3,14 +3,13 @@ package org.gms.net.netty.internal;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 内部通信连接（架构 4.5：每个进程 Netty 客户端 + 服务端，与 coordinator TCP 长连接）。
@@ -27,9 +26,10 @@ import java.util.function.Consumer;
  *
  * <p>线程安全：可多线程并发发送/请求；帧分发在 Netty IO 线程（订阅者须自行移交，EventBus 契约同）。
  */
+@Log4j2
 public final class InternalConnection extends ChannelInboundHandlerAdapter implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(InternalConnection.class);
+
 
     private final Channel channel;
     private final Runnable closeHandler;
@@ -120,11 +120,11 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
                 try {
                     respHandler.accept(frame);
                 } catch (RuntimeException e) {
-                    LOG.error("内部 RPC 响应处理异常: messageId={}", frame.messageId(), e);
+                    log.error("内部 RPC 响应处理异常: messageId={}", frame.messageId(), e);
                 }
                 return;
             }
-            LOG.warn("未匹配的 RPC 响应: messageId={}", frame.messageId());
+            log.warn("未匹配的 RPC 响应: messageId={}", frame.messageId());
             return;
         }
         if (frame.type() == InternalFrame.MessageType.RPC) {
@@ -138,7 +138,7 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
                     try {
                         rpcHandler.accept(new RpcRequestEnvelope(req, frame.messageId()));
                     } catch (RuntimeException e) {
-                        LOG.error("内部 RPC 处理异常: method={}", req.method(), e);
+                        log.error("内部 RPC 处理异常: method={}", req.method(), e);
                     }
                 }
                 return;
@@ -147,14 +147,14 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
         }
         Consumer<InternalFrame> handler = frameHandler;
         if (handler == null) {
-            LOG.warn("内部连接未注册帧处理，丢弃: type={} messageId={}", frame.type(), frame.messageId());
+            log.warn("内部连接未注册帧处理，丢弃: type={} messageId={}", frame.type(), frame.messageId());
             return;
         }
         try {
             handler.accept(frame);
         } catch (RuntimeException e) {
             // 日志红线 9：log.error("描述", e)，禁用 printStackTrace
-            LOG.error("内部帧处理异常: type={} messageId={}", frame.type(), frame.messageId(), e);
+            log.error("内部帧处理异常: type={} messageId={}", frame.type(), frame.messageId(), e);
         }
     }
 

@@ -1,7 +1,6 @@
 package org.gms.ai.service;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.observability.Metrics;
 
 import java.util.concurrent.Executors;
@@ -18,9 +17,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>装配由 bootstrap 接线（本类不加 @Singleton）。
  */
+@Log4j2
 public final class AiDailySummaryScheduler implements AutoCloseable {
 
-    private static final Logger LOG = LogManager.getLogger(AiDailySummaryScheduler.class);
+
 
     private final AiFacade aiFacade;
     private final Metrics metrics;
@@ -45,7 +45,7 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
         });
         // 首次 60s 后跑一次（启动验证），之后每 24h
         scheduler.scheduleWithFixedDelay(this::runSummary, 60, TimeUnit.HOURS.toSeconds(24), TimeUnit.SECONDS);
-        LOG.info("AI 每日总结调度已启动（首跑 60s 后，此后每 24h）");
+        log.info("AI 每日总结调度已启动（首跑 60s 后，此后每 24h）");
     }
 
     /** 立即执行一次每日总结（手动触发，也供测试）。 */
@@ -55,11 +55,11 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
             lastRunEpoch.set(System.currentTimeMillis());
             metrics.increment("ai.daily_summary.runs");
             metrics.gauge("ai.daily_summary.last_run", lastRunEpoch.get());
-            LOG.info("AI 每日总结生成完成: {}", report);
+            log.info("AI 每日总结生成完成: {}", report);
         } catch (RuntimeException e) {
             errorCount.incrementAndGet();
             metrics.increment("ai.daily_summary.errors");
-            LOG.error("AI 每日总结执行异常", e);
+            log.error("AI 每日总结执行异常", e);
         }
     }
 

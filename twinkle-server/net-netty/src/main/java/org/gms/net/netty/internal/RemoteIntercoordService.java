@@ -1,7 +1,6 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.util.Map;
@@ -19,9 +18,10 @@ import java.util.concurrent.TimeUnit;
  * <p>同步阻塞（调用方是游戏 handler 线程，低频控制面可接受）；断链/超时返回降级默认值
  * （定位 unknown、注册失败记日志）——频道本地逻辑不依赖 coordinator（架构 4.5 故障矩阵）。
  */
+@Log4j2
 public final class RemoteIntercoordService implements IntercoordService {
 
-    private static final Logger LOG = LogManager.getLogger(RemoteIntercoordService.class);
+
 
     private final CoordinatorLink link;
     private final long timeoutMillis;
@@ -158,7 +158,7 @@ public final class RemoteIntercoordService implements IntercoordService {
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {
         InternalConnection conn = link.connection();
         if (conn == null) {
-            LOG.warn("RPC 调用时 coordinator 未连接: method={}（降级默认值）", method);
+            log.warn("RPC 调用时 coordinator 未连接: method={}（降级默认值）", method);
             return null;
         }
         try {
@@ -173,7 +173,7 @@ public final class RemoteIntercoordService implements IntercoordService {
             InternalFrame reply = fut.get(timeoutMillis, TimeUnit.MILLISECONDS);
             return JsonCodec.decode(reply.payloadText(), InternalProtocol.RpcResponse.class.getName());
         } catch (Exception e) {
-            LOG.warn("RPC 调用失败: method={}（降级默认值）", method);
+            log.warn("RPC 调用失败: method={}（降级默认值）", method);
             return null;
         }
     }

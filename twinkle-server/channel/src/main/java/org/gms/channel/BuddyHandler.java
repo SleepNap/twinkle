@@ -1,7 +1,6 @@
 package org.gms.channel;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.BuddyListEntity;
 import org.gms.data.repo.BuddyListRepository;
 import org.gms.domain.game.Character;
@@ -33,9 +32,10 @@ import java.util.List;
  * <p>v83 收包：opcode(2) + 4B 头 + 动作(1B) + 目标名（短字符串）。
  * 思路参考自 BeiDou-Server 的 BuddyListHandler，实现自研。
  */
+@Log4j2
 public final class BuddyHandler implements PacketHandler {
 
-    private static final Logger LOG = LogManager.getLogger(BuddyHandler.class);
+
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -104,17 +104,17 @@ public final class BuddyHandler implements PacketHandler {
                 // 单一属主：buddylist 表持久化（PENDING），双方都写
                 boolean newRow = buddyRepo.insertIfAbsent(row(req.fromId(), req.toId(), BuddyListEntity.PENDING));
                 buddyRepo.insertIfAbsent(row(req.toId(), req.fromId(), BuddyListEntity.PENDING));
-                LOG.info("好友请求: {} → {}（新建={}）", req.fromName(), buddyName, newRow);
+                log.info("好友请求: {} → {}（新建={}）", req.fromName(), buddyName, newRow);
             }
             case ACCEPT -> {
                 buddyRepo.updateStatus(req.fromId(), req.toId(), BuddyListEntity.ACCEPTED);
                 buddyRepo.updateStatus(req.toId(), req.fromId(), BuddyListEntity.ACCEPTED);
-                LOG.info("好友确认: {} ↔ {}", req.fromName(), buddyName);
+                log.info("好友确认: {} ↔ {}", req.fromName(), buddyName);
             }
             case DELETE -> {
                 buddyRepo.delete(req.fromId(), req.toId());
                 buddyRepo.delete(req.toId(), req.fromId());
-                LOG.info("好友删除: {} ↔ {}", req.fromName(), buddyName);
+                log.info("好友删除: {} ↔ {}", req.fromName(), buddyName);
             }
             default -> {
             }

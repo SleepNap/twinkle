@@ -6,8 +6,7 @@ import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Primary;
 import io.micronaut.context.annotation.Property;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.dialect.DbDialectRegistry;
 
 import javax.sql.DataSource;
@@ -34,9 +33,9 @@ import java.sql.SQLException;
  * <p>连接串形态：{@code twinkle.db.url=jdbc:sqlite:./data/twinkle.db} 或 {@code :memory:}。
  */
 @Factory
+@Log4j2
 public class DataSourceFactory {
 
-    private static final Logger LOG = LogManager.getLogger(DataSourceFactory.class);
 
     @Bean
     @Singleton
@@ -47,7 +46,7 @@ public class DataSourceFactory {
             @Property(name = "twinkle.db.user", defaultValue = "") String user,
             @Property(name = "twinkle.db.password", defaultValue = "") String password,
             DbDialectRegistry dialectRegistry) {
-        LOG.info("初始化数据源: {}", maskCredentials(url));
+        log.info("初始化数据源: {}", maskCredentials(url));
         if (url.startsWith("jdbc:sqlite:") && !url.contains(":memory:")) {
             ensureSqliteDir(url);
         }
@@ -89,7 +88,7 @@ public class DataSourceFactory {
             stmt.execute("PRAGMA synchronous=NORMAL");
             stmt.execute("PRAGMA foreign_keys=ON");
         } catch (SQLException e) {
-            LOG.warn("SQLite PRAGMA 应用失败（部分数据库可能不支持）", e);
+            log.warn("SQLite PRAGMA 应用失败（部分数据库可能不支持）", e);
         }
     }
 

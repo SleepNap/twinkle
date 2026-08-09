@@ -1,11 +1,10 @@
 package org.gms.hotreload;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * 游戏逻辑系统注册表（贡献点版本化，仿 {@code HandlerRegistry} 范式，红线 13）。
@@ -19,9 +18,10 @@ import java.util.concurrent.ConcurrentMap;
  *
  * @param <T> 逻辑系统类型（按 key 槽位各自类型一致，运行期由调用方 cast）
  */
+@Log4j2
 public final class LogicSystemRegistry {
 
-    private static final Logger LOG = LogManager.getLogger(LogicSystemRegistry.class);
+
 
     /** 单条注册项：系统实例 + 版本。 */
     public record Registration(Object system, int version) {
@@ -57,7 +57,7 @@ public final class LogicSystemRegistry {
             }
             return new Registration(system, version);
         });
-        LOG.info("逻辑系统已替换: key={} 版本={}", key, version);
+        log.info("逻辑系统已替换: key={} 版本={}", key, version);
     }
 
     /**

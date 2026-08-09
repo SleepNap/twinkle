@@ -45,7 +45,7 @@ public interface InternalFrame {
      *   <li>{@link #LOCATE}：定位查询（已并入 RPC，保留枚举值兼容）。</li>
      * </ul>
      */
-    enum MessageType {
+    public enum MessageType {
         RPC,
         RPC_RESPONSE,
         EVENT,

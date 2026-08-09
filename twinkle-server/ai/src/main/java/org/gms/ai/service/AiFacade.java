@@ -1,7 +1,6 @@
 package org.gms.ai.service;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.AiUsageEntity;
 import org.gms.data.repo.AiUsageRepository;
 
@@ -16,9 +15,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>本类不加 @Singleton——由 bootstrap 装配。
  */
+@Log4j2
 public final class AiFacade {
 
-    private static final Logger LOG = LogManager.getLogger(AiFacade.class);
+
 
     private final AiAssistant assistant;
     private final AiUsageRepository usageRepository;
@@ -37,7 +37,7 @@ public final class AiFacade {
             record("chat", message, reply, start);
             return reply;
         } catch (RuntimeException e) {
-            LOG.error("AI 对话异常", e);
+            log.error("AI 对话异常", e);
             throw e;
         }
     }
@@ -70,7 +70,7 @@ public final class AiFacade {
         try {
             usageRepository.insert(usage);
         } catch (RuntimeException e) {
-            LOG.warn("AI 使用记录落库失败（不影响对话）", e);
+            log.warn("AI 使用记录落库失败（不影响对话）", e);
         }
     }
 }

@@ -53,7 +53,7 @@ public interface DbDialect {
     /**
      * 枚举身份。覆盖 {@link Enum#name()} 以便跨方言配置使用。
      */
-    enum DialectId {
+    public enum DialectId {
         SQLITE,
         POSTGRESQL,
         MYSQL

@@ -1,7 +1,6 @@
 package org.gms.net.netty.internal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.service.admin.AdminService;
 
@@ -17,9 +16,10 @@ import java.util.Optional;
  * <p>返回值约定同 {@link IntercoordRpcDispatcher}：值 JSON 字符串；{@code void}/{@code null}/
  * {@code Optional.empty} 返回 {@code "null"}。
  */
+@Log4j2
 public final class AdminRpcDispatcher {
 
-    private static final Logger LOG = LogManager.getLogger(AdminRpcDispatcher.class);
+
 
     private final AdminService admin;
 
@@ -45,7 +45,7 @@ public final class AdminRpcDispatcher {
                 default -> InternalProtocol.RpcResponse.fail("未知 AdminService RPC 方法: " + method);
             };
         } catch (Exception e) {
-            LOG.error("AdminService RPC 分发失败: method={}", method, e);
+            log.error("AdminService RPC 分发失败: method={}", method, e);
             return InternalProtocol.RpcResponse.fail(e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }

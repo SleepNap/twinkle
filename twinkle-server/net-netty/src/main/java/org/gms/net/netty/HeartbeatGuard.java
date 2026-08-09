@@ -24,10 +24,14 @@ import java.util.function.Consumer;
  * </pre>
  * 期限用 {@link System#nanoTime()} 单调时钟（报告 §5.3-6），避免系统时间校正误判。
  * 本类与 tick / 热重载无关：DRAINING 或 tick 暂停时心跳层保持运行（报告 §5.3-5）。
+ *
+ * <p>public：嵌套类型 {@link HeartbeatStats} 出现在 {@link NetworkSession#heartbeatStats()}
+ * public 方法返回类型中，外层类须可公开访问（红线 12：public 成员不得暴露不可见类型）。
  */
-final class HeartbeatGuard {
+public final class HeartbeatGuard {
 
-    enum State { AWAITING_READ, PROBING }
+    /** 心跳探测状态（内部状态机，仅本类使用）。 */
+    private enum State { AWAITING_READ, PROBING }
 
     private final long pongTimeoutNanos;
     private State state = State.AWAITING_READ;
@@ -42,7 +46,7 @@ final class HeartbeatGuard {
     private final Map<SessionStage, Long> pongOkCount = new EnumMap<>(SessionStage.class);
     private final Map<SessionStage, Long> pongTimeoutCount = new EnumMap<>(SessionStage.class);
 
-    HeartbeatGuard(HeartbeatConfig config) {
+    public HeartbeatGuard(HeartbeatConfig config) {
         this.pongTimeoutNanos = config.pongTimeoutMillis() * 1_000_000L;
     }
 
@@ -50,12 +54,12 @@ final class HeartbeatGuard {
      * readerIdle 触发：AWAITING_READ 时发 PING 进入 PROBING；PROBING 中若已超 deadline
      * 则关闭连接，否则继续等待（不重复发 PING）。
      *
-     * @param stage   当前会话阶段（观测用）
-     * @param nowNanos 单调时钟 now
-     * @param sender   发包回调（构造 PING 帧）
-     * @param closer   关闭连接回调
+     * @param stage     当前会话阶段（观测用）
+     * @param nowNanos  单调时钟 now
+     * @param sender    发包回调（构造 PING 帧）
+     * @param closer    关闭连接回调
      */
-    synchronized void onReaderIdle(SessionStage stage, long nowNanos,
+    public synchronized void onReaderIdle(SessionStage stage, long nowNanos,
                                    Consumer<Long> sender, Runnable closer) {
         if (state == State.AWAITING_READ) {
             long seq = probeSeq.incrementAndGet();
@@ -76,7 +80,7 @@ final class HeartbeatGuard {
      * <p>PROBING 中<b>任意收包视为传输响应</b>→ 解除探测（报告 §5.2：能读写协议包即传输
      * 存活；防"探测期间客户端恢复发包但 PONG 未到被误关"的假阳性）。是 PONG 额外计数。
      */
-    synchronized void onInboundPacket(SessionStage stage, boolean isPong) {
+    public synchronized void onInboundPacket(SessionStage stage, boolean isPong) {
         if (state == State.PROBING) {
             state = State.AWAITING_READ;
         }
@@ -85,26 +89,31 @@ final class HeartbeatGuard {
         }
     }
 
-    synchronized boolean isProbing() {
+    public synchronized boolean isProbing() {
         return state == State.PROBING;
     }
 
     /** 最近一次发出的探测序号（PONG 匹配参考）。 */
-    long lastProbeSeq() {
+    public long lastProbeSeq() {
         return lastProbeSeq;
     }
 
     /** 观测快照（按 SessionStage 分组，报告 §七 心跳指标）。 */
-    synchronized HeartbeatStats stats() {
+    public synchronized HeartbeatStats stats() {
         return new HeartbeatStats(
                 Map.copyOf(probeCount), Map.copyOf(pongOkCount), Map.copyOf(pongTimeoutCount));
     }
 
-    /** 心跳观测快照（不可变视图；缺失阶段按 0 处理）。 */
-    record HeartbeatStats(Map<SessionStage, Long> probe,
-                          Map<SessionStage, Long> pongOk,
-                          Map<SessionStage, Long> pongTimeout) {
+    /**
+     * 心跳观测快照（不可变视图；缺失阶段按 0 处理）。
+     *
+     * <p>经 {@link NetworkSession#heartbeatStats()} 公开返回（运维/测试读），故须为
+     * {@code public}——public 成员不得返回包私有/私有类型（红线 12）。
+     */
+    public record HeartbeatStats(Map<SessionStage, Long> probe,
+                                 Map<SessionStage, Long> pongOk,
+                                 Map<SessionStage, Long> pongTimeout) {
 
-        static final HeartbeatStats EMPTY = new HeartbeatStats(Map.of(), Map.of(), Map.of());
+        public static final HeartbeatStats EMPTY = new HeartbeatStats(Map.of(), Map.of(), Map.of());
     }
 }

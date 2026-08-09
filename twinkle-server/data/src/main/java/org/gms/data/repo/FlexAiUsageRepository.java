@@ -19,7 +19,8 @@ public class FlexAiUsageRepository implements AiUsageRepository {
 
     @Override
     public void insert(AiUsageEntity usage) {
-        mapper.insert(usage);
+        // insertSelective：跳过 null 字段，让 created_at 走 DB DEFAULT（datetime('now')/now()/CURRENT_TIMESTAMP）
+        mapper.insertSelective(usage);
     }
 
     @Override

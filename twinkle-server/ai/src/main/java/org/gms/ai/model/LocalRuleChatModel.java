@@ -12,8 +12,7 @@ import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequestParameters;
 import dev.langchain4j.model.chat.request.DefaultChatRequestParameters;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.ai.model.tool.ToolRouter;
 
 import java.util.List;
@@ -32,9 +31,10 @@ import java.util.UUID;
  * 全走真实 LangChain4j API；接入真实 LLM 时只需把本类替换为 OpenAI/Ollama 的 ChatModel
  * 实现（装配层换 bean，工具与编排零改动）。
  */
+@Log4j2
 public final class LocalRuleChatModel implements ChatModel, StreamingChatModel {
 
-    private static final Logger LOG = LogManager.getLogger(LocalRuleChatModel.class);
+
 
     private final ToolRouter toolRouter;
 
@@ -67,7 +67,7 @@ public final class LocalRuleChatModel implements ChatModel, StreamingChatModel {
                     .name(toolName)
                     .arguments(arguments)
                     .build();
-            LOG.info("本地模型路由到工具: {} 参数={}", toolName, arguments);
+            log.info("本地模型路由到工具: {} 参数={}", toolName, arguments);
             return ChatResponse.builder().aiMessage(new AiMessage(List.of(req))).build();
         }
 

@@ -80,7 +80,7 @@ public final class ApiV1Controller {
                 "name", a.getName(),
                 "banned", a.getBanned() == 1,
                 "gender", a.getGender(),
-                "characterslots", a.getCharacterslots());
+                "characterslots", a.getCharacterSlots());
     }
 
     private static Map<String, Object> characterDto(Character c) {

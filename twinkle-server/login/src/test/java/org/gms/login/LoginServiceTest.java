@@ -27,6 +27,11 @@ class LoginServiceTest {
         public Optional<Account> findByName(String name) {
             return Optional.ofNullable(byName.get(name));
         }
+
+        @Override
+        public void update(Account account) {
+            byName.put(account.getName(), account);
+        }
     }
 
     private static final class StubCharacterRepository implements CharacterRepository {
@@ -40,6 +45,16 @@ class LoginServiceTest {
         @Override
         public java.util.Optional<Character> findById(long id) {
             return characters.stream().filter(c -> c.getId() != null && c.getId() == id).findFirst();
+        }
+
+        @Override
+        public boolean existsByName(String name) {
+            return characters.stream().anyMatch(c -> name.equals(c.getName()));
+        }
+
+        @Override
+        public void insert(Character chr) {
+            characters.add(chr);
         }
 
         @Override

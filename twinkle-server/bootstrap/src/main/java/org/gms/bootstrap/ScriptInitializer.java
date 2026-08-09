@@ -3,8 +3,7 @@ package org.gms.bootstrap;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.script.ScriptManager;
 import org.gms.role.ChannelProcessCondition;
 
@@ -19,11 +18,11 @@ import org.gms.role.ChannelProcessCondition;
 @Singleton
 @Context
 @Requires(condition = ChannelProcessCondition.class)
+@Log4j2
 public final class ScriptInitializer {
 
-    private static final Logger LOG = LogManager.getLogger(ScriptInitializer.class);
 
     public ScriptInitializer(ScriptManager scriptManager) {
-        LOG.info("脚本引擎装配完成：根={}", scriptManager.root());
+        log.info("脚本引擎装配完成：根={}", scriptManager.root());
     }
 }

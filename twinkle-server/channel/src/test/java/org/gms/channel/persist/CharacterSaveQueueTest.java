@@ -37,6 +37,16 @@ class CharacterSaveQueueTest {
         }
 
         @Override
+        public boolean existsByName(String name) {
+            return false;
+        }
+
+        @Override
+        public void insert(org.gms.data.entity.Character chr) {
+            saved.add(chr);
+        }
+
+        @Override
         public void save(org.gms.data.entity.Character chr) {
             saved.add(chr);
             saveCalls.incrementAndGet();

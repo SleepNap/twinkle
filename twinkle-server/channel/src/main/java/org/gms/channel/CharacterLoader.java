@@ -1,6 +1,11 @@
 package org.gms.channel;
 
+import org.gms.data.entity.InventoryItemEntity;
+import org.gms.data.repo.InventoryItemRepository;
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.Inventory;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
 import org.gms.hotreload.versioned.VersionGate;
 
 /**
@@ -9,15 +14,21 @@ import org.gms.hotreload.versioned.VersionGate;
  * <p>纯转换：从 data.Character（74 列标量）读出，填入 domain.Character（内存态权威，
  * Versioned 契约，红线 4 手动 new 不进容器）。构造时取当前逻辑版本（架构 5.3 版本门）。
  *
- * <p>背包/技能/keymap 等内存态不在此填充——对应存档表（inventoryitems 等）随 M2-2
- * 背包机制落地时建表并回填；进图最小切片先以空内存态进场。
+ * <p>已穿戴装备（inventory_items position&lt;0 行）一并投影进 domain EQUIP 背包，
+ * 供进图外观/属性编码；普通背包物品暂不加载（M2-2 背包机制完整落地前）。
  */
 public final class CharacterLoader {
 
     private final VersionGate versionGate;
+    private final InventoryItemRepository inventoryItemRepository;
 
     public CharacterLoader(VersionGate versionGate) {
+        this(versionGate, null);
+    }
+
+    public CharacterLoader(VersionGate versionGate, InventoryItemRepository inventoryItemRepository) {
         this.versionGate = versionGate;
+        this.inventoryItemRepository = inventoryItemRepository;
     }
 
     /** data.Character（DB 存档）→ domain.Character（内存态角色）。 */
@@ -98,6 +109,19 @@ public final class CharacterLoader {
         chr.setLastExpGainTime(db.getLastExpGainTime());
         chr.setPartySearch(db.getPartySearch() != 0);
         chr.setJailExpire(db.getJailExpire());
+        // 已穿戴装备：inventory_items 负位置行 → domain EQUIP 背包（进图外观/属性编码用）
+        if (inventoryItemRepository != null) {
+            Inventory equip = chr.getInventory(InventoryType.EQUIP);
+            for (InventoryItemEntity e : inventoryItemRepository.findByCharacterId(db.getId())) {
+                if (e.getPosition() >= 0) {
+                    continue; // 非已穿戴（正位置）暂不加载
+                }
+                Item item = new Item(e.getItemId());
+                item.setPosition((short) e.getPosition());
+                item.setQuantity((short) e.getQuantity());
+                equip.putAtSlot((short) e.getPosition(), item);
+            }
+        }
         // 加载态即"已落盘"：清除 setter 触发的脏标记（L4 增量 FLUSH 依据）
         chr.clearDirty();
         return chr;

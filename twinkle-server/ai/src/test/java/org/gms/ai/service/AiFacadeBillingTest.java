@@ -76,6 +76,11 @@ class AiFacadeBillingTest {
         public Optional<Account> findByName(String name) {
             return Optional.empty();
         }
+
+        @Override
+        public void update(Account account) {
+            // 测试桩：无需落库
+        }
     }
 
     private AiFacade facade(MemoryUsageRepo usageRepo) {

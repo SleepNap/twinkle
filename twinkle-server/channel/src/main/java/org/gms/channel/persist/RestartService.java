@@ -1,7 +1,6 @@
 package org.gms.channel.persist;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.tick.TickScheduler;
@@ -17,9 +16,10 @@ import org.gms.tick.TickScheduler;
  *   <li><b>RESTARTING</b>：{@link System#exit}（进程兜底，换 JDK/崩溃等）。</li>
  * </ul>
  */
+@Log4j2
 public final class RestartService {
 
-    private static final Logger LOG = LogManager.getLogger(RestartService.class);
+
 
     private final RestartCoordinator coordinator;
     private final TickScheduler tickScheduler;

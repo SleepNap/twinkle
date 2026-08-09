@@ -44,7 +44,7 @@ class HeartbeatE2ETest {
                 DataInputStream in = new DataInputStream(socket.getInputStream());
                 byte[] hello = in.readNBytes(16);
                 byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
-                AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+                AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
                 // 读 PING（约 150ms 后）
                 InPacket ping = readPacket(in, recv);
                 assertThat(ping.readUnsignedShort()).isEqualTo(0x11);   // SendOpcode.PING
@@ -70,7 +70,7 @@ class HeartbeatE2ETest {
                 byte[] recvIv = Arrays.copyOfRange(hello, 7, 11);
                 byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
                 AesCipher send = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-                AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+                AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
 
                 // 跨越多个探测周期：收到 PING 即回空 PONG，连接应持续保持
                 for (int i = 0; i < 3; i++) {
@@ -102,7 +102,7 @@ class HeartbeatE2ETest {
                 byte[] recvIv = Arrays.copyOfRange(hello, 7, 11);
                 byte[] sendIv = Arrays.copyOfRange(hello, 11, 15);
                 AesCipher send = new AesCipher(InitializationVector.of(recvIv), (short) 83);
-                AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
+                AesCipher recv = new AesCipher(InitializationVector.of(sendIv), (short) (0xFFFF - 83));
 
                 // 停在 LOGIN 阶段（不发登录包），持续回心跳 → 长停留不断连（报告 §5.3-4）
                 for (int i = 0; i < 4; i++) {
