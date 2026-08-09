@@ -64,6 +64,8 @@ public final class InternalClient implements AutoCloseable {
         if (!running) {
             return;
         }
+        // 每次尝试连接前重置重连标记（允许失败后再次调度；成功分支不再依赖此标记）
+        reconnectScheduled.set(false);
         Bootstrap bootstrap = new Bootstrap();
         bootstrap.group(workerGroup)
                 .channel(NioSocketChannel.class)

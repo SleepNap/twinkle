@@ -83,15 +83,17 @@ public class SplitConfig {
         return new RemoteAdminService(coordinatorLink, channelId);
     }
 
-    /** coordinator 内部通信服务端启动（构造期起监听）。 */
-    @Bean
+    /** coordinator 内部通信服务端（@Context 强制装配：构造期即启动；@Bean preDestroy 优雅关闭释放端口）。 */
+    @Bean(preDestroy = "close")
     @Context
     @Singleton
     @Requires(condition = SplitCoordinatorCondition.class)
-    public InternalServerStarter internalServerStarter(CoordinatorFrameRouter router,
-                                                       @Property(name = "twinkle.coordinator.host", defaultValue = "127.0.0.1") String host,
-                                                       @Property(name = "twinkle.coordinator.port", defaultValue = "8510") int port) {
-        return new InternalServerStarter(router, port);
+    public InternalServer internalServer(CoordinatorFrameRouter router,
+                                         @Property(name = "twinkle.coordinator.port", defaultValue = "8510") int port) {
+        InternalServer server = new InternalServer(router.connectionHandler());
+        server.start(port);
+        LOG.info("coordinator 内部通信已启动，监听端口: {}", port);
+        return server;
     }
 
     /** 管理进程 → coordinator 的连接（RemoteAdminService 用它发 RPC）。 */
@@ -162,16 +164,6 @@ public class SplitConfig {
     }
 
     // ==================== 启动装配 ====================
-
-    /** coordinator 内部服务端启动（构造期监听，@Context 强制装配）。 */
-    @Singleton
-    static final class InternalServerStarter {
-        InternalServerStarter(CoordinatorFrameRouter router, int port) {
-            InternalServer server = new InternalServer(router.connectionHandler());
-            server.start(port);
-            LOG.info("coordinator 内部通信已启动，监听端口: {}", port);
-        }
-    }
 
     /** 频道进程挂接 AdminService RPC 分发（管理进程运维操作落到频道真值）。 */
     @Singleton

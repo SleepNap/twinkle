@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * M6 阶段 A 验收：单机多进程 split 档端到端（架构 4.5 分布式特例）。
+ * M6 阶段 A/B 验收：单机多进程 split 档端到端（架构 4.5 分布式特例）。
  *
  * <p>同 JVM 起 3 个独立 ApplicationContext（coordinator + 2 个 channel，loopback TCP），
  * 验证：
@@ -25,6 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>频道进程启动 → 上报 coordinator 注册中心（channel 注册表可见）。</li>
  *   <li>频道 A 发跨频道悄悄话 → coordinator 路由 → 频道 B 收到（消息总线）。</li>
  *   <li>频道 A 进图玩家 → 定位表登记 → 频道 B 能 locate（IntercoordService RPC）。</li>
+ *   <li>玩家换频道（CC 迁移）→ 目标频道恰好一次消费 → 定位表更新（架构 4.7）。</li>
+ *   <li>coordinator 无状态重启 → 频道重连重报 → 注册表自动重建（架构 4.2）。</li>
  * </ol>
  *
  * <p>三个 context 共享临时 SQLite（各自连接），channel id/端口区分；WZ/脚本用临时空目录
@@ -126,5 +128,55 @@ class SplitChannelE2ETest {
             Thread.sleep(50);
         }
         throw new AssertionError("等待超时");
+    }
+
+    @Test
+    void coordinatorRestartRebuildsRegistry() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-split-restart").resolve("test.db").toString();
+        String scriptDir = Files.createTempDirectory("twinkle-split-script2").toString();
+
+        // coordinator 首次启动（内部端口 8511，与主测试 8510 错开防并发端口冲突）
+        Map<String, Object> coordProps = Map.of(
+                "twinkle.profile", "split-channel",
+                "twinkle.role", "coordinator",
+                "twinkle.db.url", "jdbc:sqlite:" + dbPath,
+                "micronaut.server.port", "0",
+                "twinkle.net.login.port", "0",
+                "twinkle.coordinator.port", "8511",
+                "twinkle.admin.restart.exit", "false",
+                "twinkle.script.path", scriptDir);
+
+        Map<String, Object> channelProps = Map.of(
+                "twinkle.profile", "split-channel",
+                "twinkle.role", "channel",
+                "twinkle.db.url", "jdbc:sqlite:" + dbPath,
+                "micronaut.server.port", "0",
+                "twinkle.net.login.port", "0",
+                "twinkle.net.channel.id", "1",
+                "twinkle.net.channel.port", "8586",
+                "twinkle.coordinator.port", "8511",
+                "twinkle.script.path", scriptDir);
+
+        ApplicationContext coordinator = ApplicationContext.run(coordProps);
+        ApplicationContext channel = ApplicationContext.run(channelProps);
+        try {
+            IntercoordService coordTruth = coordinator.getBean(IntercoordService.class);
+            await(() -> coordTruth.channels().containsKey(1));
+            assertThat(coordTruth.channels().keySet()).containsExactly(1);
+
+            // coordinator 无状态重启：关闭旧 context，起新 context（同端口）。频道进程存活，
+            // 断线后 InternalClient 自动重连 → 重报 REGISTER → 注册表自动重建（架构 4.2）。
+            coordinator.close();
+            Thread.sleep(500); // 等端口释放 + 频道侧检测断链
+
+            try (ApplicationContext coordinator2 = ApplicationContext.run(coordProps)) {
+                IntercoordService rebuilt = coordinator2.getBean(IntercoordService.class);
+                await(() -> rebuilt.channels().containsKey(1));
+                assertThat(rebuilt.channels().keySet()).containsExactly(1);
+            }
+        } finally {
+            channel.close();
+            coordinator.close();
+        }
     }
 }
