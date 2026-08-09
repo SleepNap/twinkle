@@ -47,6 +47,65 @@ public final class GamePacketFactory {
         return p;
     }
 
+    /**
+     * 控制生成广播（0xEE）：只发给怪物的控制者，授予怪物移动控制权。
+     *
+     * <p>与 {@link #spawnMonster}（0xEC）同构 body，仅 opcode + 控制位不同：
+     * 0xEC 的控制位现用 5（无控制者），0xEE 用 1（授予控制）。布局思路参考自
+     * BeiDou-Server 的 PacketCreator.spawnMonsterControl（继承 OdinMS v83），
+     * 实现自研；<b>control 位 1 vs 5 的确切客户端语义需真机 parity 确认</b>，
+     * 上线前按 ARCHITECTURE M2 parity 录包回放核对。
+     */
+    public static OutPacket spawnMonsterControl(MapleMonster monster) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.SPAWN_MONSTER_CONTROL.getValue());
+        p.writeInt(monster.getObjectId());
+        p.writeByte(1);                 // 授予控制权（对照 0xEC 无控制者 5）
+        p.writeInt(monster.getData().getMobId());
+        p.skip(16);                     // 状态掩码占位（无状态）
+        p.writeShort(monster.getX());
+        p.writeShort(monster.getY());
+        p.writeByte(0);                 // 姿态
+        p.writeShort(0);                // origin fh
+        p.writeShort(0);                // fh
+        p.writeByte(-2);                // newSpawn 淡入
+        p.writeByte(0);                 // team
+        p.writeInt(0);                  // itemEffect
+        return p;
+    }
+
+    /**
+     * 怪物移动广播（0xEF）：发给控制者以外的其他玩家，透传 MOVE_LIFE 移动片段。
+     *
+     * <p>布局：oid + movement 片段流（含各片段长度前缀）。思路参考自 BeiDou-Server
+     * 的 PacketCreator.moveMonster，实现自研；待 parity 录包确认。
+     */
+    public static OutPacket moveMonster(int oid, byte[] movementBytes) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.MOVE_MONSTER.getValue());
+        p.writeInt(oid);
+        p.writeBytes(movementBytes);
+        return p;
+    }
+
+    /**
+     * 怪物移动响应（0xF0）：发给控制者，确认收到 MOVE_LIFE 并允许继续控制。
+     *
+     * <p>布局：oid + 移动序号（short 回显）+ 技能标志 + [skillId]。思路参考自
+     * BeiDou-Server 的 PacketCreator.moveMonsterResponse，实现自研；待 parity 确认。
+     */
+    public static OutPacket moveMonsterResponse(int oid, short moveId, boolean skillMove, int skillId) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.MOVE_MONSTER_RESPONSE.getValue());
+        p.writeInt(oid);
+        p.writeShort(moveId);
+        p.writeByte(skillMove ? 1 : 0);
+        if (skillMove) {
+            p.writeInt(skillId);
+        }
+        return p;
+    }
+
     /** 怪物击杀广播（0xED）：oid + 2 + 2（动画淡出）。 */
     public static OutPacket killMonster(int oid) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();

@@ -53,13 +53,20 @@ public final class AttackHandler implements PacketHandler {
 
     private final CombatSystem combatSystem;
     private final PlayerSessionRegistry sessions;
+    private final org.gms.domain.game.lease.ControllerLeaseService leaseService;
     /** 攻击类型（决定 stance 后固定段布局）。 */
     private final boolean ranged;
     private final boolean magic;
 
     public AttackHandler(CombatSystem combatSystem, PlayerSessionRegistry sessions, boolean ranged, boolean magic) {
+        this(combatSystem, sessions, null, ranged, magic);
+    }
+
+    public AttackHandler(CombatSystem combatSystem, PlayerSessionRegistry sessions,
+                         org.gms.domain.game.lease.ControllerLeaseService leaseService, boolean ranged, boolean magic) {
         this.combatSystem = combatSystem;
         this.sessions = sessions;
+        this.leaseService = leaseService;
         this.ranged = ranged;
         this.magic = magic;
     }
@@ -178,10 +185,14 @@ public final class AttackHandler implements PacketHandler {
             }
         }
 
-        // 死亡：KILL_MONSTER 广播 + 从地图移除
+        // 死亡：KILL_MONSTER 广播 + 释放控制权（MONSTER_DIED）+ 从地图移除
         if (anyDead) {
             for (int oid : deadOids) {
                 sessions.broadcastToMap(map, GamePacketFactory.killMonster(oid));
+                if (leaseService != null) {
+                    // 稳定状态变更同步解除控制归属（报告 §5.5-3，不依赖可重载 handler 补清理）
+                    leaseService.release(map.getMapId(), oid, org.gms.domain.game.lease.LeaseReleaseReason.MONSTER_DIED);
+                }
                 map.removeMonster(oid);
             }
         }
