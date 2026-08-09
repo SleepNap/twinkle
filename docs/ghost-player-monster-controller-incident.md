@@ -2,7 +2,7 @@
 
 > 事故日期：2026-08-08  
 > 报告日期：2026-08-09  
-> 状态：原因链已基本确认；触发端的具体操作无法由现有日志唯一还原  
+> 状态：原因链已基本确认；触发端的具体操作无法由现有日志唯一还原；**阶段 B（Twinkle 稳定层补强）已于 2026-08-09 实施完成**（见 §六 阶段 B 完成标注）  
 > 影响范围：旧服 `datas-server` 的怪物控制权；Twinkle 的连接存活、会话归属与热重载边界  
 > 参考说明：事故取证与旧服行为理解参考 `datas-server`（GPL）。本文只记录事实与设计思路，不复制其代码；Twinkle 的 MIT 实现必须自研。
 
@@ -274,11 +274,19 @@ Twinkle 可沿用本报告的 Client 级思想，但实现应符合状态/逻辑
 
 ### 阶段 B：Twinkle 稳定层补强
 
-1. 把当前无效的 `allIdle` 占位实现改为可测试的分阶段 PING/PONG 状态机。
-2. 为 `NetworkSession` 与角色认领增加不可变会话 ID、会话代际。
-3. 把在线表与断链清理改为按预期会话 compare-and-remove。
-4. 定义稳定层 `ControllerLeaseService` 接口，再由怪物逻辑调用。
-5. 增加迟到断链、重复登录、热重载暂停和怪物自然归零的并发/代际测试。
+> **✅ 已完成（2026-08-09）**：本报告 §5.1 所列 Twinkle 缺口已全部实施，详见 `twinkle-server` 提交
+> `770094a`（B-1 心跳状态机）→ `3e6c656`（B-4 租约稳定层）→ `24f2673`（B-2/B-3 会话代际化）
+> → `bb507f5`（B-4 怪物控制分配）→ `1ee15bf`（B-5 装配 + E2E 验收）。完成标准对照：
+> 标准 1/2 → `MonsterLeaseE2ETest`、标准 3 → `SessionIdentityE2ETest`、
+> 标准 4 → `HeartbeatE2ETest`、标准 5 → 租约单测 `tickPauseGrantsGraceAndDoesNotMisfire`
+> （L3 reload 前后 sessionId/generation 不变由网络会话构造保证）。parity 待真机确认项
+> （`SPAWN_MONSTER_CONTROL` 控制位、`MOVE_LIFE`/`MOVE_MONSTER` 布局）见代码注释标注。
+
+1. **✅** 把当前无效的 `allIdle` 占位实现改为可测试的分阶段 PING/PONG 状态机。
+2. **✅** 为 `NetworkSession` 与角色认领增加不可变会话 ID、会话代际。
+3. **✅** 把在线表与断链清理改为按预期会话 compare-and-remove。
+4. **✅** 定义稳定层 `ControllerLeaseService` 接口，再由怪物逻辑调用。
+5. **✅** 增加迟到断链、重复登录、热重载暂停和怪物自然归零的并发/代际测试。
 
 ---
 
