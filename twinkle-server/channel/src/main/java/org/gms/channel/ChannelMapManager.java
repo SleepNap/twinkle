@@ -26,4 +26,9 @@ public final class ChannelMapManager {
         return maps.computeIfAbsent(mapId,
                 id -> loader.load(id).orElseThrow(() -> new IllegalArgumentException("地图不存在: " + id)));
     }
+
+    /** 全部已加载地图（租约巡检/无主怪重新分配用，不可变视图）。 */
+    public java.util.Collection<MapleMap> maps() {
+        return java.util.List.copyOf(maps.values());
+    }
 }

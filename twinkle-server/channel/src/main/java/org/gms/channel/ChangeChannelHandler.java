@@ -70,12 +70,12 @@ public final class ChangeChannelHandler implements PacketHandler {
         LOG.info("玩家 {} 换频道 {} → {}（reason={}）", chr.getName(), channelId, targetId, req.reason());
         reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req);
 
-        // 迁移执行（M4 单进程内：定位表更新 + 地图清理 + 重新登记）
+        // 迁移执行（M4 单进程内：定位表更新 + 地图清理 + 会话注销（compare-and-remove））
         intercoord.movePlayer(chr.getId(), targetId);
         if (chr.getMapObject() != null) {
             chr.getMapObject().removeCharacter(chr);
         }
-        sessions.unregister(chr.getId());
+        sessions.unregister(chr.getId(), session);
         // 玩家重连目标频道端口 → PlayerLoggedinHandler 重新进图（v83 loading 界面）
         LOG.info("玩家 {} 换频道完成，等待重连频道 {}（{} 端口）", chr.getName(), targetId, targetId);
     }

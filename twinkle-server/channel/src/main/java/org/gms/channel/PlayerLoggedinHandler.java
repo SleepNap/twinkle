@@ -27,19 +27,28 @@ public final class PlayerLoggedinHandler implements PacketHandler {
     private final PlayerStorage players;
     private final PlayerSessionRegistry sessions;
     private final MonsterSpawnService spawnService;
+    private final org.gms.domain.game.lease.ControllerLeaseService leaseService;
     private final int channelId;
     private final org.gms.channel.admin.ChannelEventPublisher eventPublisher;
 
     public PlayerLoggedinHandler(CharacterRepository characterRepo, CharacterLoader characterLoader,
                                  ChannelMapManager mapManager, PlayerStorage players,
                                  PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId) {
-        this(characterRepo, characterLoader, mapManager, players, sessions, spawnService, channelId, null);
+        this(characterRepo, characterLoader, mapManager, players, sessions, spawnService, channelId, null, null);
     }
 
     public PlayerLoggedinHandler(CharacterRepository characterRepo, CharacterLoader characterLoader,
                                  ChannelMapManager mapManager, PlayerStorage players,
                                  PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId,
                                  org.gms.channel.admin.ChannelEventPublisher eventPublisher) {
+        this(characterRepo, characterLoader, mapManager, players, sessions, spawnService, channelId, eventPublisher, null);
+    }
+
+    public PlayerLoggedinHandler(CharacterRepository characterRepo, CharacterLoader characterLoader,
+                                 ChannelMapManager mapManager, PlayerStorage players,
+                                 PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId,
+                                 org.gms.channel.admin.ChannelEventPublisher eventPublisher,
+                                 org.gms.domain.game.lease.ControllerLeaseService leaseService) {
         this.characterRepo = characterRepo;
         this.characterLoader = characterLoader;
         this.mapManager = mapManager;
@@ -48,6 +57,7 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         this.spawnService = spawnService;
         this.channelId = channelId;
         this.eventPublisher = eventPublisher;
+        this.leaseService = leaseService;
     }
 
     @Override
@@ -65,11 +75,21 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         Character chr = characterLoader.fromData(dbChar);
         MapleMap map = mapManager.getMap(chr.getMap());
         chr.setMapObject(map);
+        // 会话代际认领（事故报告阶段 B）：新连接认领 = 新代际；先移除地图/在线表里
+        // 同 id 的旧 Character（防广播双发），再由 claim 覆盖会话登记。
+        removeSupersededCharacter(map, chr);
         map.addCharacter(chr);
         players.add(chr);
-        sessions.register(chr.getId(), session);
-        // 首次进图生成地图怪物并广播
-        spawnService.spawnForMap(map);
+        long generation = sessions.claim(chr.getId(), session);
+        session.setAttr("sessionGeneration", generation);
+        if (leaseService != null) {
+            // 新认领：旧代际租约立即失效（SESSION_REPLACED）
+            leaseService.onClaim(chr.getId(), session.sessionId(), generation);
+        }
+        // 生成缺失怪物（去重）+ 把现存怪广播给进入玩家并分配无主怪控制权
+        spawnService.ensureSpawned(map);
+        spawnService.onPlayerEnter(map, session, new org.gms.domain.game.lease.LeaseOwner(
+                chr.getId(), session.sessionId(), generation));
         session.setAttr("character", chr);
         session.transition(SessionStage.IN_GAME);
         session.send(ChannelPacketFactory.charInfo(chr, channelId));
@@ -77,5 +97,15 @@ public final class PlayerLoggedinHandler implements PacketHandler {
             eventPublisher.playerOnline(chr);
         }
         LOG.info("玩家进图: {} (id={}) 地图={}", chr.getName(), chr.getId(), map.getMapId());
+    }
+
+    /** 移除地图/在线表里同 id 的非自身旧 Character（重复登录，防广播双发；旧代际断链迟到清理由 compare-and-remove 短路）。 */
+    private void removeSupersededCharacter(MapleMap map, Character newChr) {
+        for (var c : java.util.List.copyOf(map.characters())) {
+            if (c.getId() == newChr.getId() && c != newChr) {
+                map.removeCharacter(c);
+                players.remove((Character) c);
+            }
+        }
     }
 }

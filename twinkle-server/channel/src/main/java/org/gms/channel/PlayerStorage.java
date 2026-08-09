@@ -22,9 +22,9 @@ public final class PlayerStorage {
         players.put(chr.getId(), chr);
     }
 
-    /** 角色下线/换图移除。 */
+    /** 角色下线/换图移除（compare-and-remove：仅当登记对象==本对象才删，防旧代际误删新角色）。 */
     public void remove(Character chr) {
-        players.remove(chr.getId());
+        players.remove(chr.getId(), chr);
     }
 
     public Character getById(long id) {
