@@ -37,4 +37,11 @@ public interface PacketSession {
      * 写连接级属性。
      */
     void setAttr(String key, Object value);
+
+    /**
+     * 本连接的不可变会话 id（创建时生成、全局单调，事故报告阶段 B：会话代际的
+     * 第一维）。同一 TCP 连接全程不变；角色被认领时在其之上再叠 {@code sessionGeneration}，
+     * 归属用 {@code (characterId, sessionId, sessionGeneration)} 三元组证明。
+     */
+    long sessionId();
 }

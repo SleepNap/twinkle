@@ -4,9 +4,13 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gms.net.encryption.CipherPair;
+import org.gms.net.opcodes.RecvOpcode;
+import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.net.packet.InPacket;
@@ -16,6 +20,7 @@ import org.gms.net.packet.SessionStage;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 客户端连接会话（架构 net-netty：连接状态机 + 封包分发到 HandlerRegistry）。
@@ -24,9 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li><b>握手</b>：连入即发 v83 hello 明文包（含双方 IV），随后全连接加密。</li>
  *   <li><b>分发</b>：收到解密后的 {@link InPacket}，读 opcode → 查 {@link HandlerRegistry}
- *        → 交给对应 {@code PacketHandler}。</li>
+ *        → 交给对应 {@code PacketHandler}。PONG 在分发前拦截（传输心跳，各阶段共享）。</li>
+ *   <li><b>心跳</b>：readerIdle → PING → PONG deadline 状态机（事故报告阶段 B：分阶段
+ *        心跳替代 allIdle；探测超时才关闭，长停留不因业务阶段被误伤）。</li>
  *   <li><b>阶段状态机</b>：M1 校验包顺序（握手 → 登录 → 角色列表 → 选角），
- *       防止跳过阶段。</li>
+ *        防止跳过阶段。</li>
  *   <li><b>连接态</b>：{@link #send} 发包 / {@link #close} 断链（实现 {@link PacketSession}）。</li>
  * </ul>
  *
@@ -40,22 +47,43 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     /** v83 客户端版本（字节级兼容红线 1）。 */
     public static final short MAPLE_VERSION = 83;
 
+    /** 会话 id 分配（全局单调；同一 TCP 连接创建即得、全程不变，事故报告阶段 B）。 */
+    private static final AtomicLong SESSION_ID_SEQ = new AtomicLong();
+
+    private final long sessionId = SESSION_ID_SEQ.incrementAndGet();
     private final HandlerRegistry registry;
     private final CipherPair ciphers;
     private final Map<String, Object> attributes = new ConcurrentHashMap<>();
     private final DisconnectListener disconnectListener;
+    private final HeartbeatGuard heartbeat;
 
     private volatile Channel channel;
     private volatile SessionStage stage = SessionStage.HANDSHAKE;
 
     public NetworkSession(HandlerRegistry registry, CipherPair ciphers) {
-        this(registry, ciphers, null);
+        this(registry, ciphers, null, HeartbeatConfig.defaults());
     }
 
     public NetworkSession(HandlerRegistry registry, CipherPair ciphers, DisconnectListener disconnectListener) {
+        this(registry, ciphers, disconnectListener, HeartbeatConfig.defaults());
+    }
+
+    public NetworkSession(HandlerRegistry registry, CipherPair ciphers, DisconnectListener disconnectListener,
+                          HeartbeatConfig heartbeatConfig) {
         this.registry = registry;
         this.ciphers = ciphers;
         this.disconnectListener = disconnectListener;
+        this.heartbeat = new HeartbeatGuard(heartbeatConfig);
+    }
+
+    @Override
+    public long sessionId() {
+        return sessionId;
+    }
+
+    /** 心跳观测快照（测试/运维读，报告 §七 心跳指标）。 */
+    public HeartbeatGuard.HeartbeatStats heartbeatStats() {
+        return heartbeat.stats();
     }
 
     public CipherPair ciphers() {
@@ -113,10 +141,34 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof InPacket packet) {
             int opcode = packet.readUnsignedShort();
+            if (opcode == RecvOpcode.PONG.getValue()) {
+                // 传输心跳响应：PONG 在分发前拦截，不进 HandlerRegistry（各阶段共享稳定贡献点）
+                heartbeat.onInboundPacket(stage(), true);
+                return;
+            }
+            heartbeat.onInboundPacket(stage(), false);
             registry.find(opcode).ifPresentOrElse(
                     handler -> handler.handle(this, packet),
                     () -> LOG.warn("未注册的收包 opcode: 0x{}", Integer.toHexString(opcode)));
         }
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent ise && ise.state() == IdleState.READER_IDLE) {
+            // readerIdle：发 PING 探测；PROBING 中已超期限则关闭（不因业务阶段长停留误伤）
+            heartbeat.onReaderIdle(stage(), System.nanoTime(), this::sendPing, () -> ctx.close());
+        } else {
+            super.userEventTriggered(ctx, evt);
+        }
+    }
+
+    /** 构造 PING 帧并发出（v83：short 0x11 + short seq，真实客户端忽略负载回空 PONG）。 */
+    private void sendPing(long seq) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.PING.getValue());
+        p.writeShort((int) seq);
+        send(p);
     }
 
     @Override

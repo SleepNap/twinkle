@@ -27,9 +27,10 @@ class NettyIntegrationTest {
 
     @Test
     void helloHandshakeAndEncryptedRoundTrip() throws Exception {
-        // 服务端：注册一个回包 handler（PONG → 回 PING + 字符串）
+        // 服务端：注册一个回包 handler（WHISPER → 回 PING + 字符串）。
+        // 注意：不能再用 PONG——NetworkSession 已把 PONG 作为传输心跳在分发前拦截（事故报告阶段 B）。
         HandlerRegistry registry = new HandlerRegistry();
-        registry.register(RecvOpcode.PONG, (session, packet) -> {
+        registry.register(RecvOpcode.WHISPER, (session, packet) -> {
             ByteArrayOutPacket out = new ByteArrayOutPacket();
             out.writeShort(SendOpcode.PING.getValue());
             out.writeString("pong-reply");
@@ -64,9 +65,9 @@ class NettyIntegrationTest {
                 AesCipher clientSend = new AesCipher(InitializationVector.of(recvIv), (short) 83);
                 AesCipher clientRecv = new AesCipher(InitializationVector.of(sendIv), (short) 83);
 
-                // 4. 发加密 PONG
+                // 4. 发加密 WHISPER（替代 PONG 回环，PONG 已被传输心跳拦截）
                 ByteArrayOutPacket pong = new ByteArrayOutPacket();
-                pong.writeShort(RecvOpcode.PONG.getValue());
+                pong.writeShort(RecvOpcode.WHISPER.getValue());
                 byte[] wire = PacketCodec.encodePacket(clientSend, pong.getBytes());
                 out.write(wire);
                 out.flush();

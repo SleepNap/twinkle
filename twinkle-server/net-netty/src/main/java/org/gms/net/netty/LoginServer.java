@@ -23,18 +23,24 @@ public final class LoginServer implements AutoCloseable {
     private static final Logger LOG = LogManager.getLogger(LoginServer.class);
 
     private final HandlerRegistry registry;
+    private final HeartbeatConfig heartbeatConfig;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
 
     public LoginServer(HandlerRegistry registry) {
+        this(registry, HeartbeatConfig.defaults());
+    }
+
+    public LoginServer(HandlerRegistry registry, HeartbeatConfig heartbeatConfig) {
         this.registry = registry;
+        this.heartbeatConfig = heartbeatConfig;
     }
 
     /**
      * 启动并绑定端口。
      *
-     * @param port 监听端口（v83 客户端经典登录端口 8484）
+     * @param port 监听端口（v83 客户端经典登录端口 8484；0 = 动态分配，测试用）
      */
     public void start(int port) {
         bossGroup = new NioEventLoopGroup(1);
@@ -42,7 +48,7 @@ public final class LoginServer implements AutoCloseable {
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
-                .childHandler(new V83ServerInitializer(registry));
+                .childHandler(new V83ServerInitializer(registry, null, heartbeatConfig));
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
         LOG.info("登录服启动，监听端口: {}", port);
     }

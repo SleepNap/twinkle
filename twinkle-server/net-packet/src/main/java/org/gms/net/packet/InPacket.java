@@ -51,5 +51,12 @@ public interface InPacket {
      */
     int available();
 
+    /**
+     * 读剩余全部字节（MOVE_LIFE 移动片段等透传用）。
+     */
+    default byte[] readRemaining() {
+        return readBytes(available());
+    }
+
     byte[] getBytes();
 }

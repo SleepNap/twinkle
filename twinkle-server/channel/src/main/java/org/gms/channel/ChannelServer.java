@@ -9,6 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gms.net.netty.V83ServerInitializer;
 import org.gms.net.netty.DisconnectListener;
+import org.gms.net.netty.HeartbeatConfig;
 import org.gms.net.packet.HandlerRegistry;
 
 import java.net.InetSocketAddress;
@@ -28,17 +29,24 @@ public final class ChannelServer implements AutoCloseable {
 
     private final HandlerRegistry registry;
     private final DisconnectListener disconnectListener;
+    private final HeartbeatConfig heartbeatConfig;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
 
     public ChannelServer(HandlerRegistry registry) {
-        this(registry, null);
+        this(registry, null, HeartbeatConfig.defaults());
     }
 
     public ChannelServer(HandlerRegistry registry, DisconnectListener disconnectListener) {
+        this(registry, disconnectListener, HeartbeatConfig.defaults());
+    }
+
+    public ChannelServer(HandlerRegistry registry, DisconnectListener disconnectListener,
+                         HeartbeatConfig heartbeatConfig) {
         this.registry = registry;
         this.disconnectListener = disconnectListener;
+        this.heartbeatConfig = heartbeatConfig;
     }
 
     /** 启动并绑定端口。 */
@@ -48,7 +56,7 @@ public final class ChannelServer implements AutoCloseable {
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
-                .childHandler(new V83ServerInitializer(registry, disconnectListener));
+                .childHandler(new V83ServerInitializer(registry, disconnectListener, heartbeatConfig));
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
         LOG.info("频道服启动，监听端口: {}", port);
     }
