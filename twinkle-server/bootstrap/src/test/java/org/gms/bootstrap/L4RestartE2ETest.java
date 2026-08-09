@@ -62,12 +62,12 @@ class L4RestartE2ETest {
         flex.getMapper(AccountMapper.class).insertSelective(acc);
 
         org.gms.data.entity.Character heroDb = new org.gms.data.entity.Character();
-        heroDb.setAccountid(acc.getId());
+        heroDb.setAccountId(acc.getId());
         heroDb.setWorld(0);
         heroDb.setName("Hero");
         heroDb.setLevel(10);
         heroDb.setJob(0);
-        heroDb.setSkincolor(0);
+        heroDb.setSkinColor(0);
         heroDb.setGender(0);
         heroDb.setFace(20000);
         heroDb.setHair(30000);
@@ -77,15 +77,15 @@ class L4RestartE2ETest {
         heroDb.setIntStat((short) 4);
         heroDb.setHp((short) 500);
         heroDb.setMp((short) 5);
-        heroDb.setMaxhp((short) 500);
-        heroDb.setMaxmp((short) 5);
+        heroDb.setMaxHp((short) 500);
+        heroDb.setMaxMp((short) 5);
         heroDb.setMap(100000000);
-        heroDb.setSpawnpoint(0);
+        heroDb.setSpawnPoint(0);
         heroDb.setBuddyCapacity(25);
-        heroDb.setEquipslots(24);
-        heroDb.setUseslots(24);
-        heroDb.setSetupslots(24);
-        heroDb.setEtcslots(24);
+        heroDb.setEquipSlots(24);
+        heroDb.setUseSlots(24);
+        heroDb.setSetupSlots(24);
+        heroDb.setEtcSlots(24);
         characterMapper.insertSelective(heroDb);
         long heroId = heroDb.getId();
 

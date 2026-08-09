@@ -7,7 +7,7 @@
 #
 # 前置：切换前已备份（见 docs/ops/switch-to-production.md 的切换步骤）：
 #   ./backup/twinkle-server.jar.bak    （旧 jar）
-#   ./data/twinkle.db.bak.<时间戳>      （DB 备份，见 migrate-newmaple.sh 输出）
+#   ./data/twinkle.db.bak.<时间戳>      （DB 备份，见 docs/ops/switch-to-production.md 切换步骤）
 #   ./backup/application.yml.bak       （旧配置，可选）
 # ============================================================
 set -euo pipefail

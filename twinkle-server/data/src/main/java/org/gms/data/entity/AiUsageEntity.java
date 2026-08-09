@@ -10,7 +10,7 @@ import lombok.Setter;
  * AI 使用记录表实体（架构 M3-2：计费/观测落 SQLite，V4 迁移建表）。
  * 一行一次 AI 请求：工具名/请求文本/响应长度/耗时。
  */
-@Table("ai_usage")
+@Table("ai_usage_log")
 @Getter
 @Setter
 public class AiUsageEntity {

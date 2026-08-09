@@ -30,7 +30,7 @@ class LoggingDisciplineTest {
     private static final Path REPO_ROOT = SqlInjectionScanTest.REPO_ROOT;
 
     /**
-     * 放行清单：一次性 CLI 工具（NewMapleImportMain）用 stdout 打印导入结果——命令行工具
+     * 放行清单：一次性 CLI 工具（如数据迁移/导入工具）用 stdout 打印结果——命令行工具
      * stdout 输出是标准惯例（用户直接看结果），不属于服务端日志规范范畴。
      */
     private static final String[] SYSTEM_OUT_WHITELIST = {

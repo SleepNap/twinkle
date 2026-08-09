@@ -240,12 +240,12 @@ class MonsterLeaseE2ETest {
     }
 
     private static void fill(org.gms.data.entity.Character c, long accountId, String name, int level) {
-        c.setAccountid(accountId);
+        c.setAccountId(accountId);
         c.setWorld(0);
         c.setName(name);
         c.setLevel(level);
         c.setJob(0);
-        c.setSkincolor(0);
+        c.setSkinColor(0);
         c.setGender(0);
         c.setFace(20000);
         c.setHair(30000);
@@ -255,15 +255,15 @@ class MonsterLeaseE2ETest {
         c.setIntStat((short) 4);
         c.setHp((short) 50);
         c.setMp((short) 5);
-        c.setMaxhp((short) 50);
-        c.setMaxmp((short) 5);
+        c.setMaxHp((short) 50);
+        c.setMaxMp((short) 5);
         c.setMap(100000000);
-        c.setSpawnpoint(0);
+        c.setSpawnPoint(0);
         c.setBuddyCapacity(25);
-        c.setEquipslots(24);
-        c.setUseslots(24);
-        c.setSetupslots(24);
-        c.setEtcslots(24);
+        c.setEquipSlots(24);
+        c.setUseSlots(24);
+        c.setSetupSlots(24);
+        c.setEtcSlots(24);
     }
 
     /** 一个 Socket 客户端连接 + v83 会话（封装握手/加密/进图）。 */

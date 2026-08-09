@@ -12,7 +12,7 @@ import lombok.Setter;
  * owner_id/buddy_id 作为查询键（MyBatis-Flex 允许无 @Id 的普通表，增删改用 QueryWrapper）。
  * status：PENDING（待确认）/ ACCEPTED（已确认）。
  */
-@Table("buddylist")
+@Table("buddy_list")
 @Getter
 @Setter
 public class BuddyListEntity {

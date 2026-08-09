@@ -141,12 +141,12 @@ class GamePlayE2ETest {
         accountMapper.insertSelective(acc);
 
         Character hero = new Character();
-        hero.setAccountid(acc.getId());
+        hero.setAccountId(acc.getId());
         hero.setWorld(0);
         hero.setName("Hero");
         hero.setLevel(10);
         hero.setJob(0);
-        hero.setSkincolor(0);
+        hero.setSkinColor(0);
         hero.setGender(0);
         hero.setFace(20000);
         hero.setHair(30000);
@@ -156,15 +156,15 @@ class GamePlayE2ETest {
         hero.setIntStat((short) 4);
         hero.setHp((short) 500);
         hero.setMp((short) 5);
-        hero.setMaxhp((short) 500);
-        hero.setMaxmp((short) 5);
+        hero.setMaxHp((short) 500);
+        hero.setMaxMp((short) 5);
         hero.setMap(100000000);
-        hero.setSpawnpoint(0);
+        hero.setSpawnPoint(0);
         hero.setBuddyCapacity(25);
-        hero.setEquipslots(24);
-        hero.setUseslots(24);
-        hero.setSetupslots(24);
-        hero.setEtcslots(24);
+        hero.setEquipSlots(24);
+        hero.setUseSlots(24);
+        hero.setSetupSlots(24);
+        hero.setEtcSlots(24);
         characterMapper.insertSelective(hero);
 
         // ---- WZ：临时目录写地图 + 怪物/物品数据 ----

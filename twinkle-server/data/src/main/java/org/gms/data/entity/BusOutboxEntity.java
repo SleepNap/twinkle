@@ -13,7 +13,7 @@ import lombok.Setter;
  * 进程崩了重投未 ACKED（投递成功才 ack，崩了重发）；接收方按 {@code messageId} 幂等去重、
  * 按 {@code streamId + seq} 单一属主序号按序投递。
  */
-@Table("bus_outbox")
+@Table("bus_outbox_queue")
 @Getter
 @Setter
 public class BusOutboxEntity {

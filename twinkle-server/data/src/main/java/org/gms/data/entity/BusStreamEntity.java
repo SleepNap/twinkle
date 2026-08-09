@@ -13,7 +13,7 @@ import lombok.Setter;
  * M4 内存版（ReliableEventBus 的 deliveredSeq Map）；M6 跨进程落此表，重启不丢去重状态
  * （进程崩了重投不重复应用）。
  */
-@Table("bus_stream")
+@Table("bus_stream_state")
 @Getter
 @Setter
 public class BusStreamEntity {

@@ -148,7 +148,7 @@ public final class LoginPacketFactory {
         p.writeInt(c.getId().intValue());
         writeFixedString(p, c.getName(), 13);
         p.writeByte(c.getGender());
-        p.writeByte(c.getSkincolor());
+        p.writeByte(c.getSkinColor());
         p.writeInt(c.getFace());
         p.writeInt(c.getHair());
         p.writeLong(0);             // 宠物 x3
@@ -161,22 +161,22 @@ public final class LoginPacketFactory {
         p.writeShort(c.getIntStat());
         p.writeShort(c.getLuk());
         p.writeShort(c.getHp());
-        p.writeShort(c.getMaxhp());
+        p.writeShort(c.getMaxHp());
         p.writeShort(c.getMp());
-        p.writeShort(c.getMaxmp());
+        p.writeShort(c.getMaxMp());
         p.writeShort(c.getAp());
         p.writeShort(remainingSp(c)); // 非 Aran 职业用 short
         p.writeInt((int) c.getExp());
         p.writeShort(c.getFame());
-        p.writeInt((int) c.getGachaexp());
+        p.writeInt((int) c.getGachaExp());
         p.writeInt(c.getMap());
-        p.writeByte(c.getSpawnpoint());
+        p.writeByte(c.getSpawnPoint());
         p.writeInt(0);
     }
 
     private static void addCharLook(OutPacket p, Character c) {
         p.writeByte(c.getGender());
-        p.writeByte(c.getSkincolor());
+        p.writeByte(c.getSkinColor());
         p.writeInt(c.getFace());
         p.writeBool(true);          // !mega
         p.writeInt(c.getHair());

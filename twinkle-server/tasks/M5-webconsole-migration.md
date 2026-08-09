@@ -74,3 +74,10 @@ Web 控制台（替代 JavaFX）、单库迁移、上线切换。
 - 测试全绿：`mvn -B verify` 17 模块 SUCCESS，bootstrap 33 测试全绿（新增 AdminConsoleE2ETest / MigrationImportE2ETest /
   LoggingDisciplineTest / NewMapleImporterTest / V7QueststatusColumnsMigrationTest / ChannelAdminServiceTest 扩展）。
 
+
+## 后续变更（2026-08-09，覆盖本节上文）
+
+**newmaple 兼容已删除**：用户明确"这是全新自研项目，不兼容 newmaple/北斗"。`NewMapleImporter`/
+`NewMapleImportMain`/`MigrationImportE2ETest`/`NewMapleImporterTest`/`V7QueststatusColumnsMigrationTest`/
+`migrate-newmaple.sh` 全部删除；`V7__queststatus_newmaple_columns` 并入 `quest_status` 建表（四列一次建全）。
+上文勾选的迁移/导入项不再适用——见 `docs/ops/switch-to-production.md` 新库自建说明。

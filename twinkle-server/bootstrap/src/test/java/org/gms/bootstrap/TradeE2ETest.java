@@ -254,12 +254,12 @@ class TradeE2ETest {
 
     private static Character makeChar(Account acc, String name) {
         Character c = new Character();
-        c.setAccountid(acc.getId());
+        c.setAccountId(acc.getId());
         c.setWorld(0);
         c.setName(name);
         c.setLevel(10);
         c.setJob(0);
-        c.setSkincolor(0);
+        c.setSkinColor(0);
         c.setGender(0);
         c.setFace(20000);
         c.setHair(30000);
@@ -269,15 +269,15 @@ class TradeE2ETest {
         c.setIntStat((short) 4);
         c.setHp((short) 50);
         c.setMp((short) 5);
-        c.setMaxhp((short) 50);
-        c.setMaxmp((short) 5);
+        c.setMaxHp((short) 50);
+        c.setMaxMp((short) 5);
         c.setMap(100000000);
-        c.setSpawnpoint(0);
+        c.setSpawnPoint(0);
         c.setBuddyCapacity(25);
-        c.setEquipslots(24);
-        c.setUseslots(24);
-        c.setSetupslots(24);
-        c.setEtcslots(24);
+        c.setEquipSlots(24);
+        c.setUseSlots(24);
+        c.setSetupSlots(24);
+        c.setEtcSlots(24);
         c.setMeso(5000);        // 初始金币（交易 SET_MESO 校验持有量）
         return c;
     }

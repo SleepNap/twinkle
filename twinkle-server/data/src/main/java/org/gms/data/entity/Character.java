@@ -1,6 +1,5 @@
 package org.gms.data.entity;
 
-import com.mybatisflex.annotation.Column;
 import com.mybatisflex.annotation.Id;
 import com.mybatisflex.annotation.KeyType;
 import com.mybatisflex.annotation.Table;
@@ -8,123 +7,92 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 角色表实体（架构 M1 选角，红线 3：characters 结构不变）。
+ * 角色记录实体（架构 M1 选角 + 存档，数据库命名与迁移规范：表名 ≥2 词、字段 snake_case）。
  * Lombok 生成字段 getter/setter（红线 11，可变实体类用 @Getter/@Setter 代替手写）。
  *
- * <p>M1 映射选角列表展示所需字段（id/accountid/world/name/属性/外观/rank）。
- * 其余列（sp 之外的 mount/dojo 等）待 M2 游戏逻辑接入时补充映射，表结构保持完整
- * （V2 迁移建全列）。
+ * <p>字段与 {@code character_records} 表对齐（全 snake_case 列名；MyBatis-Flex 驼峰→下划线
+ * 自动匹配，无需 @Column 显式标注）。映射选角列表展示 + 存档读写所需字段。
  *
- * <p>{@code int} 是 SQL 保留字列名，Java 字段用 {@code intStat} + {@link Column} 显式映射；
- * {@code hpMpUsed} 等驼峰列同理需显式标注。字段对齐参考项目 characters 表
- * （思路参考自 BeiDou-Server，结构按红线兼容）。
+ * <p>{@code int_stat} 对应原 {@code "int"} 关键字列（规范改名，消除关键字字段）。
  */
-@Table("characters")
+@Table("character_records")
 @Getter
 @Setter
 public class Character {
 
     @Id(keyType = KeyType.Auto)
     private Long id;
-    private Long accountid;
+    private Long accountId;
     private int world;
     private String name;
     private int level;
     private long exp;
-    private long gachaexp;
+    private long gachaExp;
     private short str;
     private short dex;
     private short luk;
-    @Column("int")
     private short intStat;
     private short hp;
     private short mp;
-    private short maxhp;
-    private short maxmp;
+    private short maxHp;
+    private short maxMp;
     private int meso;
+    private int hpMpUsed;
     private int job;
-    private int skincolor;
+    private int skinColor;
     private int gender;
     private int fame;
+    private int fQuest;
     private int hair;
     private int face;
     private int ap;
     private String sp;
     private int map;
-    private int spawnpoint;
+    private int spawnPoint;
     private int gm;
-    private long rank;
-    @Column("rankMove")
-    private int rankMove;
-    @Column("jobRank")
-    private long jobRank;
-    @Column("jobRankMove")
-    private int jobRankMove;
-
-    // ---------- 存档剩余列（M2 进图/游戏逻辑接入；表结构对齐 newmaple，红线 3） ----------
-    // MyBatis-Flex 默认驼峰→下划线列名，与 DB 驼峰列名不符的字段需 @Column 显式对齐
-    // （全小写字段如 guildid/omokwins 默认列名=字段名=DB 列名，无需标注）。
-    @Column("hpMpUsed")
-    private int hpMpUsed;
-    private int fquest;
     private int party;
-    @Column("buddyCapacity")
     private int buddyCapacity;
-    private String createdate;
-    private int guildid;
-    private int guildrank;
-    private int messengerid;
-    private int messengerposition;
-    private int mountlevel;
-    private int mountexp;
-    private int mounttiredness;
-    private int omokwins;
-    private int omoklosses;
-    private int omokties;
-    private int matchcardwins;
-    private int matchcardlosses;
-    private int matchcardties;
-    @Column("MerchantMesos")
-    private int MerchantMesos;
-    @Column("HasMerchant")
-    private int HasMerchant;
-    private int equipslots;
-    private int useslots;
-    private int setupslots;
-    private int etcslots;
-    @Column("familyId")
+    private String createDate;
+    private long rank;
+    private int rankMove;
+    private long jobRank;
+    private int jobRankMove;
+    private int guildId;
+    private int guildRank;
+    private int messengerId;
+    private int messengerPosition;
+    private int mountLevel;
+    private int mountExp;
+    private int mountTiredness;
+    private int omokWins;
+    private int omokLosses;
+    private int omokTies;
+    private int matchCardWins;
+    private int matchCardLosses;
+    private int matchCardTies;
+    private int merchantMesos;
+    private int hasMerchant;
+    private int equipSlots;
+    private int useSlots;
+    private int setupSlots;
+    private int etcSlots;
     private int familyId;
-    private int monsterbookcover;
-    @Column("allianceRank")
+    private int monsterBookCover;
     private int allianceRank;
-    @Column("vanquisherStage")
     private int vanquisherStage;
-    @Column("ariantPoints")
     private int ariantPoints;
-    @Column("dojoPoints")
     private int dojoPoints;
-    @Column("lastDojoStage")
     private int lastDojoStage;
-    @Column("finishedDojoTutorial")
     private int finishedDojoTutorial;
-    @Column("vanquisherKills")
     private int vanquisherKills;
-    @Column("summonValue")
     private int summonValue;
-    @Column("partnerId")
     private int partnerId;
-    @Column("marriageItemId")
     private int marriageItemId;
     private int reborns;
-    @Column("PQPoints")
-    private int PQPoints;
-    @Column("dataString")
+    private int pqPoints;
     private String dataString;
-    @Column("lastLogoutTime")
     private String lastLogoutTime;
-    @Column("lastExpGainTime")
     private String lastExpGainTime;
-    @Column("partySearch")
     private int partySearch;
-    private long jailexpire;
+    private long jailExpire;
 }

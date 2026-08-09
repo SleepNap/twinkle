@@ -19,17 +19,21 @@ import java.util.TreeMap;
  * 自研迁移器（架构 6.2 决策：Flyway 社区版不支持 SQLite，三库统一自研迁移器）。
  *
  * <p>思路：版本表 {@code schema_version(version INT, name TEXT, applied_at TEXT)} + 类路径下
- * {@code db/migrate/V{n}__{name}.sql} 顺序执行。SQLite/PG/MySQL 三库共享同一脚本源，方言差异点通过
- * SQL 注释（{@code -- dialect:sqlite} / {@code -- dialect:postgresql} / {@code -- dialect:mysql}）
- * 限定执行。
+ * {@code db/migrate/V{n}__{name}.sql} 顺序执行。
+ *
+ * <h2>目录结构（数据库命名与迁移规范，禁 -- dialect 节）</h2>
+ * <p>迁移目录分四类，方言差异靠"放哪个目录"表达，不用 SQL 内注释节：
+ * <ul>
+ *   <li>{@code db/migrate/common/}：三方言完全一致的语句（如 seed 数据、通用 DDL）。</li>
+ *   <li>{@code db/migrate/sqlite/} / {@code postgresql/} / {@code mysql/}：各方言特有 DDL。</li>
+ * </ul>
+ * <p>执行顺序：按版本号升序；同一版本 common 与方言目录都有时，<b>方言目录优先</b>（方言覆盖 common）。
  *
  * <h2>脚本约定</h2>
  * <ul>
- *   <li>路径：{@code src/main/resources/db/migrate/V1__init.sql}（双下划线分隔版本号与名称）。</li>
+ *   <li>路径：{@code db/migrate/common/V1__seed.sql}、{@code db/migrate/sqlite/V1__init.sql}（双下划线分隔版本号与名称）。</li>
  *   <li>语句分隔：{@code ;}（不写存储过程，避免方言差异）。</li>
- *   <li>方言分支：{@code -- dialect:xxx} 起始的节属于该方言，直到下一个节标记或空行；
- *       无节包裹的语句所有方言执行。设计意图：把方言差异收敛到迁移脚本里（受控位置），
- *       不要在业务代码里出现（红线 14）。</li>
+ *   <li>方言差异禁止用 {@code -- dialect:xxx} 注释节（旧机制废弃），必须拆目录。</li>
  * </ul>
  *
  * <h2>为什么不用 Flyway</h2>
@@ -45,6 +49,10 @@ public final class MigrationRunner {
 
     private static final String VERSION_TABLE = "schema_version";
     private static final String MIGRATE_DIR = "db/migrate/";
+    /** 全方言共用目录。 */
+    private static final String COMMON_DIR = "db/migrate/common/";
+    /** 方言目录前缀（{@code db/migrate/{dialectId}/}）。 */
+    private static final String DIALECT_DIR_PREFIX = "db/migrate/";
 
     private final DataSource dataSource;
     private final String dialectId;
@@ -75,8 +83,8 @@ public final class MigrationRunner {
                     continue;
                 }
                 LOG.info("应用迁移 V{}: {}", version, name);
-                String sql = loadResource(MIGRATE_DIR + "V" + version + "__" + name + ".sql");
-                List<String> statements = splitStatements(filterForDialect(sql, dialectId));
+                String sql = loadResource(name);
+                List<String> statements = splitStatements(sql);
                 for (String stmt : statements) {
                     if (stmt.isBlank()) continue;
                     try (Statement st = conn.createStatement()) {
@@ -122,18 +130,31 @@ public final class MigrationRunner {
         }
     }
 
+    /**
+     * 发现迁移：合并 common 与方言目录，按版本号升序，方言优先覆盖 common。
+     *
+     * <p>返回的 name 是<b>完整资源路径</b>（如 {@code db/migrate/sqlite/V1__init.sql}），
+     * 便于 {@link #loadResource} 直接加载；版本 → 路径映射。
+     */
     private TreeMap<Integer, String> discoverMigrations() {
         TreeMap<Integer, String> result = new TreeMap<>();
+        // 先扫 common（全方言共用），方言目录后扫覆盖同版本
+        scanDirectory(COMMON_DIR, result);
+        scanDirectory(DIALECT_DIR_PREFIX + dialectId + "/", result);
+        return result;
+    }
+
+    /** 扫描单个目录下的 .sql 迁移（file 或 jar 协议），版本冲突时后扫者覆盖（方言优先）。 */
+    private void scanDirectory(String dir, TreeMap<Integer, String> result) {
         try {
-            var urls = Thread.currentThread().getContextClassLoader().getResources(MIGRATE_DIR);
+            var urls = Thread.currentThread().getContextClassLoader().getResources(dir);
             while (urls.hasMoreElements()) {
                 var url = urls.nextElement();
                 if (url.getProtocol().equals("file")) {
-                    // IDE 开发期：文件系统目录
-                    java.nio.file.Path dir = java.nio.file.Paths.get(url.toURI());
-                    try (var stream = java.nio.file.Files.list(dir)) {
+                    java.nio.file.Path path = java.nio.file.Paths.get(url.toURI());
+                    try (var stream = java.nio.file.Files.list(path)) {
                         stream.filter(p -> p.getFileName().toString().endsWith(".sql"))
-                                .forEach(p -> parseAndPut(p.getFileName().toString(), result));
+                                .forEach(p -> parseAndPut(dir + p.getFileName().toString(), result));
                     }
                 } else if (url.getProtocol().equals("jar")) {
                     String fullPath = url.getPath();
@@ -147,26 +168,26 @@ public final class MigrationRunner {
                             var entry = entries.nextElement();
                             String name = entry.getName();
                             if (name.startsWith(entryPrefix) && name.endsWith(".sql")) {
-                                parseAndPut(name.substring(entryPrefix.length()), result);
+                                parseAndPut(dir + name.substring(entryPrefix.length()), result);
                             }
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            LOG.error("扫描迁移目录失败", e);
+            LOG.error("扫描迁移目录失败: {}", dir, e);
         }
-        return result;
     }
 
-    private static void parseAndPut(String filename, TreeMap<Integer, String> map) {
+    /** 解析文件名（{@code V{n}__{name}.sql}），放入 version → 完整路径 映射。 */
+    private static void parseAndPut(String fullResourcePath, TreeMap<Integer, String> map) {
+        String filename = fullResourcePath.substring(fullResourcePath.lastIndexOf('/') + 1);
         if (!filename.startsWith("V") || !filename.contains("__")) {
             return;
         }
         try {
             int version = Integer.parseInt(filename.substring(1, filename.indexOf("__")));
-            String name = filename.substring(filename.indexOf("__") + 2, filename.length() - 4);
-            map.put(version, name);
+            map.put(version, fullResourcePath);
         } catch (NumberFormatException e) {
             LOG.warn("迁移文件名格式异常: {}", filename);
         }
@@ -182,37 +203,6 @@ public final class MigrationRunner {
         } catch (IOException e) {
             throw new RuntimeException("加载迁移失败: " + path, e);
         }
-    }
-
-    /**
-     * 执行方言过滤。
-     *
-     * <p>方言标记以"节"为单位：{@code -- dialect:sqlite} 之后的语句属于该节，直到遇到下一个
-     * {@code -- dialect:} 标记，或遇到空行（回到"全方言适用"）。无节包裹的语句对所有方言执行。
-     *
-     * <p>注释行（{@code -- ...}）不重置节：允许在 CREATE TABLE 多行块中写行内注释（如
-     * {@code -- updated_at 统一存 ISO 8601}），不必担心泄漏到其他方言。
-     */
-    static String filterForDialect(String sql, String dialectId) {
-        StringBuilder out = new StringBuilder();
-        String currentSection = null; // null = 全方言适用
-        for (String line : sql.split("\\R")) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("-- dialect:")) {
-                currentSection = trimmed.substring("-- dialect:".length()).trim();
-                continue;
-            }
-            // 空行 → 重置节（回到"全方言适用"）
-            if (trimmed.isEmpty()) {
-                currentSection = null;
-                out.append(line).append('\n');
-                continue;
-            }
-            if (currentSection == null || currentSection.equals(dialectId)) {
-                out.append(line).append('\n');
-            }
-        }
-        return out.toString();
     }
 
     /**

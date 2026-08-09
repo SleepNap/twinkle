@@ -89,7 +89,7 @@ class LoginPacketFactoryTest {
         c.setId(100L);
         c.setName("Hero");
         c.setGender(0);
-        c.setSkincolor(3);
+        c.setSkinColor(3);
         c.setFace(20000);
         c.setHair(30000);
         c.setLevel(10);
@@ -100,13 +100,13 @@ class LoginPacketFactoryTest {
         c.setLuk((short) 4);
         c.setHp((short) 50);
         c.setMp((short) 5);
-        c.setMaxhp((short) 50);
-        c.setMaxmp((short) 5);
+        c.setMaxHp((short) 50);
+        c.setMaxMp((short) 5);
         c.setAp((short) 0);
         c.setExp(0L);
         c.setFame(0);
         c.setMap(100000000);
-        c.setSpawnpoint(0);
+        c.setSpawnPoint(0);
 
         OutPacket p = LoginPacketFactory.charList(List.of(c), 0, 0);
         ByteArrayInPacket in = new ByteArrayInPacket(p.getBytes());

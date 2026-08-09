@@ -66,12 +66,12 @@ class LoginFlowE2ETest {
         accountMapper.insertSelective(acc);
 
         Character hero = new Character();
-        hero.setAccountid(acc.getId());
+        hero.setAccountId(acc.getId());
         hero.setWorld(0);
         hero.setName("Hero");
         hero.setLevel(10);
         hero.setJob(0);
-        hero.setSkincolor(0);
+        hero.setSkinColor(0);
         hero.setGender(0);
         hero.setFace(20000);
         hero.setHair(30000);
@@ -81,10 +81,10 @@ class LoginFlowE2ETest {
         hero.setIntStat((short) 4);
         hero.setHp((short) 50);
         hero.setMp((short) 5);
-        hero.setMaxhp((short) 50);
-        hero.setMaxmp((short) 5);
+        hero.setMaxHp((short) 50);
+        hero.setMaxMp((short) 5);
         hero.setMap(100000000);
-        hero.setSpawnpoint(0);
+        hero.setSpawnPoint(0);
         characterMapper.insertSelective(hero);
 
         // ---- 网络：handler 注册 + 登录服 ----

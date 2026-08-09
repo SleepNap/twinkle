@@ -43,6 +43,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - DB 按需三档：SQLite（低配默认，WAL + 单写连接 + busy_timeout）/ PostgreSQL（大服）/ MySQL/MariaDB（兼容切换）。
 - ORM 用 MyBatis-Flex；方言差异点（upsert/自增/布尔/时间函数）集中进 `db-dialect`，业务代码禁止出现裸方言差异。
 
+### 数据库命名与迁移规范（硬约束，写迁移/建表必须遵守）
+
+1. **表名 ≥ 2 个单词**（如 `player_session`、`quest_status`，禁止单单词表名如 `accounts`）；字段名 ≥ 1 个单词。
+2. **多单词一律用 `_`（下划线）连接**，禁止无隔离拼接（`nxcredit`❌）也禁止驼峰（`nxCredit`❌）。统一 `snake_case`。
+3. **禁止 SQL 关键字作表名/字段名**（如 `int`、`order`、`group` 等）——如需保留语义，改名（`int` → `int_stat`）。
+4. **迁移文件目录结构**：`db/migrate/` 下建 `common/`、`sqlite/`、`postgresql/`、`mysql/` 四个目录。三方言**完全一致的语句放 `common/`**；方言有差异的语句分别放到对应目录。
+5. **禁止 `-- dialect:xxx` 注释节**（旧机制废除）。方言差异靠"放哪个目录"表达，不靠 SQL 内注释。
+6. **迁移命名**：`V<数字>__<snake_case描述>.sql`，每迁移一个主题（建表/补列/seed 分开）。
+7. **seed 数据**（如 `param_conf` 初始值）与结构 DDL 分迁移放，便于区分"结构"与"内容"。
+
+> 背景：此规范是用户明确要求（2026-08-09），此前迁移违反（`accounts` 单表名、`nxCredit` 驼峰、`"int"` 关键字字段、`-- dialect:` 节）。重写 V1-V7 时按本规范执行；旧库直接删除重建。
+
 ### 技术选型
 
 Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM JS，全速无需 EnableJVMCI）、Netty 4（v83 协议字节级不动）、自研迁移器（Flyway 不引入）、log4j2、Bucket4j（限流）、LangChain4j（AI）、WZ/脚本数据源定位（配置直接指定路径、单份数据、读不到报错，见 ARCHITECTURE 6.4）、Web 控制台（JavaFX 明确移除）。
@@ -50,7 +62,7 @@ Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM 
 ## 硬性编码约束（红线摘录）
 
 1. **v83 协议字节级兼容**：`net.encryption` + `RecvOpcode` 原样移植。
-2. **MySQL `newmaple` 库兼容**：表结构不改，扩展走 migration `ADD COLUMN`（禁止单条 ALTER 串接多列）。
+2. **表结构由自研迁移器管理**：迁移 SQL 建表/改表是唯一权威；禁止裸 `ALTER` 串接多列（迁移每列独立语句）。数据库命名与迁移规范见"数据与状态模型"节。
 3. **游戏对象不进容器**：Character/MapleMap/Item 手动 new，容器只管基础设施 + Service。
 4. **HTTP 与游戏 Netty 隔离 EventLoop**：第三方 API 流量不挤占游戏 tick 线程。
 5. `accounts.banned` 只有值 `1` 明确表示已封禁，查询未封禁必须用 `banned <> 1`（兼容 NULL）。

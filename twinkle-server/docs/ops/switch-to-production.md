@@ -2,7 +2,7 @@
 
 > 本文档记录 twinkle 从开发到生产上线的完整切换流程：profile 装配确认、单库迁移、切换步骤、灰度/回滚路径（CC 兜底）、已知差异。
 >
-> 配套脚本：`scripts/migrate-newmaple.sh`、`scripts/start.sh`、`scripts/rollback.sh`。
+> 配套脚本：`scripts/start.sh`、`scripts/rollback.sh`、`scripts/split-start.sh`。
 
 ## 1. `--profile` 装配档位确认
 
@@ -25,27 +25,23 @@ curl http://127.0.0.1:8080/admin/v1/channels     # 至少 1 频道（注册钩�
 curl http://127.0.0.1:8080/internal/v1/health    # 官网/内网健康
 ```
 
-## 2. 单库迁移（老库 → 新库）
+## 2. 数据库初始化（新库自建，无导入）
 
-**原则**：migration 管结构、seed 管内容。目标库先由自研迁移器跑 V1-V7 建结构，再由导入工具拷贝内容。
+**原则**：表结构由自研迁移器管理（数据库命名与迁移规范：表名 ≥2 词、字段 snake_case、迁移拆 common/sqlite/postgresql/mysql 目录）。无外部库导入——twinkle 是全新自研库，旧库数据不迁移（2026-08-09 起不兼容 newmaple/北斗）。
 
 ```bash
 # 构建
 mvn -B verify
 
-# 导入（源 = newmaple MySQL，目标 = twinkle SQLite）
-./scripts/migrate-newmaple.sh \
-  --source-url=jdbc:mysql://host:3306/newmaple --source-user=root --source-pass=xxx \
-  --target-url=jdbc:sqlite:./data/twinkle.db
+# 启动时自研迁移器自动建库（schema_version 表 + V1-V7 建表 + seed）
+./scripts/start.sh
 ```
 
-**导入内容**：accounts、characters（74 列，红线 3 兼容）、queststatus（V7 补列后 9 列对齐）、questprogress、inventoryitems（NULL 语义归一）。
+**建库内容**：`param_config`、`account_records`、`character_records`、`quest_status`（九列）、`quest_progress`、`inventory_items`、`ai_usage_log`、`bus_outbox_queue`、`bus_stream_state`、`buddy_list` + seed 5 条 param_config。
 
-**导入跳过**：
-- `buddies`（newmaple）→ twinkle `buddylist` 结构/语义不兼容，跳过并计数（好友需游戏中重建）。
-- 老库非 BCrypt 密码 → 默认重置为 `changeMe123!`（`--no-reset-passwords` 可关闭，但注意老账号登不上）。
+**账号**：新库无默认账号。需手动建号（BCrypt 密码）或用测试号 `admin/admin`（`web_admin=1`）。
 
-**校验**：导入工具打印各表行数；人工抽查 `SELECT COUNT(*) FROM accounts/characters/...`；启动后用 `CharacterLoader` 加载一个老角色进游戏验证可读。
+**校验**：启动后 `/admin/v1/health` healthy；`SELECT * FROM schema_version` 列出已应用版本。
 
 ## 3. 切换步骤（CC 兜底 + 增量 FLUSH，红线 17）
 
@@ -92,9 +88,8 @@ mvn -B verify
 
 ## 6. 已知差异（诚实标注）
 
-- **密码不保真**：老库非 BCrypt 密码导入后重置为默认口令 `changeMe123!`（清单在导入日志）。双轨校验（支持旧格式验密并升级）列为后续增强。
-- **好友列表不迁移**：newmaple `buddies` 与 twinkle `buddylist` 结构不兼容，跳过；好友关系经游戏内加好友流程重建。
-- **queststatus 兼容列**：V7 补的 `expires/forfeited/completed/info` 四列对齐 newmaple 表结构（红线 2）；twinkle 领域层当前不使用，默认 0 对齐语义。
+- **新库无迁移**：twinkle 是全新自研库（2026-08-09 起不兼容 newmaple/北斗），无老库数据导入。原 `NewMapleImporter`/`migrate-newmaple.sh` 已删除。
+- **quest_status 兼容列**：`expires/forfeited/completed/info` 四列一次建全（原 V7 补列并入建表）；twinkle 领域层当前不使用，默认 0 对齐语义。
 - **Web 控制台前端**：本轮落地后端运维 API（/admin/v1）；前端页面形态尚未设计，后续里程碑配套。
 
 ## 7. 日志规范检查（红线 9）

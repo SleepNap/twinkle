@@ -22,7 +22,7 @@ import lombok.Setter;
  *   <li>{@code updatedAt}：UTC 秒级时间戳（SQLite 用 TEXT 存 ISO 8601）。</li>
  * </ul>
  */
-@Table("param_conf")
+@Table("param_config")
 @Getter
 @Setter
 public class ParamConf {

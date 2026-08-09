@@ -98,7 +98,8 @@ public class ChannelConfig {
         return new MonsterSpawnService(mobData, sessions, leaseService);
     }
 
-    @Bean
+    /** @Bean(preDestroy="close")：频道 Netty 服 context close 时优雅关闭释放端口（多测试/多次启动不残留）。 */
+    @Bean(preDestroy = "close")
     @Singleton
     public ChannelServer channelServer(HandlerRegistry registry, PlayerSessionRegistry playerSessionRegistry,
                                        ChannelEventPublisher eventPublisher, PlayerStorage playerStorage,

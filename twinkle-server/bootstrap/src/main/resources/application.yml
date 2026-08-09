@@ -40,9 +40,9 @@ twinkle:
 
   # ============== WZ / 脚本数据源（架构 6.4：直接指定路径、单份数据、读不到启动报错） ==============
   wz:
-    path: ${TWINKLE_WZ_PATH:./wz}
+    path: ${TWINKLE_WZ_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\wz}
   script:
-    path: ${TWINKLE_SCRIPT_PATH:./scripts}
+    path: ${TWINKLE_SCRIPT_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\scripts}
 
   # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
   http:

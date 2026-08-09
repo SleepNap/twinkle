@@ -36,8 +36,9 @@ public class NetConfig {
         return new HeartbeatConfig(readerIdleSeconds * 1000, pongTimeoutSeconds * 1000);
     }
 
-    /** 登录服仅管理进程装配（single 档全内嵌；split 下频道进程不启登录服）。 */
-    @Bean
+    /** 登录服仅管理进程装配（single 档全内嵌；split 下频道进程不启登录服）。
+     *  @Bean(preDestroy="close")：context close 时释放端口（测试多 context 不残留）。 */
+    @Bean(preDestroy = "close")
     @Singleton
     @Requires(condition = ManagementProcessCondition.class)
     public LoginServer loginServer(HandlerRegistry registry, HeartbeatConfig heartbeatConfig) {

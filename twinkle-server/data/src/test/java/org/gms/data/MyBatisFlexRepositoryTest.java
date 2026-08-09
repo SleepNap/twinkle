@@ -52,7 +52,7 @@ class MyBatisFlexRepositoryTest {
 
         // 角色插入 + 按账号/世界查询（选角列表）
         Character hero = new Character();
-        hero.setAccountid(acc.getId());
+        hero.setAccountId(acc.getId());
         hero.setWorld(0);
         hero.setName("Hero");
         hero.setLevel(10);
@@ -60,7 +60,7 @@ class MyBatisFlexRepositoryTest {
         characterMapper.insertSelective(hero);
 
         Character otherWorld = new Character();
-        otherWorld.setAccountid(acc.getId());
+        otherWorld.setAccountId(acc.getId());
         otherWorld.setWorld(1);
         otherWorld.setName("Other");
         otherWorld.setLevel(20);
@@ -77,7 +77,7 @@ class MyBatisFlexRepositoryTest {
 
     /**
      * 注入防御 demo（安全门槛 M0 第 1 条 / 红线 18）：恶意载荷经 Repository 参数化写入，
-     * 断言原样存库、不执行注入（accounts 表仍在，后续查询可用）。走 MyBatis-Flex {@code #{}}
+     * 断言原样存库、不执行注入（account_records 表仍在，后续查询可用）。走 MyBatis-Flex {@code #{}}
      * 参数化即天然免疫。
      */
     @Test
@@ -98,7 +98,7 @@ class MyBatisFlexRepositoryTest {
         FlexAccountRepository accountRepo = new FlexAccountRepository(accountMapper);
 
         // 恶意载荷：若走字符串拼接即成注入（DROP 表），参数化则原样存库
-        String payload = "evil'; DROP TABLE accounts; --";
+        String payload = "evil'; DROP TABLE account_records; --";
         Account acc = new Account();
         acc.setName(payload);
         acc.setPassword("pwd");
@@ -107,7 +107,7 @@ class MyBatisFlexRepositoryTest {
 
         // 断言 1：载荷被原样存储（findByName 参数化命中）
         assertThat(accountRepo.findByName(payload)).isPresent();
-        // 断言 2：accounts 表未被 DROP——再插一条并查询成功
+        // 断言 2：account_records 表未被 DROP——再插一条并查询成功
         Account second = new Account();
         second.setName("tester");
         second.setPassword("pwd");

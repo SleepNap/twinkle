@@ -55,3 +55,7 @@ Thumbs.db
 
 # ===== Claude =====
 CLAUDE.local.md
+
+# ===== 运行时数据目录（WZ 缓存 / DB，运行期生成不入仓） =====
+data/
+bootstrap/data/

@@ -65,3 +65,11 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **CC 迁移跨进程**：`ChangeChannelHandler` 发送前 `flushCharacterSync` 同步存档（玩家状态落 DB）；目标频道 `ChannelChangeReceiver`（@Context）订阅 CC 请求，ReliableReceiver 恰好一次 + 定位表 movePlayer。
 - **测试**：全量 `mvn -B verify` 17 模块 SUCCESS，bootstrap 39 测试全绿（含 `SplitChannelE2ETest` 两个用例：coordinator+2 channel 跨进程悄悄话/定位/CC 迁移 + coordinator 无状态重启注册表重建）。新增 core `ReliableReceiverTest` 4 例。
 - **剩余项（诚实标注，见 M6 任务文档）**：配置中心 TCP 长连接推送未做（M4 进程内 EventBus 订阅已验证）；CC 客户端真机 loading 界面留客户端验收；真实多机/网络分区演练留运维；coordinator 心跳超时标记下线未做（依赖断链检测触发重连）；喇叭/加好友生产接收端同 M4 标注。
+
+**数据库规范重写（2026-08-09，覆盖上文中 newmaple 内容）**：用户明确"全新自研，不兼容 newmaple/北斗"。数据库全面重写：
+- **命名规范**（详见 [[db-naming-migration-standard]]）：表名 ≥2 词、字段 snake_case、禁关键字（`int`→`int_stat`）。
+- **迁移目录**：`db/migrate/{common,sqlite,postgresql,mysql}/`，禁 `-- dialect:` 节（MigrationRunner 改目录扫描，方言差异靠目录）。common 放 seed（V7），方言目录各 V1-V6 DDL。
+- **表名全改**：`param_config`/`account_records`/`character_records`/`quest_status`（九列一次建全，含原 V7 四列）/`quest_progress`/`inventory_items`/`ai_usage_log`/`bus_outbox_queue`/`bus_stream_state`/`buddy_list`。
+- **实体改名**：10 个实体 `@Table` 新表名 + 字段 snake_case（MyBatis-Flex 驼峰→下划线自动匹配，无需 @Column）。`CharacterLoader`/`LoginPacketFactory`/各 repo/测试同步 getter/setter。
+- **删除 newmaple**：`NewMapleImporter`/`NewMapleImportMain`/`MigrationImportE2ETest`/`NewMapleImporterTest`/`V7QueststatusColumnsMigrationTest`/`migrate-newmaple.sh` 全删；CLAUDE.md 红线 2 改为"表结构由自研迁移器管理"。
+- **坑**：`data/` 运行时目录 gitignore；`ChannelServer`/`LoginServer` bean 加 preDestroy=close（多 context 测试端口不残留）；旧库直接删除重建。全量 `mvn -B verify` 通过，bootstrap 39 测试绿。

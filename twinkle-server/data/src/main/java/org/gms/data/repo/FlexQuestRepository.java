@@ -26,19 +26,19 @@ public class FlexQuestRepository implements QuestRepository {
     @Override
     public List<QuestStatusEntity> findStatusesByCharacterId(long characterId) {
         return statusMapper.selectListByQuery(QueryWrapper.create()
-                .where(QuestStatusEntity::getCharacterid).eq(characterId));
+                .where(QuestStatusEntity::getCharacterId).eq(characterId));
     }
 
     @Override
     public List<QuestProgressEntity> findProgressByCharacterId(long characterId) {
         return progressMapper.selectListByQuery(QueryWrapper.create()
-                .where(QuestProgressEntity::getCharacterid).eq(characterId));
+                .where(QuestProgressEntity::getCharacterId).eq(characterId));
     }
 
     @Override
     public void replaceAll(long characterId, List<QuestStatusEntity> statuses, List<QuestProgressEntity> progress) {
         statusMapper.deleteByQuery(QueryWrapper.create()
-                .where(QuestStatusEntity::getCharacterid).eq(characterId));
+                .where(QuestStatusEntity::getCharacterId).eq(characterId));
         for (QuestStatusEntity status : statuses) {
             statusMapper.insert(status);
         }

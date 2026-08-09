@@ -22,13 +22,13 @@ public class FlexInventoryItemRepository implements InventoryItemRepository {
     @Override
     public List<InventoryItemEntity> findByCharacterId(long characterId) {
         return mapper.selectListByQuery(QueryWrapper.create()
-                .where(InventoryItemEntity::getCharacterid).eq(characterId));
+                .where(InventoryItemEntity::getCharacterId).eq(characterId));
     }
 
     @Override
     public void replaceAll(long characterId, List<InventoryItemEntity> items) {
         mapper.deleteByQuery(QueryWrapper.create()
-                .where(InventoryItemEntity::getCharacterid).eq(characterId));
+                .where(InventoryItemEntity::getCharacterId).eq(characterId));
         for (InventoryItemEntity item : items) {
             mapper.insert(item);
         }

@@ -23,7 +23,7 @@ public class FlexCharacterRepository implements CharacterRepository {
     @Override
     public List<Character> findByAccount(int accountId, int world) {
         return mapper.selectListByQuery(QueryWrapper.create()
-                .where(Character::getAccountid).eq(accountId)
+                .where(Character::getAccountId).eq(accountId)
                 .and(Character::getWorld).eq(world)
                 .orderBy(Character::getLevel).desc());
     }
