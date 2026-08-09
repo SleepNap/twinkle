@@ -38,6 +38,20 @@ class AiAgentTest {
         public boolean kick(long characterId) {
             return false;
         }
+
+        @Override
+        public int reloadScripts() {
+            return 0;
+        }
+
+        @Override
+        public void requestRestart() {
+        }
+
+        @Override
+        public org.gms.hotreload.RestartCoordinator.Phase restartPhase() {
+            return org.gms.hotreload.RestartCoordinator.Phase.RUNNING;
+        }
     }
 
     private static final class FakeAccountRepo implements AccountRepository {

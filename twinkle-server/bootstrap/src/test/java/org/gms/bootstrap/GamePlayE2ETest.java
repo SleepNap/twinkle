@@ -192,7 +192,8 @@ class GamePlayE2ETest {
         PlayerSessionRegistry sessions = new PlayerSessionRegistry();
         DefaultVersionGate versionGate = new DefaultVersionGate();
         ItemSystem itemSystem = new ItemSystem(versionGate, itemData);
-        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions);
+        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions,
+                new org.gms.domain.game.lease.DefaultControllerLeaseService(50, 15, 10_000));
 
         Path scriptDir = Files.createTempDirectory("twinkle-script-gameplay");
         ScriptEngine scriptEngine = new ScriptEngine();
@@ -238,11 +239,12 @@ class GamePlayE2ETest {
                 loggedin.writeInt(hero.getId().intValue());
                 send(out, send, loggedin);
 
-                // 进图响应：PlayerLoggedinHandler 先 spawnForMap 广播 SPAWN_MONSTER，再发 SET_FIELD
+                // 进图响应：PlayerLoggedinHandler 生成怪物后经 onPlayerEnter 给进入玩家发控制包
+                // （单玩家 = 地图唯一控制者 → 0xEE SPAWN_MONSTER_CONTROL），再发 SET_FIELD
                 InPacket spawn = readPacket(in, recv);
-                assertThat(spawn.readUnsignedShort()).isEqualTo(SendOpcode.SPAWN_MONSTER.getValue());
+                assertThat(spawn.readUnsignedShort()).isEqualTo(SendOpcode.SPAWN_MONSTER_CONTROL.getValue());
                 int mobOid = spawn.readInt();
-                assertThat(spawn.readByte()).isEqualTo((byte) 5);
+                assertThat(spawn.readByte()).isEqualTo((byte) 1);   // 授予控制权（对照无控制者 5）
                 assertThat(spawn.readInt()).isEqualTo(100100);      // mobId
                 spawn.skip(16);
                 assertThat(spawn.readShort()).isEqualTo((short) 100); // x

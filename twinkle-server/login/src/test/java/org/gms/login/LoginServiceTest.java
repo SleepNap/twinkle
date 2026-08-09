@@ -41,6 +41,11 @@ class LoginServiceTest {
         public java.util.Optional<Character> findById(long id) {
             return characters.stream().filter(c -> c.getId() != null && c.getId() == id).findFirst();
         }
+
+        @Override
+        public void save(Character chr) {
+            // 测试桩：M5 起 CharacterRepository 新增 save（L4 增量 FLUSH），登录测试不落库
+        }
     }
 
     private static Account account(String name, String rawPassword, int banned) {

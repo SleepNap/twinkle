@@ -46,6 +46,11 @@ class ThreeMechanismE2ETest {
     static final class FakeSession implements PacketSession {
         final List<byte[]> received = new ArrayList<>();
         SessionStage stage = SessionStage.IN_GAME;
+        private final long id;
+
+        FakeSession() {
+            this.id = FakeSessionId.incrementAndGet();
+        }
 
         @Override
         public void send(OutPacket packet) {
@@ -74,7 +79,15 @@ class ThreeMechanismE2ETest {
         @Override
         public void setAttr(String key, Object value) {
         }
+
+        @Override
+        public long sessionId() {
+            return id;
+        }
     }
+
+    /** 会话 id 分配（FakeSession 模拟 NetworkSession 的全局单调 sessionId）。 */
+    private static final java.util.concurrent.atomic.AtomicLong FakeSessionId = new java.util.concurrent.atomic.AtomicLong(8000);
 
     @BeforeEach
     void setUp() {
@@ -91,7 +104,7 @@ class ThreeMechanismE2ETest {
         intercoord.registerPlayer(1001, 1);
         intercoord.registerPlayer(1002, 1);
         FakeSession target = new FakeSession();
-        sessions.register(1002, target);
+        sessions.claim(1002, target);
 
         WhisperRequest req = new WhisperRequest(1001, "Alice", 1002, "Bob", "你好");
         eventBus.send(MessageTargets.channel(1), req); // 跨频道投递（模拟总线送达）
@@ -107,7 +120,7 @@ class ThreeMechanismE2ETest {
         intercoord.registerPlayer(1001, 1);
         // 1002 不在线（定位表无记录）
         FakeSession target = new FakeSession();
-        sessions.register(1002, target);
+        sessions.claim(1002, target);
 
         // 定位不在本频道 → 投递被拒
         WhisperRequest req = new WhisperRequest(1001, "Alice", 1002, "Bob", "hi");
@@ -121,8 +134,8 @@ class ThreeMechanismE2ETest {
         intercoord.registerPlayer(1002, 1);
         FakeSession s1 = new FakeSession();
         FakeSession s2 = new FakeSession();
-        sessions.register(1001, s1);
-        sessions.register(1002, s2);
+        sessions.claim(1001, s1);
+        sessions.claim(1002, s2);
 
         eventBus.send(MessageTargets.channel(1), new NoticeMessage(0, "欢迎光临", 0));
 

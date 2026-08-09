@@ -104,8 +104,13 @@ class ChannelAdminServiceTest {
             @Override
             public void setAttr(String key, Object value) {
             }
+
+            @Override
+            public long sessionId() {
+                return 4242;
+            }
         };
-        sessions.register(42L, fakeSession);
+        sessions.claim(42L, fakeSession);
 
         assertThat(admin.kick(42L)).isTrue();
         assertThat(closed).isTrue();

@@ -17,6 +17,7 @@ import org.gms.channel.ChannelLocationBinder;
 import org.gms.channel.ChannelServer;
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.MonsterSpawnService;
+import org.gms.channel.MoveLifeHandler;
 import org.gms.channel.MovePlayerHandler;
 import org.gms.channel.NpcTalkHandler;
 import org.gms.channel.NpcTalkMoreHandler;
@@ -105,29 +106,43 @@ public class ChannelConfig {
 
     @Bean
     @Singleton
-    public MonsterSpawnService monsterSpawnService(Map<Integer, MobData> mobData, PlayerSessionRegistry sessions) {
-        return new MonsterSpawnService(mobData, sessions);
+    public MonsterSpawnService monsterSpawnService(Map<Integer, MobData> mobData, PlayerSessionRegistry sessions,
+                                                   org.gms.domain.game.lease.ControllerLeaseService leaseService) {
+        return new MonsterSpawnService(mobData, sessions, leaseService);
     }
 
     @Bean
     @Singleton
     public ChannelServer channelServer(HandlerRegistry registry, PlayerSessionRegistry playerSessionRegistry,
                                        ChannelEventPublisher eventPublisher, PlayerStorage playerStorage,
-                                       org.gms.channel.persist.CharacterSaveQueue saveQueue) {
+                                       org.gms.channel.persist.CharacterSaveQueue saveQueue,
+                                       org.gms.domain.game.lease.ControllerLeaseService leaseService,
+                                       org.gms.net.netty.HeartbeatConfig heartbeatConfig) {
         return new ChannelServer(registry, session -> {
-            // 断链注销：在线事件 + 会话注册表 + 在线表 + 地图 + 存档（IO 线程快速返回，重活入队）
+            // 断链注销（事故报告阶段 B：compare-and-remove，迟到旧连接不能误删新会话）。
+            // IO 线程快速返回，重活入队。
             org.gms.domain.game.Character chr = session.getAttr("character");
-            if (chr != null) {
-                eventPublisher.playerOffline(chr.getId());
-                playerSessionRegistry.unregister(chr.getId());
-                playerStorage.remove(chr);
-                if (chr.getMapObject() != null) {
-                    chr.getMapObject().removeCharacter(chr);
-                }
-                saveQueue.save(chr); // 下线存档（L4 增量 FLUSH 队列，单写执行器）
+            if (chr == null) {
+                org.gms.channel.NpcTalkHandler.closeConversation(session);
+                return;
             }
+            if (!playerSessionRegistry.unregister(chr.getId(), session)) {
+                // 本会话已被新代际替代（旧连接迟到关闭）：只计数不清理、不存档——
+                // 防旧态覆盖新会话 DB（事故报告 §5.4）。
+                return;
+            }
+            eventPublisher.playerOffline(chr.getId());
+            playerStorage.remove(chr);
+            if (chr.getMapObject() != null) {
+                chr.getMapObject().removeCharacter(chr);
+            }
+            Long gen = session.getAttr("sessionGeneration");
+            if (gen != null) {
+                leaseService.onDisconnect(chr.getId(), session.sessionId(), gen);
+            }
+            saveQueue.save(chr); // 下线存档（L4 增量 FLUSH 队列，单写执行器）
             org.gms.channel.NpcTalkHandler.closeConversation(session);
-        });
+        }, heartbeatConfig);
     }
 
     @Bean
@@ -171,21 +186,23 @@ public class ChannelConfig {
                                                            org.gms.event.ReliableEventBus reliableEventBus,
                                                            IntercoordService intercoordService,
                                                            org.gms.data.repo.BuddyListRepository buddyListRepository,
+                                                           org.gms.domain.game.lease.ControllerLeaseService leaseService,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
-                new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher),
+                new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher, leaseService),
                 new PlayerMapTransitionHandler(),
                 new MovePlayerHandler(movementSystem, playerSessionRegistry),
-                new AttackHandler(combatSystem, playerSessionRegistry, false, false),
-                new AttackHandler(combatSystem, playerSessionRegistry, true, false),
-                new AttackHandler(combatSystem, playerSessionRegistry, false, true),
+                new AttackHandler(combatSystem, playerSessionRegistry, leaseService, false, false),
+                new AttackHandler(combatSystem, playerSessionRegistry, leaseService, true, false),
+                new AttackHandler(combatSystem, playerSessionRegistry, leaseService, false, true),
                 new PlayerInteractionHandler(tradeSystem, playerSessionRegistry, entityReloadCoordinator),
                 new NpcTalkHandler(scriptManager, itemSystem, questSystem),
                 new NpcTalkMoreHandler(),
                 new UseItemHandler(itemSystem, itemData),
                 new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
                 new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry),
-                new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository));
+                new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository),
+                new MoveLifeHandler(leaseService, playerSessionRegistry));
     }
 
     /** 频道消息订阅（跨频道悄悄话/公告投递，架构 4.4 消息总线）。 */

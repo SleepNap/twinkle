@@ -201,7 +201,8 @@ class NpcDialogE2ETest {
         Map<Integer, ItemData> itemData = new HashMap<>();
         Map<Integer, MobData> mobData = new HashMap<>();
         ItemSystem itemSystem = new ItemSystem(versionGate, itemData);
-        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions);
+        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions,
+                new org.gms.domain.game.lease.DefaultControllerLeaseService(50, 15, 10_000));
         ScriptEngine scriptEngine = new ScriptEngine();
         ScriptManager scriptManager = new ScriptManager(scriptEngine, new ScriptRepository(scriptDir));
 

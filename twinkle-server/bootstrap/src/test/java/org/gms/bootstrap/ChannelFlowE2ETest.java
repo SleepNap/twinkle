@@ -167,7 +167,8 @@ class ChannelFlowE2ETest {
         Map<Integer, org.gms.domain.game.item.ItemData> itemData = Map.of();
         Map<Integer, org.gms.domain.game.mob.MobData> mobData = Map.of();
         ItemSystem itemSystem = new ItemSystem(versionGate, itemData);
-        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions);
+        MonsterSpawnService spawnService = new MonsterSpawnService(mobData, sessions,
+                new org.gms.domain.game.lease.DefaultControllerLeaseService(50, 15, 10_000));
 
         // 脚本目录：临时空目录（NPC 对话脚本本测试不触发）
         Path scriptDir = Files.createTempDirectory("twinkle-script-e2e");
