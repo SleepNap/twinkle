@@ -3,10 +3,12 @@ package org.gms.bootstrap;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.domain.script.ScriptEngine;
 import org.gms.domain.script.ScriptManager;
 import org.gms.domain.script.ScriptRepository;
+import org.gms.role.ChannelProcessCondition;
 
 import java.nio.file.Path;
 
@@ -16,8 +18,11 @@ import java.nio.file.Path;
  * <p>{@code twinkle.script.path} 直接指定脚本目录（架构 6.4：单份、读不到报错——
  * {@link ScriptRepository} 构造时目录不存在即抛异常，context 启动即失败）。
  * ScriptEngine 单例（2C2G 预算：GraalVM context 常驻约 60-100M，不复用多实例）。
+ *
+ * <p>脚本引擎是频道进程专属（NPC 对话脚本运行在频道进程，split 下管理进程不装配）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class ScriptConfig {
 
     @Bean(preDestroy = "close")

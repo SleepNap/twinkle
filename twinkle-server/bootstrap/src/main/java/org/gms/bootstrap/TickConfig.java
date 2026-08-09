@@ -3,7 +3,9 @@ package org.gms.bootstrap;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.GameTickLoop;
 import org.gms.tick.TickScheduler;
 
@@ -16,8 +18,11 @@ import org.gms.tick.TickScheduler;
  *   <li>插件 tick 贡献点宿主（插件 TickHandler 注册进来）。</li>
  * </ul>
  * GameTickLoop 线程为 daemon、不阻塞 JVM 退出；启动在装配层显式 {@link TickScheduler#start()}。
+ *
+ * <p>游戏 tick 是频道进程专属：split 下 coordinator 管理进程不装配（架构 4.2）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class TickConfig {
 
     @Bean

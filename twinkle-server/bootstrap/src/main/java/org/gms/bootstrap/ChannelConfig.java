@@ -4,6 +4,7 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.channel.admin.ChannelAdminService;
 import org.gms.channel.admin.ChannelEventPublisher;
@@ -35,7 +36,6 @@ import org.gms.domain.script.ScriptManager;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
-import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.netty.LoginServer;
 import org.gms.net.packet.HandlerRegistry;
@@ -44,6 +44,7 @@ import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.MovementSystem;
 import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.TradeSystem;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.service.admin.AdminService;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.wz.MapLoader;
@@ -57,28 +58,13 @@ import java.util.Map;
  * <p>角色加载（CharacterLoader）、地图缓存（ChannelMapManager，WZ 路径来自
  * {@code twinkle.wz.path}）、在线表（PlayerStorage）、会话注册表（PlayerSessionRegistry）、
  * 刷怪服务（MonsterSpawnService）、全部游戏内 handler + 可替换层 system 在此装配。
- * VersionGate 全局单例（热重载换代判定，M0 定稿）也在此统一装配。
+ *
+ * <p>装配条件（架构 4.1 进程边界是配置）：single 全内嵌 / split 的 channel 角色装配本类；
+ * coordinator 角色（管理进程）不装配（游戏世界只在频道进程）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class ChannelConfig {
-
-    @Bean
-    @Singleton
-    public VersionGate versionGate() {
-        return new DefaultVersionGate();
-    }
-
-    @Bean
-    @Singleton
-    public EntityReloadCoordinator entityReloadCoordinator() {
-        return new EntityReloadCoordinator();
-    }
-
-    @Bean
-    @Singleton
-    public EntityReloadService entityReloadService(EntityReloadCoordinator coordinator, VersionGate versionGate) {
-        return new EntityReloadService(coordinator, versionGate);
-    }
 
     @Bean
     @Singleton

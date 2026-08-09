@@ -3,6 +3,7 @@ package org.gms.ai;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.ai.model.LocalRuleChatModel;
 import org.gms.ai.model.tool.GameStatTool;
@@ -13,6 +14,7 @@ import org.gms.ai.service.AiFacade;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AiUsageRepository;
 import org.gms.observability.Metrics;
+import org.gms.role.ManagementProcessCondition;
 import org.gms.service.admin.AdminService;
 
 /**
@@ -21,8 +23,11 @@ import org.gms.service.admin.AdminService;
  * <p>只依赖 core + data（红线 4.1 / ArchUnit 规则 1）：工具经 {@link AdminService}（core 公共
  * 契约）访问频道，不触碰游戏内存。模型为自研 {@link LocalRuleChatModel}；接入真实 LLM 时
  * 换 {@code ChatModel}/{@code StreamingChatModel} bean 即可（装配层替换，工具/编排零改动）。
+ *
+ * <p>管理进程专属（single 全内嵌；split 下仅 coordinator 角色装配，频道进程不启 AI）。
  */
 @Factory
+@Requires(condition = ManagementProcessCondition.class)
 public class AiConfig {
 
     @Bean

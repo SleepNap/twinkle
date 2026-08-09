@@ -33,5 +33,22 @@
             <groupId>org.gms</groupId>
             <artifactId>twinkle-net-packet</artifactId>
         </dependency>
+        <!-- 内部通信网络实现需 core 接口（EventBus / IntercoordService，铁律 1：接口在底座） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-core</artifactId>
+        </dependency>
+        <!-- 内部帧负载 JSON 序列化（RPC 参数 / 事件 payload，版本由 micronaut-platform BOM 管理） -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <!-- 集成测试引用 coordinator 进程内真值（CoordinatorService，仅 test scope 运行时；
+             主依赖图仍为 base 模块纯净，ArchUnit 扫描排除测试类不违规则 5） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-coordinator</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

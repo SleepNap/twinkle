@@ -21,8 +21,18 @@ twinkle:
     login:
       port: ${TWINKLE_LOGIN_PORT:8484}
     # 频道服端口（M2 进图：选角后客户端重连；单进程默认与登录服错开）
+    # split 档每频道进程独占一个端口（如 8584 / 8585 / ...），经 TWINKLE_CHANNEL_PORT 指定
     channel:
+      host: ${TWINKLE_CHANNEL_HOST:127.0.0.1}
       port: ${TWINKLE_CHANNEL_PORT:8584}
+      # 频道 id（split 档每频道进程 1 / 2 / ...；single 档恒 1）
+      id: ${TWINKLE_CHANNEL_ID:1}
+
+  # ============== 内部通信 coordinator（架构 4.6.4 注册中心：channel 上报/心跳/路由） ==============
+  # 星形拓扑中心（架构 4.5）。split 档频道进程/管理进程连此地址；single 档不启用（进程内实现）。
+  coordinator:
+    host: ${TWINKLE_COORDINATOR_HOST:127.0.0.1}
+    port: ${TWINKLE_COORDINATOR_PORT:8510}
 
   # 服务器列表展示名（LoginServer 响应 SERVERLIST 用）
   server:

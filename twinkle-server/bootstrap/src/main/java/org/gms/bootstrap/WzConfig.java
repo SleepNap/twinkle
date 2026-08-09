@@ -3,6 +3,7 @@ package org.gms.bootstrap;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.mob.MobData;
@@ -13,6 +14,7 @@ import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.MovementSystem;
 import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.TradeSystem;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.wz.ItemLoader;
 import org.gms.wz.MobLoader;
 import org.gms.wz.WzCache;
@@ -28,8 +30,11 @@ import java.util.Map;
  * {@link ItemSystem} 等可替换层系统，供频道 handler 使用。WZ 目录缺省时（如测试
  * 临时目录只有地图）返回空数据，不阻断启动（架构 6.4 读不到报错的严格校验在
  * 生产装配用真目录兜底）。
+ *
+ * <p>WZ 数据 + 可替换层是频道进程专属（split 下 coordinator 管理进程不装配）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class WzConfig {
 
     @Bean

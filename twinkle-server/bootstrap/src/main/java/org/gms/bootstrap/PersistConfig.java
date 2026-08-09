@@ -3,6 +3,7 @@ package org.gms.bootstrap;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.PlayerStorage;
@@ -13,6 +14,7 @@ import org.gms.data.repo.CharacterRepository;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.observability.Metrics;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.TickScheduler;
 
 /**
@@ -21,8 +23,11 @@ import org.gms.tick.TickScheduler;
  * <p>CharacterSaveQueue 单写执行器（架构 6.2 ②）+ CharacterFlushTickHandler（定期增量 FLUSH，
  * 红线 17）+ RestartService（把 RestartCoordinator 状态机接到真实组件）。启动期注册 flush
  * handler 并启动 tick 循环（@Context 强制装配）。
+ *
+ * <p>存档是频道进程专属（split 下 coordinator 管理进程不装配，架构 4.2）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class PersistConfig {
 
     @Bean

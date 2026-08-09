@@ -1,6 +1,7 @@
 package org.gms.bootstrap.plugin;
 
 import io.micronaut.context.annotation.Context;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,6 +14,7 @@ import org.gms.observability.Metrics;
 import org.gms.observability.Sli;
 import org.gms.plugin.PluginDescriptor;
 import org.gms.plugin.runtime.PluginManager;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.TickScheduler;
 
 import java.nio.file.Path;
@@ -24,9 +26,12 @@ import java.nio.file.Path;
  * context 创建时即扫描插件目录并加载全部插件。插件目录不存在 = 无插件（可选组件，不阻断启动）。
  *
  * <p>可观测埋点（架构 12 / M4 可观测性纪律）：Metrics 计数 {@code plugin.loaded/unloaded/failed}。
+ *
+ * <p>插件宿主依赖 TickScheduler（频道进程专属，同 {@code PluginConfig}）。
  */
 @Singleton
 @Context
+@Requires(condition = ChannelProcessCondition.class)
 public final class PluginInitializer {
 
     private static final Logger LOG = LogManager.getLogger(PluginInitializer.class);

@@ -4,12 +4,14 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.channel.ChannelMapManager;
 import org.gms.channel.MonsterReassignTickHandler;
 import org.gms.channel.MonsterSpawnService;
 import org.gms.domain.game.lease.DefaultControllerLeaseService;
 import org.gms.domain.game.lease.ControllerLeaseService;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.TickScheduler;
 
 /**
@@ -21,8 +23,11 @@ import org.gms.tick.TickScheduler;
  *
  * <p>启动期 {@code @Context} registrar 把两个 TickHandler 注册进 tickScheduler 并 start()
  * （GameTickLoop.start() 幂等，与 PersistConfig 的 registrar 共存安全）。
+ *
+ * <p>租约是频道进程专属（split 下 coordinator 管理进程不装配，架构 4.2）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class LeaseConfig {
 
     @Bean

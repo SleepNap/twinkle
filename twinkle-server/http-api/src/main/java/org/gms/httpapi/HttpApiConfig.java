@@ -3,6 +3,7 @@ package org.gms.httpapi;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.CharacterRepository;
@@ -11,6 +12,7 @@ import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
 import org.gms.httpapi.service.AdminApiService;
 import org.gms.observability.Metrics;
+import org.gms.role.ManagementProcessCondition;
 import org.gms.service.admin.AdminService;
 
 /**
@@ -18,8 +20,11 @@ import org.gms.service.admin.AdminService;
  *
  * <p>只依赖 core + data（红线 4.1 / ArchUnit 规则 1）：经 {@link AdminService}（core 公共契约）
  * 访问频道，经 data repository 查 DB，经 {@link EventBus} 订阅在线事件维护只读镜像。
+ *
+ * <p>管理进程专属（single 全内嵌；split 下仅 coordinator 角色装配，频道进程不启 HTTP 管理面）。
  */
 @Factory
+@Requires(condition = ManagementProcessCondition.class)
 public class HttpApiConfig {
 
     @Bean

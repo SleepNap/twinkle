@@ -27,11 +27,29 @@ public interface InternalFrame {
     byte[] payload();
 
     /**
-     * 消息类型占位（M6 细化，如 RPC 请求 / 事件投递 / 心跳 / 定位查询）。
+     * 负载按 UTF-8 解码（JSON/文本负载读取，内部帧协议负载均为 UTF-8 JSON）。
+     */
+    default String payloadText() {
+        return new String(payload(), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 消息类型（架构 4.5 内部通信：帧头携带类型，路由/分发用）。
+     *
+     * <ul>
+     *   <li>{@link #RPC}：请求-响应（频道侧 IntercoordService 方法调用 → coordinator 真值）。</li>
+     *   <li>{@link #RPC_RESPONSE}：RPC 响应（消息ID 关联请求，CompletableFuture 匹配）。</li>
+     *   <li>{@link #EVENT}：事件投递（悄悄话/公告等，走消息总线）。</li>
+     *   <li>{@link #REGISTER}：频道启动上报（注册中心，携带频道ID+host:port）。</li>
+     *   <li>{@link #HEARTBEAT}：心跳（channel → coordinator 续期）。</li>
+     *   <li>{@link #LOCATE}：定位查询（已并入 RPC，保留枚举值兼容）。</li>
+     * </ul>
      */
     enum MessageType {
         RPC,
+        RPC_RESPONSE,
         EVENT,
+        REGISTER,
         HEARTBEAT,
         LOCATE
     }

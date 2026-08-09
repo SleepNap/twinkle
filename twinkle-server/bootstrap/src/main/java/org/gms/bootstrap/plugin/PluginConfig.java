@@ -3,6 +3,7 @@ package org.gms.bootstrap.plugin;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
+import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
@@ -12,6 +13,7 @@ import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.plugin.runtime.ContributionRouter;
 import org.gms.plugin.runtime.PluginManager;
+import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.TickScheduler;
 
 import java.nio.file.Path;
@@ -24,8 +26,12 @@ import java.util.function.Function;
  * <p>{@code twinkle.plugin.path} 指定插件目录（默认 {@code ./plugins}），目录不存在 = 无插件
  * （可选组件，不阻断启动）。PluginManager 持有宿主贡献点路由（{@link TwinklePluginHost}），
  * 插件经接口访问宿主服务（信任边界 = 全权但经接口）。
+ *
+ * <p>插件宿主依赖 TickScheduler（频道进程专属），故插件装配归 channel 侧
+ * （架构 4.6.2：频道插件进频道进程；平台插件/AI 进管理进程，留 M6 后续扩展）。
  */
 @Factory
+@Requires(condition = ChannelProcessCondition.class)
 public class PluginConfig {
 
     @Bean
