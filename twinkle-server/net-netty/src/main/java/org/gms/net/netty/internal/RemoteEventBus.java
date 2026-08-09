@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
+import org.gms.event.ReliableDelivery;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -25,8 +26,12 @@ import java.util.function.Consumer;
  *
  * <p>断链降级：coordinator 失联时发送仅本地派发（单频道可玩，架构 4.5 故障矩阵），
  * 重连后自动恢复转发（CoordinatorLink 通知重挂帧处理器）。
+ *
+ * <p>可靠投递：实现 {@link ReliableDelivery}——{@link ReliableEventBus} 发送时携带序号，
+ * 转发帧带 {@code streamId/seq/messageId}，接收侧目标进程可经 {@link ReliableReceiver}
+ * 做恰好一次判定（bus_stream 持久化去重）。
  */
-public final class RemoteEventBus implements EventBus {
+public final class RemoteEventBus implements EventBus, ReliableDelivery {
 
     private static final Logger LOG = LogManager.getLogger(RemoteEventBus.class);
 
@@ -46,6 +51,16 @@ public final class RemoteEventBus implements EventBus {
 
     @Override
     public <T> CompletableFuture<Void> send(String target, T payload) {
+        return forward(target, payload, null, null, null);
+    }
+
+    @Override
+    public <T> void sendReliable(String streamId, long seq, String messageId, String target, T payload) {
+        forward(target, payload, streamId, seq, messageId);
+    }
+
+    private <T> CompletableFuture<Void> forward(String target, T payload,
+                                                String streamId, Long seq, String messageId) {
         // 1) 本地派发（本进程订阅者）
         local.send(target, payload);
         // 2) 跨进程转发 coordinator（低频控制消息，架构 4.5）；未连接仅本地派发（单频道可玩）
@@ -55,7 +70,7 @@ public final class RemoteEventBus implements EventBus {
             return CompletableFuture.completedFuture(null);
         }
         InternalProtocol.EventPayload event = new InternalProtocol.EventPayload(
-                target, JsonCodec.typeName(payload), JsonCodec.encode(payload));
+                target, JsonCodec.typeName(payload), JsonCodec.encode(payload), streamId, seq, messageId);
         DefaultInternalFrame frame = new DefaultInternalFrame(InternalFrame.MessageType.EVENT,
                 conn.nextMessageId(), JsonCodec.encode(event));
         conn.send(frame);
@@ -78,6 +93,13 @@ public final class RemoteEventBus implements EventBus {
             LOG.warn("EVENT 负载反序列化失败: type={}", event.type());
             return;
         }
-        local.send(event.target(), payload);
+        // 可靠序号存在 → 携带派发（订阅方若用 ReliableReceiver 可恰好一次）；
+        // 否则普通本地派发
+        if (event.streamId() != null) {
+            local.sendReliable(event.streamId(), event.seq() == null ? 0 : event.seq(),
+                    event.messageId(), event.target(), payload);
+        } else {
+            local.send(event.target(), payload);
+        }
     }
 }

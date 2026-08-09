@@ -11,6 +11,7 @@ import org.gms.channel.admin.ChannelEventPublisher;
 import org.gms.channel.AttackHandler;
 import org.gms.channel.BuddyHandler;
 import org.gms.channel.ChangeChannelHandler;
+import org.gms.channel.ChannelChangeReceiver;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelMapManager;
 import org.gms.channel.ChannelMessageSubscriber;
@@ -173,6 +174,7 @@ public class ChannelConfig {
                                                            IntercoordService intercoordService,
                                                            org.gms.data.repo.BuddyListRepository buddyListRepository,
                                                            org.gms.domain.game.lease.ControllerLeaseService leaseService,
+                                                           org.gms.channel.persist.CharacterSaveQueue characterSaveQueue,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
                 new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher, leaseService),
@@ -186,7 +188,8 @@ public class ChannelConfig {
                 new NpcTalkMoreHandler(),
                 new UseItemHandler(itemSystem, itemData),
                 new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
-                new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry),
+                new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry,
+                        characterSaveQueue),
                 new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository),
                 new MoveLifeHandler(leaseService, playerSessionRegistry));
     }
@@ -200,6 +203,19 @@ public class ChannelConfig {
             PlayerSessionRegistry playerSessionRegistry,
             EventBus eventBus) {
         return new ChannelMessageSubscriber(channelId, intercoordService, playerSessionRegistry, eventBus);
+    }
+
+    /** 换频道接收端（架构 4.7：目标频道消费 CC 请求，恰好一次 + 定位确认）。
+     *  @Context 强制装配：构造期即订阅（懒 @Singleton 无人引用不实例化，CC 请求收不到）。 */
+    @Bean
+    @Context
+    @Singleton
+    public ChannelChangeReceiver channelChangeReceiver(
+            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
+            IntercoordService intercoordService,
+            org.gms.event.ReliableReceiver reliableReceiver,
+            EventBus eventBus) {
+        return new ChannelChangeReceiver(channelId, intercoordService, reliableReceiver, eventBus);
     }
 
     /** 玩家定位绑定（进图/下线经事件更新定位表，架构 4.4）。 */

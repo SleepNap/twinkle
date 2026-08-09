@@ -2,7 +2,9 @@ package org.gms.data.repo;
 
 import com.mybatisflex.core.query.QueryWrapper;
 import org.gms.data.entity.BusOutboxEntity;
+import org.gms.data.entity.BusStreamEntity;
 import org.gms.data.mapper.BusOutboxMapper;
+import org.gms.data.mapper.BusStreamMapper;
 import org.gms.event.OutboxRepository;
 
 import java.time.Instant;
@@ -12,13 +14,18 @@ import java.util.List;
  * MyBatis-Flex 实现的消息总线 outbox 仓库（M4 可靠投递，架构 4.5）。
  *
  * <p>SQL 用两库公共子集（SELECT/UPDATE/ORDER BY，红线 14：方言点进 db-dialect，此处无方言裸写）。
+ *
+ * <p>M6 跨进程：接收侧去重状态落 {@code bus_stream} 表（{@code lastDeliveredSeq}），
+ * 重启不丢去重状态——进程崩了重投未 ACKED 时接收侧按持久化序号判断是否重复应用。
  */
 public class FlexBusOutboxRepository implements OutboxRepository {
 
     private final BusOutboxMapper mapper;
+    private final BusStreamMapper streamMapper;
 
-    public FlexBusOutboxRepository(BusOutboxMapper mapper) {
+    public FlexBusOutboxRepository(BusOutboxMapper mapper, BusStreamMapper streamMapper) {
         this.mapper = mapper;
+        this.streamMapper = streamMapper;
     }
 
     @Override
@@ -62,6 +69,32 @@ public class FlexBusOutboxRepository implements OutboxRepository {
         e.setStatus(OutboxRow.ACKED);
         mapper.updateByQuery(e, QueryWrapper.create()
                 .where(BusOutboxEntity::getMessageId).eq(messageId));
+    }
+
+    @Override
+    public long lastDeliveredSeq(String streamId) {
+        BusStreamEntity e = streamMapper.selectOneByQuery(QueryWrapper.create()
+                .where(BusStreamEntity::getStreamId).eq(streamId));
+        return e == null ? 0 : e.getLastDeliveredSeq();
+    }
+
+    @Override
+    public void advanceLastDeliveredSeq(String streamId, long seq) {
+        BusStreamEntity e = streamMapper.selectOneByQuery(QueryWrapper.create()
+                .where(BusStreamEntity::getStreamId).eq(streamId));
+        if (e == null) {
+            // 首条：插入
+            BusStreamEntity fresh = new BusStreamEntity();
+            fresh.setStreamId(streamId);
+            fresh.setLastDeliveredSeq(seq);
+            streamMapper.insert(fresh);
+            return;
+        }
+        // 只进不退（并发安全：单写语义 + 同流单属主）
+        if (seq > e.getLastDeliveredSeq()) {
+            e.setLastDeliveredSeq(seq);
+            streamMapper.update(e);
+        }
     }
 
     private OutboxRow toRow(BusOutboxEntity e) {

@@ -1,7 +1,9 @@
 package org.gms.event;
 
-import org.gms.message.MessageTargets;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -11,25 +13,29 @@ import java.util.function.Consumer;
 /**
  * 可靠事件总线（架构 4.5 可靠性三件套：持久化队列 + 幂等去重 + 单一属主序号 = 恰好一次）。
  *
- * <p>装饰 {@link EventBus}（进程内投递），发送侧先落 outbox（PENDING）→ 投递 → 标记投递。
+ * <p>装饰 {@link EventBus}（进程内/网络投递），发送侧先落 outbox（PENDING）→ 投递 → 标记投递。
  * 核心保证：
  * <ul>
  *   <li><b>持久化队列</b>：发消息先落 outbox（投递成功才 ack，进程崩了重发未 ACKED）。</li>
  *   <li><b>幂等去重</b>：每条消息带全局 {@code messageId}；接收方按消息 id 去重（已处理不重复应用）。</li>
  *   <li><b>单一属主序号</b>：同一逻辑流（streamId）消息带单调 {@code seq}；接收方按 stream 的
- *       {@code lastDeliveredSeq} 按序投递、越序丢弃（防乱序重复）。</li>
+ *       {@code lastDeliveredSeq} 按序投递、越序暂存等待前序（防乱序重复）。</li>
  * </ul>
  * 三者组合 = 语义上的恰好一次——CC 迁移不掉数据、不重复的核心（架构 4.7）。
  *
- * <p>M4 单进程内：outbox 持久化（重启重投）+ 内存去重/序号。M6 跨进程时接收侧去重状态落
- * {@code bus_stream} 表、投递走网络帧，接口不变（铁律 1）。
+ * <p>M6 跨进程 ack 协议闭环（接收方权威）：
+ * <ul>
+ *   <li><b>发送方</b>：落 outbox（PENDING）→ 投递 → {@code markDelivered}。重启重投所有非 ACKED。</li>
+ *   <li><b>接收方</b>（{@link ReliableReceiver}）：收到消息 → 按 bus_stream 的 lastDeliveredSeq 判序
+ *       去重 → 应用 → {@code advanceLastDeliveredSeq} + {@code markAcked}（发送方 outbox 落定，不再重投）。</li>
+ * </ul>
  *
- * <p>线程安全：发送可并发；接收侧同步派发（复用 InProcessEventBus 语义）。
+ * <p>本类只负责发送侧可靠性（落库 + 投递 + 重投）；接收侧去重/ack 由 {@link ReliableReceiver} 承担，
+ * 两者经共享 outbox/bus_stream 表协作（单机多进程同库即协作；跨机经网络 ack 帧，M6 后续）。
  */
 public final class ReliableEventBus {
 
-    private static final org.apache.logging.log4j.Logger LOG =
-            org.apache.logging.log4j.LogManager.getLogger(ReliableEventBus.class);
+    private static final Logger LOG = LogManager.getLogger(ReliableEventBus.class);
 
     private final EventBus delegate;
     private final OutboxRepository outbox;
@@ -38,10 +44,10 @@ public final class ReliableEventBus {
     /** 发送侧：每 stream 的下一序号（单一属主）。 */
     private final ConcurrentMap<String, AtomicLong> streamSeq = new ConcurrentHashMap<>();
 
-    /** 接收侧：每 stream 已投递序号（幂等去重 + 按序）。 */
+    /** 发送侧：已投递序号（本进程 outbox 重投的幂等去重；重启后由 outbox 状态重建）。 */
     private final ConcurrentMap<String, Long> deliveredSeq = new ConcurrentHashMap<>();
 
-    /** 接收侧：已处理消息 id（幂等去重，避免重投重复应用）。 */
+    /** 发送侧：已处理消息 id（本进程 outbox 重投去重）。 */
     private final ConcurrentMap<String, Boolean> processedMessageIds = new ConcurrentHashMap<>();
 
     public ReliableEventBus(EventBus delegate, OutboxRepository outbox) {
@@ -52,7 +58,8 @@ public final class ReliableEventBus {
         this.delegate = delegate;
         this.outbox = outbox;
         this.codec = codec;
-        // 启动重投：取出未 ACKED 的 in-flight 消息（进程崩了重发，架构 4.5）
+        // 启动重投：取出未 ACKED 的 in-flight 消息（进程崩了重发，架构 4.5）。
+        // 注意：ACKED = 接收方已确认应用，重投只重投未确认的。
         for (OutboxRepository.OutboxRow row : outbox.findPending()) {
             LOG.info("可靠总线启动重投: messageId={} stream={} seq={}", row.messageId(), row.streamId(), row.seq());
             deliver(row);
@@ -71,39 +78,47 @@ public final class ReliableEventBus {
         String stream = streamId == null ? "default" : streamId;
         long seq = streamSeq.computeIfAbsent(stream, k -> new AtomicLong()).incrementAndGet();
         String messageId = stream + ":" + seq;
+        String payload = codec.encode(message);
 
-        // 1) 持久化队列：先落 outbox（PENDING），投递成功才 ack
+        // 1) 持久化队列：先落 outbox（PENDING），接收方 ack 前视为未确认（可重投）
         long id = outbox.insert(new OutboxRepository.OutboxRow(0L, stream, seq, messageId, target,
-                message.getClass().getName(), codec.encode(message), OutboxRepository.OutboxRow.PENDING));
+                message.getClass().getName(), payload, OutboxRepository.OutboxRow.PENDING));
 
-        // 2) 投递 + 标记（接收方按 stream seq 去重，重投不重复应用）
+        // 2) 投递 + 标记 DELIVERED（接收方 ack 才 ACKED）
         deliver(new OutboxRepository.OutboxRow(id, stream, seq, messageId, target,
-                message.getClass().getName(), codec.encode(message), OutboxRepository.OutboxRow.PENDING));
+                message.getClass().getName(), payload, OutboxRepository.OutboxRow.PENDING));
         return CompletableFuture.completedFuture(null);
     }
 
-    /** 投递一条 outbox 消息到 delegate（接收侧去重 + 严格按序；package-private 供测试直接驱动重投）。 */
+    /** 投递一条 outbox 消息到 delegate（发送侧重投去重；package-private 供测试直接驱动重投）。 */
     void deliver(OutboxRepository.OutboxRow row) {
-        // 单一属主序号：严格按序投递（该流只投 seq == last+1；越序/重复等待前序或已投）
-        long last = deliveredSeq.getOrDefault(row.streamId(), 0L);
-        if (row.seq() != last + 1) {
-            LOG.info("可靠总线越序/重复丢弃: messageId={} seq={}（last={}）", row.messageId(), row.seq(), last);
-            return;
-        }
-        // 幂等去重：同 messageId 已处理过则不重复应用
+        String stream = row.streamId();
+        // 幂等去重：同 messageId 已投递过则不重复投（发送侧重投保护；接收侧另有 ReliableReceiver 去重）
         if (processedMessageIds.putIfAbsent(row.messageId(), Boolean.TRUE) != null) {
-            LOG.info("可靠总线幂等去重: messageId={} 已处理", row.messageId());
+            LOG.info("可靠总线幂等去重（发送侧）: messageId={} 已投递", row.messageId());
             return;
         }
-        deliveredSeq.put(row.streamId(), row.seq());
-        // 反序列化 + 投递
+        long last = deliveredSeq.getOrDefault(stream, 0L);
+        if (row.seq() <= last) {
+            LOG.info("可靠总线重复序号丢弃: messageId={} seq={}（last={}）", row.messageId(), row.seq(), last);
+            return;
+        }
+        deliveredSeq.put(stream, row.seq());
+        // 反序列化 + 投递（发送侧真实投递；接收侧按 bus_stream 判序去重）
         Object payload = codec.decode(row.payload(), row.payloadType());
         if (payload == null) {
             LOG.error("可靠总线负载反序列化失败: messageId={} type={}", row.messageId(), row.payloadType());
             return;
         }
         try {
-            delegate.send(row.target(), payload).join();
+            // 跨进程投递：delegate 支持 ReliableDelivery 时携带序号（接收侧 ReliableReceiver 恰好一次）；
+            // 否则普通 send（进程内，接收侧即本地）。
+            if (delegate instanceof ReliableDelivery reliable) {
+                reliable.sendReliable(stream, row.seq(), row.messageId(), row.target(), payload);
+            } else {
+                delegate.send(row.target(), payload).join();
+            }
+            // 投递成功 → DELIVERED（等接收方 ack 落定 ACKED）
             outbox.markDelivered(row.id());
         } catch (RuntimeException e) {
             LOG.error("可靠总线投递失败: messageId={}", row.messageId(), e);
@@ -115,5 +130,10 @@ public final class ReliableEventBus {
      */
     public <T> AutoCloseable subscribe(String target, Class<T> type, Consumer<T> handler) {
         return delegate.subscribe(target, type, handler);
+    }
+
+    /** 调试/观测：已投递 stream 序号快照（测试断言用）。 */
+    public Map<String, Long> deliveredSeqSnapshot() {
+        return Map.copyOf(deliveredSeq);
     }
 }

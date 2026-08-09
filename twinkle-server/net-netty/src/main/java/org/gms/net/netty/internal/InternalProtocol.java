@@ -25,8 +25,14 @@ public final class InternalProtocol {
     public record HeartbeatPayload(int channelId, int onlineCount) {
     }
 
-    /** EVENT 帧负载：消息总线投递（target + 负载类型名 + JSON）。 */
-    public record EventPayload(String target, String type, String payload) {
+    /** EVENT 帧负载：消息总线投递（target + 负载类型名 + JSON + 可选可靠序号）。 */
+    public record EventPayload(String target, String type, String payload,
+                               String streamId, Long seq, String messageId) {
+
+        /** 普通投递（无可靠序号）。 */
+        public EventPayload(String target, String type, String payload) {
+            this(target, type, payload, null, null, null);
+        }
     }
 
     /** RPC 请求负载：方法名 + 参数数组（每参数已 JSON 序列化为字符串，避免类型信息丢失）。 */

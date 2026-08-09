@@ -100,6 +100,16 @@ class SplitChannelE2ETest {
             channel1Coord.registerPlayer(3001, 1);
             await(() -> coordTruth.locate(3001).isPresent());
             assertThat(coordTruth.locate(3001)).contains(1);
+
+            // ---- 5) 玩家换频道（CC 迁移跨进程）：频道 1 发 CC 请求 → 目标频道 2 消费 + 定位更新 ----
+            org.gms.event.ReliableEventBus channel1Reliable = channel1.getBean(org.gms.event.ReliableEventBus.class);
+            channel1Reliable.send("cc:player:3001", MessageTargets.channel(2),
+                    new org.gms.message.ChangeChannelRequest(3001, 1, 2,
+                            org.gms.message.ChangeChannelRequest.Reason.PLAYER_CHANGE));
+
+            // 目标频道 2 的 ChannelChangeReceiver 收到（恰好一次）→ 定位表 movePlayer(3001, 2)
+            await(() -> coordTruth.locate(3001).isPresent() && coordTruth.locate(3001).get() == 2);
+            assertThat(coordTruth.locate(3001)).contains(2);
         }
     }
 

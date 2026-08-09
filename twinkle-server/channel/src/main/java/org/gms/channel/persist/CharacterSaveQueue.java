@@ -73,6 +73,25 @@ public final class CharacterSaveQueue implements AutoCloseable {
     }
 
     /**
+     * 同步保存单个角色（CC 迁移前用：玩家状态必须落 DB，目标频道重连后从 DB 加载最新态）。
+     *
+     * <p>不同于异步 {@link #save}：本方法直接在调用线程落库 + 清脏，调用方（ChangeChannelHandler）
+     * 返回前保证数据已持久化（架构 4.7：老频道 flush 状态 → 目标频道加载，不掉数据）。
+     * 与 {@link #flushAllSync} 同语义，只针对单角色。
+     */
+    public void flushCharacterSync(Character chr) {
+        if (chr == null) {
+            return;
+        }
+        try {
+            repository.save(loader.toData(chr));
+            chr.clearDirty();
+        } catch (RuntimeException e) {
+            LOG.error("角色同步存档失败: id={}", chr.getId(), e);
+        }
+    }
+
+    /**
      * 增量 FLUSH：扫描在线表中脏角色入队（红线 17：只刷脏数据）。
      *
      * <p>由 tick handler（CharacterFlushTickHandler）周期性调用，异步（单写线程执行）。

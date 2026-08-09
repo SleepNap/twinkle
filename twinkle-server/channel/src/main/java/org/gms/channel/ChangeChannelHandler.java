@@ -2,6 +2,7 @@ package org.gms.channel;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.domain.game.Character;
 import org.gms.event.ReliableEventBus;
 import org.gms.message.ChangeChannelRequest;
@@ -19,8 +20,9 @@ import org.gms.service.intercoord.IntercoordService;
  * 注册 → 客户端重连（v83 换频道本来就是 loading 界面）。兜底性：升级前把玩家挪到别的频道
  * （MAINTENANCE reason）→ 重启 → 回来，玩家视角只是"换了一次频道"。
  *
- * <p>v83 收包：opcode(2) + 4B 头 + 目标频道（1B，0-based）。M4 单进程内：目标频道 = 本进程，
- * 定位表 move + 清地图 + 重新登记即完成"迁移"。
+ * <p>v83 收包：opcode(2) + 4B 头 + 目标频道（1B，0-based）。M6 跨进程：发送前<b>同步存档</b>
+ * （玩家状态落 DB，目标频道重连后从 DB 加载最新态，不掉数据）；目标频道经
+ * {@link ChannelChangeReceiver} 消费 CC 请求（恰好一次）。
  */
 public final class ChangeChannelHandler implements PacketHandler {
 
@@ -30,13 +32,20 @@ public final class ChangeChannelHandler implements PacketHandler {
     private final IntercoordService intercoord;
     private final ReliableEventBus reliableBus;
     private final PlayerSessionRegistry sessions;
+    private final CharacterSaveQueue saveQueue;
 
     public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
                                 PlayerSessionRegistry sessions) {
+        this(channelId, intercoord, reliableBus, sessions, null);
+    }
+
+    public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
+                                PlayerSessionRegistry sessions, CharacterSaveQueue saveQueue) {
         this.channelId = channelId;
         this.intercoord = intercoord;
         this.reliableBus = reliableBus;
         this.sessions = sessions;
+        this.saveQueue = saveQueue;
     }
 
     @Override
@@ -61,6 +70,12 @@ public final class ChangeChannelHandler implements PacketHandler {
 
         if (targetId == channelId) {
             return; // 同频道，忽略
+        }
+
+        // 发送前同步存档（架构 4.7：老频道 flush 状态 → 目标频道加载）。玩家状态落 DB，
+        // 目标频道重连后 PlayerLoggedinHandler 从 DB 加载最新态（跨进程不掉数据）。
+        if (saveQueue != null) {
+            saveQueue.flushCharacterSync(chr);
         }
 
         // 发 CC 请求（经可靠总线发目标频道，架构 4.5：CC 迁移不掉数据、不重复的核心）。

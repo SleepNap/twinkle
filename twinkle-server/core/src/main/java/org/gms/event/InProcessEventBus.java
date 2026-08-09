@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  * </ul>
  */
 @Singleton
-public final class InProcessEventBus implements EventBus {
+public final class InProcessEventBus implements EventBus, ReliableDelivery {
 
     private static final Logger LOG = LogManager.getLogger(InProcessEventBus.class);
 
@@ -42,19 +42,33 @@ public final class InProcessEventBus implements EventBus {
         if (payload == null) {
             return CompletableFuture.completedFuture(null);
         }
+        dispatch(target, payload);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public <T> void sendReliable(String streamId, long seq, String messageId, String target, T payload) {
+        // 进程内可靠投递：直接本地派发（接收侧 ReliableReceiver 用 outbox/bus_stream 判定恰好一次；
+        // 序号经 outbox 行传递——InProcessEventBus 不做网络，接收侧从发送方 outbox 读序号）。
+        // 本实现无网络转发，携带的序号仅供接收侧 ReliableReceiver 判序（发送方已落 outbox）。
+        if (payload != null) {
+            dispatch(target, payload);
+        }
+    }
+
+    private <T> void dispatch(String target, T payload) {
         ConcurrentMap<Class<?>, CopyOnWriteArrayList<HandlerEntry<?>>> byType = routes.get(target);
         if (byType == null) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         CopyOnWriteArrayList<HandlerEntry<?>> handlers = byType.get(payload.getClass());
         if (handlers == null || handlers.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         // 同步派发：记录异常但不中断其他订阅者。每个订阅者独立 try，避免一处崩了全链路断。
         for (HandlerEntry<?> entry : handlers) {
             dispatch(entry, payload);
         }
-        return CompletableFuture.completedFuture(null);
     }
 
     @Override

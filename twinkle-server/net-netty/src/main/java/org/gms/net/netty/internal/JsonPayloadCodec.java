@@ -1,0 +1,46 @@
+package org.gms.net.netty.internal;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.gms.event.PayloadCodec;
+
+/**
+ * 可靠总线负载 JSON 编解码（架构 4.5：outbox 持久化队列 + 网络帧重投的真实序列化）。
+ *
+ * <p>M4 单进程内用 {@link PayloadCodec#MARKER}（只存字符串标记，反射重建空对象）——投递真实对象
+ * 不经网络，outbox 仅持久化记录。M6 跨进程：outbox 负载经网络重投，必须真实序列化。
+ * 消息负载都是 Java record（core {@code org.gms.message} / {@code OnlinePlayerEvents}），
+ * Jackson 原生支持。
+ *
+ * <p>装配由 bootstrap 注入 {@link org.gms.event.ReliableEventBus}（替换 MARKER）。
+ */
+public final class JsonPayloadCodec implements PayloadCodec {
+
+    private static final Logger LOG = LogManager.getLogger(JsonPayloadCodec.class);
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    public String encode(Object payload) {
+        try {
+            return MAPPER.writeValueAsString(payload);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("可靠总线负载 JSON 序列化失败: " + payload.getClass().getName(), e);
+        }
+    }
+
+    @Override
+    public Object decode(String payload, String payloadType) {
+        try {
+            Class<?> type = Class.forName(payloadType);
+            return MAPPER.readValue(payload, type);
+        } catch (ClassNotFoundException e) {
+            LOG.error("可靠总线负载类型不存在: {}", payloadType);
+            return null;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            LOG.error("可靠总线负载 JSON 反序列化失败: type={}", payloadType, e);
+            return null;
+        }
+    }
+}

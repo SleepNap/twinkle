@@ -13,6 +13,7 @@ import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.AiUsageMapper;
 import org.gms.data.mapper.BuddyListMapper;
 import org.gms.data.mapper.BusOutboxMapper;
+import org.gms.data.mapper.BusStreamMapper;
 import org.gms.data.mapper.CharacterMapper;
 import org.gms.data.mapper.InventoryItemMapper;
 import org.gms.data.mapper.ParamConfMapper;
@@ -67,9 +68,10 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(QuestProgressMapper.class);
         bootstrap.addMapper(AiUsageMapper.class);
         bootstrap.addMapper(BusOutboxMapper.class);
+        bootstrap.addMapper(BusStreamMapper.class);
         bootstrap.addMapper(BuddyListMapper.class);
         bootstrap.start();
-        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox/BuddyList 九个 Mapper 已注册");
+        LOG.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox/BusStream/BuddyList 十个 Mapper 已注册");
         return bootstrap;
     }
 
@@ -123,6 +125,12 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public BusStreamMapper busStreamMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(BusStreamMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public BuddyListMapper buddyListMapper(MybatisFlexBootstrap bootstrap) {
         return bootstrap.getMapper(BuddyListMapper.class);
     }
@@ -166,8 +174,8 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
-    public OutboxRepository busOutboxRepository(BusOutboxMapper mapper) {
-        return new FlexBusOutboxRepository(mapper);
+    public OutboxRepository busOutboxRepository(BusOutboxMapper mapper, BusStreamMapper streamMapper) {
+        return new FlexBusOutboxRepository(mapper, streamMapper);
     }
 
     @Bean

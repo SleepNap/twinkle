@@ -25,10 +25,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ReliableEventBusTest {
 
-    /** 内存 outbox（记录落库行 + ack 状态）。 */
+    /** 内存 outbox（记录落库行 + ack 状态 + bus_stream 序号）。 */
     static final class MemoryOutbox implements OutboxRepository {
         final List<OutboxRow> rows = new ArrayList<>();
         final ConcurrentMap<String, Boolean> acked = new ConcurrentHashMap<>();
+        final ConcurrentMap<String, Long> streamLastSeq = new ConcurrentHashMap<>();
         private final AtomicLong idGen = new AtomicLong();
 
         @Override
@@ -54,6 +55,20 @@ class ReliableEventBusTest {
         @Override
         public void markAcked(String messageId) {
             acked.put(messageId, Boolean.TRUE);
+            rows.stream()
+                    .filter(r -> r.messageId().equals(messageId))
+                    .findFirst()
+                    .ifPresent(r -> replaceStatus(r.id(), OutboxRow.ACKED));
+        }
+
+        @Override
+        public long lastDeliveredSeq(String streamId) {
+            return streamLastSeq.getOrDefault(streamId, 0L);
+        }
+
+        @Override
+        public void advanceLastDeliveredSeq(String streamId, long seq) {
+            streamLastSeq.merge(streamId, seq, Math::max);
         }
 
         private void replaceStatus(long id, String status) {
@@ -133,21 +148,20 @@ class ReliableEventBusTest {
     }
 
     @Test
-    void outOfOrderDeliveryDroppedBySeq() {
+    void senderEmitsEachMessageOnce() {
         MemoryOutbox outbox = new MemoryOutbox();
         RecordingBus bus = new RecordingBus();
         ReliableEventBus reliable = newBus(outbox, bus);
 
-        // 先投 seq=3（越序），应被丢弃
-        reliable.deliver(new OutboxRow(9, "s", 3, "s:3", "*", "String.class", "x", OutboxRow.PENDING));
-        assertThat(bus.delivered).isEmpty();
-        assertThat(outbox.rows).isEmpty(); // 未落库的投递不记录
+        // 发送侧：send() 单调分配序号，按序投递；重复 deliver 同 messageId 去重
+        reliable.send("s", "*", "m1");
+        reliable.send("s", "*", "m2");
+        // 模拟重投（重启重投未 ack 的 m1）：同 messageId 不重复投递
+        OutboxRow m1 = outbox.rows.stream().filter(r -> r.messageId().equals("s:1")).findFirst().orElseThrow();
+        reliable.deliver(m1);
 
-        // 再按序投 seq=1,2,3 → 全送达
-        reliable.deliver(new OutboxRow(9, "s", 1, "s:1", "*", "String.class", "x", OutboxRow.PENDING));
-        reliable.deliver(new OutboxRow(9, "s", 2, "s:2", "*", "String.class", "x", OutboxRow.PENDING));
-        reliable.deliver(new OutboxRow(9, "s", 3, "s:3", "*", "String.class", "x", OutboxRow.PENDING));
-        assertThat(bus.delivered).hasSize(3);
+        assertThat(bus.delivered).containsExactly("m1", "m2"); // 重投不重复
+        assertThat(reliable.deliveredSeqSnapshot().get("s")).isEqualTo(2);
     }
 
     @Test
