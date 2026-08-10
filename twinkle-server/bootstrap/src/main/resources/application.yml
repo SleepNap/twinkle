@@ -44,6 +44,12 @@ twinkle:
   script:
     path: ${TWINKLE_SCRIPT_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\scripts}
 
+  # ============== AI 模块（可选功能，2C2G 默认不装配） ==============
+  # 同 WAL 按需启用：需要时 -Dtwinkle.ai.enabled=true 显式开启。
+  # 默认关省内存/CPU（2C2G 红线 15/9.2）；只在管理进程装配（single/standalone/coordinator 角色）。
+  ai:
+    enabled: ${TWINKLE_AI_ENABLED:false}
+
   # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
   http:
     api:

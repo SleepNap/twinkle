@@ -14,7 +14,7 @@ import org.gms.ai.service.AiFacade;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AiUsageRepository;
 import org.gms.observability.Metrics;
-import org.gms.role.ManagementProcessCondition;
+import org.gms.role.AiEnabledCondition;
 import org.gms.service.admin.AdminService;
 
 /**
@@ -24,10 +24,12 @@ import org.gms.service.admin.AdminService;
  * 契约）访问频道，不触碰游戏内存。模型为自研 {@link LocalRuleChatModel}；接入真实 LLM 时
  * 换 {@code ChatModel}/{@code StreamingChatModel} bean 即可（装配层替换，工具/编排零改动）。
  *
- * <p>管理进程专属（single 全内嵌；split 下仅 coordinator 角色装配，频道进程不启 AI）。
+ * <p><b>可选功能（2C2G 红线，同 WAL 按需启用）</b>：默认不装配，经
+ * {@code twinkle.ai.enabled=true} 显式开启。管理进程专属（single 全内嵌；split 下仅
+ * coordinator 角色装配，频道进程不启 AI）。
  */
 @Factory
-@Requires(condition = ManagementProcessCondition.class)
+@Requires(condition = AiEnabledCondition.class)
 public class AiConfig {
 
     @Bean
