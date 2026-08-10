@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>twinkle · 运维控制台（设计 Demo）</title>
+<style>
+  /* ===== shadcn/ui 令牌约定（Notion 风格映射） ===== */
+  :root {
+    --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+
+    /* 浅色（默认） */
+    --background: 0 0% 100%;          /* #FFFFFF */
+    --foreground: 40 8% 20%;          /* #37352F Notion 暖灰 */
+    --muted: 60 8% 96%;               /* #F7F7F5 侧栏/分组 */
+    --muted-foreground: 40 5% 42%;    /* 次级文字 */
+    --card: 0 0% 100%;
+    --border: 60 6% 91%;              /* #E9E9E7 发丝分隔线 */
+    --primary: 207 76% 51%;           /* #2383E2 Notion 链接蓝 */
+    --primary-foreground: 0 0% 100%;
+    --success: 173 79% 27%;           /* #0F7B6C */
+    --warning: 45 99% 44%;            /* #DFAB01 */
+    --danger: 0 76% 58%;              /* #E03E3E */
+    --ring: 207 76% 51%;
+  }
+  .dark {
+    /* 深色 */
+    --background: 0 0% 10%;           /* #191919 */
+    --foreground: 0 0% 90%;           /* rgba(255,255,255,0.90) */
+    --muted: 0 0% 13%;                /* #202020 */
+    --muted-foreground: 0 0% 55%;
+    --card: 0 0% 13%;
+    --border: 0 0% 18%;               /* #2F2F2F */
+    --primary: 207 76% 51%;
+    --primary-foreground: 0 0% 100%;
+    --success: 160 45% 50%;
+    --warning: 45 99% 50%;
+    --danger: 0 76% 66%;
+    --ring: 207 76% 51%;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-sans);
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background .25s ease, color .25s ease;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / .25); border-radius: 999px; border: 2px solid hsl(var(--background)); }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / .4); }
+
+  .icon { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* ===== 布局 ===== */
+  .layout { display: flex; height: 100vh; overflow: hidden; }
+
+  /* 侧栏 */
+  .sidebar {
+    width: 256px; flex-shrink: 0;
+    background: hsl(var(--muted));
+    border-right: 1px solid hsl(var(--border));
+    display: flex; flex-direction: column;
+    transition: background .25s ease, border-color .25s ease;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 18px 20px; }
+  .brand .logo {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    background: hsl(40 8% 20%);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px;
+  }
+  .brand b { font-size: 16px; font-weight: 700; letter-spacing: .2px; }
+  .brand span { display: block; font-size: 11px; color: hsl(var(--muted-foreground)); font-weight: 400; }
+
+  .nav { padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: hsl(var(--muted-foreground)); padding: 14px 12px 6px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    color: hsl(var(--muted-foreground)); font-weight: 500;
+    transition: background .15s ease, color .15s ease;
+  }
+  .nav-item:hover { background: hsl(var(--foreground) / .05); color: hsl(var(--foreground)); }
+  .nav-item.active { background: hsl(var(--foreground) / .07); color: hsl(var(--foreground)); font-weight: 600; }
+  .nav-item .count { margin-left: auto; font-size: 11px; background: hsl(var(--danger) / .15); color: hsl(var(--danger)); padding: 1px 7px; border-radius: 999px; font-weight: 600; }
+
+  .side-foot { padding: 12px; border-top: 1px solid hsl(var(--border)); display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--muted-foreground) / .15); color: hsl(var(--foreground)); display: grid; place-items: center; font-weight: 600; font-size: 13px; }
+  .side-foot .who { line-height: 1.2; }
+  .side-foot .who b { font-size: 13px; }
+  .side-foot .who span { font-size: 11px; color: hsl(var(--muted-foreground)); }
+
+  /* 主区 */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    height: 56px; flex-shrink: 0; border-bottom: 1px solid hsl(var(--border));
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; background: hsl(var(--background));
+    transition: background .25s ease, border-color .25s ease;
+  }
+  .topbar .title { font-size: 15px; font-weight: 600; }
+  .topbar .title small { color: hsl(var(--muted-foreground)); font-weight: 400; margin-left: 8px; font-size: 12px; }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .search {
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    background: hsl(var(--muted)); border: 1px solid hsl(var(--border));
+    border-radius: 8px; color: hsl(var(--muted-foreground)); min-width: 200px;
+  }
+  .search input { border: none; background: transparent; outline: none; font: inherit; color: hsl(var(--foreground)); width: 100%; }
+  .search input::placeholder { color: hsl(var(--muted-foreground)); }
+
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 8px; border: 1px solid hsl(var(--border));
+    background: hsl(var(--background)); color: hsl(var(--foreground));
+    display: grid; place-items: center; cursor: pointer; position: relative;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .icon-btn:hover { background: hsl(var(--muted)); }
+  .dot { position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: hsl(var(--danger)); border: 2px solid hsl(var(--background)); }
+
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+  .page-h { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+  .page-h h1 { font-size: 22px; font-weight: 700; letter-spacing: -.2px; }
+  .page-h p { color: hsl(var(--muted-foreground)); font-size: 13px; margin-top: 3px; }
+
+  /* KPI */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+  .card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 16px 18px; transition: background .25s ease, border-color .25s ease, box-shadow .2s ease; }
+  .card:hover { box-shadow: 0 4px 16px hsl(var(--foreground) / .06); }
+  .kpi .top { display: flex; align-items: center; justify-content: space-between; }
+  .kpi .label { font-size: 13px; color: hsl(var(--muted-foreground)); }
+  .kpi .ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: hsl(var(--muted-foreground) / .1); color: hsl(var(--muted-foreground)); }
+  .kpi .value { font-size: 28px; font-weight: 700; margin-top: 10px; letter-spacing: -.5px; }
+  .kpi .sub { font-size: 12px; margin-top: 4px; color: hsl(var(--muted-foreground)); }
+  .kpi .sub.up { color: hsl(var(--success)); }
+  .kpi .sub.down { color: hsl(var(--danger)); }
+  .bar { height: 6px; border-radius: 999px; background: hsl(var(--muted-foreground) / .15); margin-top: 10px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: hsl(var(--foreground) / .75); }
+
+  /* 面板 */
+  .two-col { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid hsl(var(--border)); }
+  .panel-head h2 { font-size: 15px; font-weight: 600; }
+  .panel-head .meta { font-size: 12px; color: hsl(var(--muted-foreground)); }
+  .panel-body { padding: 6px 18px 14px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; color: hsl(var(--muted-foreground)); padding: 10px 12px; border-bottom: 1px solid hsl(var(--border)); }
+  td { padding: 11px 12px; font-size: 14px; border-bottom: 1px solid hsl(var(--border)); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background .12s ease; }
+  tbody tr:hover { background: hsl(var(--foreground) / .03); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: hsl(var(--muted-foreground)); }
+
+  /* 状态标签（Notion tag 风格：淡底实字） */
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.online { background: hsl(var(--success) / .14); color: hsl(var(--success)); }
+  .badge.warn   { background: hsl(var(--warning) / .16); color: hsl(35 80% 40%); }
+  .badge.offline{ background: hsl(var(--danger) / .14); color: hsl(var(--danger)); }
+  .dark .badge.warn { color: hsl(var(--warning)); }
+
+  /* 告警流 */
+  .alert { display: flex; gap: 12px; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; margin-bottom: 10px; align-items: flex-start; transition: border-color .2s ease, background .2s ease; }
+  .alert:hover { background: hsl(var(--muted) / .5); }
+  .alert .lv { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
+  .alert.err .lv  { background: hsl(var(--danger) / .14); color: hsl(var(--danger)); }
+  .alert.warn .lv { background: hsl(var(--warning) / .16); color: hsl(35 80% 40%); }
+  .alert.info .lv { background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
+  .dark .alert.warn .lv { color: hsl(var(--warning)); }
+  .alert .body { flex: 1; min-width: 0; }
+  .alert .body p { font-size: 13px; }
+  .alert .body time { font-size: 11px; color: hsl(var(--muted-foreground)); }
+
+  .foot { padding: 16px 24px; color: hsl(var(--muted-foreground)); font-size: 12px; border-top: 1px solid hsl(var(--border)); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- 侧栏 -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">T</div>
+      <div><b>twinkle</b><span>运维控制台</span></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">监控</div>
+      <div class="nav-item active"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>总览</div>
+      <div class="nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>集群健康</div>
+      <div class="nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>玩家管理</div>
+      <div class="nav-label">运维</div>
+      <div class="nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>配置中心</div>
+      <div class="nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>日志 / 告警<span class="count">3</span></div>
+      <div class="nav-item"><svg class="icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>GM 工具</div>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">A</div>
+      <div class="who"><b>Admin</b><span>超级管理员</span></div>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="main">
+    <header class="topbar">
+      <div class="title">运维总览 <small>single · 管理进程</small></div>
+      <div class="actions">
+        <div class="search">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input placeholder="搜索玩家 / 频道 / 配置…" />
+        </div>
+        <button class="icon-btn" id="themeBtn" title="切换浅/深主题">
+          <svg class="icon" id="themeIcon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button class="icon-btn" title="通知"><span class="dot"></span><svg class="icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-h">
+        <div>
+          <h1>服务器总览</h1>
+          <p>冒险岛 v83 · 单进程模式 · 最后刷新 14:32:08</p>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <div class="kpi-grid">
+        <div class="card kpi">
+          <div class="top"><span class="label">在线玩家</span><span class="ico"><svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span></div>
+          <div class="value">1,284</div>
+          <div class="sub up">较昨日 +3.2%</div>
+        </div>
+        <div class="card kpi">
+          <div class="top"><span class="label">活跃频道</span><span class="ico"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/></svg></span></div>
+          <div class="value">6 / 8</div>
+          <div class="sub down">2 个频道异常 / 离线</div>
+        </div>
+        <div class="card kpi">
+          <div class="top"><span class="label">服务器负载</span><span class="ico"><svg class="icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span></div>
+          <div class="value">42%</div>
+          <div class="bar"><i style="width:42%"></i></div>
+        </div>
+        <div class="card kpi">
+          <div class="top"><span class="label">待处理告警</span><span class="ico"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span></div>
+          <div class="value">3</div>
+          <div class="sub down">2 警告 · 1 错误</div>
+        </div>
+      </div>
+
+      <!-- 双栏 -->
+      <div class="two-col">
+        <!-- 集群健康 -->
+        <div class="card">
+          <div class="panel-head"><h2>集群健康 · 频道进程</h2><span class="meta">心跳周期 5s</span></div>
+          <div class="panel-body">
+            <table>
+              <thead><tr><th>频道</th><th>状态</th><th>在线人数</th><th>延迟</th><th>运行时长</th></tr></thead>
+              <tbody>
+                <tr><td>频道 1 · 商城</td><td><span class="badge online">在线</span></td><td>312</td><td class="mono">12 ms</td><td class="mono">14d 06h</td></tr>
+                <tr><td>频道 2 · 新手</td><td><span class="badge online">在线</span></td><td>486</td><td class="mono">18 ms</td><td class="mono">14d 06h</td></tr>
+                <tr><td>频道 3 · 主城</td><td><span class="badge online">在线</span></td><td>421</td><td class="mono">15 ms</td><td class="mono">14d 06h</td></tr>
+                <tr><td>频道 4 · 副本</td><td><span class="badge warn">异常</span></td><td>65</td><td class="mono">210 ms</td><td class="mono">14d 06h</td></tr>
+                <tr><td>频道 5 · PK</td><td><span class="badge offline">离线</span></td><td>—</td><td class="mono">—</td><td class="mono">维护中</td></tr>
+                <tr><td>频道 6 · 活动</td><td><span class="badge offline">离线</span></td><td>—</td><td class="mono">—</td><td class="mono">已停止</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 告警流 -->
+        <div class="card">
+          <div class="panel-head"><h2>实时告警 / 日志</h2><span class="meta">滚动</span></div>
+          <div class="panel-body">
+            <div class="alert err"><span class="lv"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></span><div class="body"><p>频道 4 延迟超阈值 (210ms &gt; 150ms)</p><time>2 分钟前</time></div></div>
+            <div class="alert warn"><span class="lv"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></span><div class="body"><p>频道 6 进程未响应心跳</p><time>8 分钟前</time></div></div>
+            <div class="alert info"><span class="lv"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><div class="body"><p>配置 param_conf 热更新生效 (v128)</p><time>15 分钟前</time></div></div>
+            <div class="alert warn"><span class="lv"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></span><div class="body"><p>数据库连接池使用率 82%</p><time>22 分钟前</time></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 玩家管理 -->
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head"><h2>玩家管理 · 最近登录</h2><span class="meta">共 1,284 在线</span></div>
+        <div class="panel-body">
+          <table>
+            <thead><tr><th>角色 ID</th><th>名称</th><th>等级</th><th>频道</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">1000231</td><td>风之轨迹</td><td>182</td><td>频道 3</td><td><span class="badge online">在线</span></td></tr>
+              <tr><td class="mono">1000198</td><td>暗夜猎手</td><td>156</td><td>频道 2</td><td><span class="badge online">在线</span></td></tr>
+              <tr><td class="mono">1000456</td><td>柠檬不萌</td><td>201</td><td>频道 1</td><td><span class="badge online">在线</span></td></tr>
+              <tr><td class="mono">1000789</td><td>一刀九九九</td><td>89</td><td>—</td><td><span class="badge offline">离线</span></td></tr>
+              <tr><td class="mono">1000320</td><td>糖醋排骨</td><td>134</td><td>频道 4</td><td><span class="badge warn">异常</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="foot">twinkle 运维控制台 · 设计 Demo（React 19 + Vite + shadcn/ui + Tailwind 规划中） · 本页仅为视觉预览，无后端交互</div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // 浅 / 深主题切换，持久化到 localStorage
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('themeBtn');
+    var icon = document.getElementById('themeIcon');
+    var SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
+    var MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    function apply(dark) {
+      root.classList.toggle('dark', dark);
+      icon.innerHTML = dark ? SUN : MOON;
+      btn.title = dark ? '切换到浅色' : '切换到深色';
+    }
+    var saved = localStorage.getItem('twinkle-theme');
+    if (!saved) saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    apply(saved === 'dark');
+    btn.addEventListener('click', function () {
+      var dark = !root.classList.contains('dark');
+      apply(dark);
+      localStorage.setItem('twinkle-theme', dark ? 'dark' : 'light');
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+/* ============================================================
+   twinkle 运维控制台 · 设计令牌（shadcn/ui 约定）
+   风格：Notion 中性暖灰主基调
+   原则：界面主基调全为灰阶；蓝 (#2383E2) 仅用于主操作按钮/链接；
+        绿/黄/红仅用于数据语义状态（在线/异常/离线）。
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ===== 浅色（默认） ===== */
+    --background: 0 0% 100%;            /* #FFFFFF */
+    --foreground: 40 8% 20%;            /* #37352F 暖灰正文，对白 ≈ 11:1 (AAA) */
+    --card: 0 0% 100%;
+    --card-foreground: 40 8% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 8% 20%;
+
+    --primary: 207 76% 51%;             /* #2383E2 仅主操作按钮 / 链接 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 60 8% 96%;             /* 中性浅灰底（按钮次态等） */
+    --secondary-foreground: 40 8% 20%;
+    --muted: 60 8% 96%;                 /* #F7F7F5 侧栏 / 分组背景 */
+    --muted-foreground: 40 5% 42%;      /* 次级文字，对白 ≈ 4.6:1 (AA) */
+    --accent: 60 8% 96%;
+    --accent-foreground: 40 8% 20%;
+
+    --border: 60 6% 91%;                /* #E9E9E7 发丝分隔线 */
+    --input: 60 6% 91%;
+    --ring: 40 8% 20%;                  /* focus ring 用中性深灰，非蓝（更 Notion） */
+
+    --radius: 0.5rem;                   /* Notion 偏直角，12px 卡片圆角 */
+
+    /* 语义状态色（数据着色，非主基调） */
+    --success: 173 79% 27%;             /* #0F7B6C 在线 */
+    --warning: 45 99% 44%;              /* #DFAB01 异常（底色 / 图标） */
+    --danger: 0 76% 58%;                /* #E03E3E 离线 / 错误 */
+  }
+
+  .dark {
+    /* ===== 深色（暖黑，非纯黑） ===== */
+    --background: 0 0% 10%;             /* #191919 */
+    --foreground: 0 0% 90%;             /* 对深底高对比 */
+    --card: 0 0% 13%;                   /* #202020 */
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 13%;
+    --popover-foreground: 0 0% 90%;
+
+    --primary: 207 76% 51%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 90%;
+
+    --border: 0 0% 18%;                 /* #2F2F2F */
+    --input: 0 0% 18%;
+    --ring: 0 0% 90%;
+
+    --success: 160 45% 50%;
+    --warning: 45 99% 50%;
+    --danger: 0 76% 66%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
