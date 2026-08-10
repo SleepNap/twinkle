@@ -156,7 +156,7 @@ web 是服务端的一部分，twish 是消费者，两者归属不同。
 
 ## 五、后续行动（按优先级）
 
-1. **能力面设计**（第一优先级）：接口清单 + scope 分级 + api-key 鉴权 + 审计。这是外部 agent、web、定时任务的共同底座。
+1. **能力面设计（twish v0.1 只读闭环已完成 2026-08-11）**：稳定服务端身份、Subject/Credential、专用 scope、身份快照、Capability 摘要与详情、统一 Tool 执行、健康与在线分页 Tool、标准信封和 `auditRef` 已落地；接入说明见 [`twish-capability-api.md`](twish-capability-api.md)。
 2. **ai 模块可选化（已完成 2026-08-10）**：`AiEnabledCondition` + `twinkle.ai.enabled`（默认 false），管理进程 + 开关双条件才装配；默认 2C2G 不装配省资源。
 3. **服务端 agent 完善（启用后，核心方向=客服能力）**：接入真实 LLM（`ChatModel` bean 换 OpenAI/Ollama，api-key 走 env）→ 落地"AI 值班 GM"：理解玩家自然语言 → 服务端取证（背包/交易/DB，写审计）→ 自然语言回应。这是 agent 保留的立足点。
 4. **web 控制台**：作为能力面的可视化，后做。

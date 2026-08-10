@@ -38,12 +38,26 @@ public final class ApiRateLimiter {
     public boolean tryConsume(String key) {
         Bucket bucket = buckets.computeIfAbsent(key, k -> newBucket());
         boolean allowed = bucket.tryConsume(1);
+        String dimension = metricDimension(key);
         if (allowed) {
-            metrics.increment("http.api.rate.allow", "key", key);
+            metrics.increment("http.api.rate.allow", "dimension", dimension);
         } else {
-            metrics.increment("http.api.rate.block", "key", key);
+            metrics.increment("http.api.rate.block", "dimension", dimension);
         }
         return allowed;
+    }
+
+    private static String metricDimension(String key) {
+        if (key.startsWith("preauth:")) {
+            return "ip";
+        }
+        if (key.startsWith("tool:")) {
+            return "credential_tool";
+        }
+        if (key.startsWith("key:")) {
+            return "credential";
+        }
+        return "other";
     }
 
     private Bucket newBucket() {

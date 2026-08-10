@@ -1,0 +1,225 @@
+package org.gms.httpapi.capability;
+
+import org.gms.httpapi.auth.ApiPrincipal;
+import org.gms.httpapi.auth.ApiScopes;
+import org.gms.httpapi.contract.ApiContract;
+import org.gms.httpapi.identity.ServerIdentity;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
+/** 明确注册、按 Credential 可见性裁剪的首批 Tool 目录。 */
+public final class ToolCatalogService {
+
+    public static final String HEALTH_TOOL = "server.health.read";
+    public static final String ONLINE_TOOL = "player.online.list";
+    public static final String TOOL_VERSION = "1.0.0";
+    public static final String CATALOG_VERSION = "catalog_0.1.0";
+
+    private final ServerIdentity serverIdentity;
+    private final Map<String, ToolSpec> specs;
+
+    public ToolCatalogService(ServerIdentity serverIdentity) {
+        this.serverIdentity = serverIdentity;
+        this.specs = Map.of(
+                HEALTH_TOOL, healthSpec(),
+                ONLINE_TOOL, onlineSpec());
+    }
+
+    public Map<String, Object> catalog(ApiPrincipal principal, String profile, String query) {
+        String normalizedQuery = normalizeQuery(query);
+        List<Map<String, Object>> tools = new ArrayList<>();
+        specs.values().stream()
+                .sorted(java.util.Comparator.comparing(ToolSpec::toolId))
+                .filter(spec -> visible(principal, spec))
+                .filter(spec -> matches(spec, profile, normalizedQuery))
+                .map(ToolSpec::summary)
+                .forEach(tools::add);
+
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        result.put("contractVersion", ApiContract.VERSION);
+        result.put("catalogVersion", CATALOG_VERSION);
+        result.put("permissionVersion", principal.permissionVersion());
+        result.put("tools", tools);
+        result.put("generatedAt", Instant.now().toString());
+        return result;
+    }
+
+    public Optional<Map<String, Object>> detail(ApiPrincipal principal, String toolId) {
+        ToolSpec spec = specs.get(toolId);
+        if (spec == null || !visible(principal, spec)) {
+            return Optional.empty();
+        }
+        return Optional.of(spec.detail());
+    }
+
+    public Optional<ToolSpec> executable(ApiPrincipal principal, String toolId, String toolVersion) {
+        ToolSpec spec = specs.get(toolId);
+        if (spec == null || !visible(principal, spec) || !spec.toolVersion().equals(toolVersion)) {
+            return Optional.empty();
+        }
+        return Optional.of(spec);
+    }
+
+    public String etag(ApiPrincipal principal) {
+        return "\"" + CATALOG_VERSION + ":" + principal.permissionVersion() + "\"";
+    }
+
+    private boolean visible(ApiPrincipal principal, ToolSpec spec) {
+        return serverIdentity.serverId().equals(principal.serverId())
+                && principal.permits(spec.requiredScope());
+    }
+
+    private static boolean matches(ToolSpec spec, String profile, String query) {
+        if (profile != null && !profile.isBlank() && !"read-only".equals(profile)) {
+            return false;
+        }
+        if (query.isBlank()) {
+            return true;
+        }
+        String haystack = (spec.toolId() + " " + spec.title() + " " + spec.summaryText()
+                + " " + String.join(" ", spec.tags())).toLowerCase(Locale.ROOT);
+        return haystack.contains(query);
+    }
+
+    private static String normalizeQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return "";
+        }
+        String normalized = query.trim().toLowerCase(Locale.ROOT);
+        if (normalized.length() > 100) {
+            throw new IllegalArgumentException("query 最长 100 字符");
+        }
+        return normalized;
+    }
+
+    private static ToolSpec healthSpec() {
+        Map<String, Object> input = objectSchema(Map.of(), List.of());
+        Map<String, Object> check = objectSchema(linkedMap(
+                "id", Map.of("type", "string"),
+                "status", Map.of("enum", List.of("up", "degraded", "down", "unknown")),
+                "message", Map.of("type", List.of("string", "null"))), List.of("id", "status"));
+        Map<String, Object> server = objectSchema(linkedMap(
+                "serverId", Map.of("type", "string"),
+                "displayName", Map.of("type", "string"),
+                "environment", Map.of("enum", List.of("development", "test", "staging", "production")),
+                "version", Map.of("type", List.of("string", "null"))),
+                List.of("serverId", "displayName", "environment"));
+        Map<String, Object> output = objectSchema(linkedMap(
+                "server", server,
+                "status", Map.of("enum", List.of("healthy", "degraded", "unhealthy", "unknown")),
+                "checks", Map.of("type", "array", "items", check),
+                "observedAt", Map.of("type", "string", "format", "date-time")),
+                List.of("server", "status", "checks", "observedAt"));
+        return buildSpec(HEALTH_TOOL, "读取服务器健康状态", "返回当前服务端的安全健康摘要",
+                "返回当前连接服务端经过安全筛选的 liveness、readiness 和依赖检查摘要。",
+                List.of("developer", "operations"), List.of("server", "health", "diagnostics"),
+                "read", ApiScopes.SERVER_HEALTH_READ, input, output,
+                List.of("server"), "connected_server", "required_compact", "none",
+                List.of("game/server-status", "text/markdown"));
+    }
+
+    private static ToolSpec onlineSpec() {
+        Map<String, Object> input = objectSchema(linkedMap(
+                "pageSize", linkedMap("type", "integer", "minimum", 1, "maximum", 200, "default", 100),
+                "cursor", linkedMap("type", List.of("string", "null"), "maxLength", 2048)), List.of());
+        Map<String, Object> player = objectSchema(linkedMap(
+                "characterId", Map.of("type", "string"),
+                "name", Map.of("type", "string"),
+                "level", linkedMap("type", "integer", "minimum", 0),
+                "jobId", linkedMap("type", "integer", "minimum", 0),
+                "mapId", linkedMap("type", "integer", "minimum", 0)),
+                List.of("characterId", "name", "level", "jobId", "mapId"));
+        Map<String, Object> output = objectSchema(linkedMap(
+                "serverId", Map.of("type", "string"),
+                "snapshotVersion", Map.of("type", "string"),
+                "onlineCount", linkedMap("type", "integer", "minimum", 0),
+                "returnedCount", linkedMap("type", "integer", "minimum", 0),
+                "players", Map.of("type", "array", "items", player),
+                "nextCursor", Map.of("type", List.of("string", "null")),
+                "observedAt", Map.of("type", "string", "format", "date-time")),
+                List.of("serverId", "snapshotVersion", "onlineCount", "returnedCount",
+                        "players", "nextCursor", "observedAt"));
+        return buildSpec(ONLINE_TOOL, "读取在线玩家列表", "分页返回当前在线角色的安全快照",
+                "分页返回当前连接服务端的在线角色安全快照。",
+                List.of("developer", "gm", "operations"), List.of("player", "online", "session"),
+                "sensitive_read", ApiScopes.PLAYER_ONLINE_READ, input, output,
+                List.of("server", "character"), "connected_server_online_characters",
+                "required", "page_metadata_only",
+                List.of("data/table", "game/character-card", "text/markdown"));
+    }
+
+    private static ToolSpec buildSpec(String toolId, String title, String summary, String description,
+                                      List<String> categories, List<String> tags, String riskLevel,
+                                      String requiredScope, Map<String, Object> input,
+                                      Map<String, Object> output, List<String> resourceTypes,
+                                      String resourceResolution, String auditMode,
+                                      String parameterSummary, List<String> contentTypes) {
+        LinkedHashMap<String, Object> summaryMap = new LinkedHashMap<>();
+        summaryMap.put("toolId", toolId);
+        summaryMap.put("toolVersion", TOOL_VERSION);
+        summaryMap.put("title", title);
+        summaryMap.put("summary", summary);
+        summaryMap.put("provider", "server");
+        summaryMap.put("categories", categories);
+        summaryMap.put("tags", tags);
+        summaryMap.put("riskLevel", riskLevel);
+        summaryMap.put("availability", "available");
+        summaryMap.put("permissionState", "allowed");
+
+        LinkedHashMap<String, Object> detail = new LinkedHashMap<>();
+        detail.put("contractVersion", ApiContract.VERSION);
+        detail.put("toolId", toolId);
+        detail.put("toolVersion", TOOL_VERSION);
+        detail.put("title", title);
+        detail.put("description", description);
+        detail.put("provider", "server");
+        detail.put("schemaDialect", "https://json-schema.org/draft/2020-12/schema");
+        detail.put("inputSchema", input);
+        detail.put("outputSchema", output);
+        detail.put("permission", linkedMap(
+                "requiredScopes", List.of(requiredScope),
+                "resourceTypes", resourceTypes,
+                "resourceResolution", resourceResolution));
+        detail.put("risk", linkedMap(
+                "level", riskLevel, "confirmation", "never", "supportsDryRun", false));
+        detail.put("execution", linkedMap(
+                "mode", "sync", "timeoutMs", 5000,
+                "idempotency", "not_required", "retryPolicy", "safe_read_backoff"));
+        detail.put("result", linkedMap(
+                "contentTypes", contentTypes, "dataClassification", "internal"));
+        detail.put("audit", linkedMap("mode", auditMode, "parameterSummary", parameterSummary));
+        return new ToolSpec(toolId, TOOL_VERSION, title, summary, tags, requiredScope,
+                Map.copyOf(summaryMap), Map.copyOf(detail));
+    }
+
+    private static Map<String, Object> objectSchema(Map<String, Object> properties,
+                                                    List<String> required) {
+        LinkedHashMap<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        if (!required.isEmpty()) {
+            schema.put("required", required);
+        }
+        schema.put("properties", properties);
+        schema.put("additionalProperties", false);
+        return schema;
+    }
+
+    private static LinkedHashMap<String, Object> linkedMap(Object... values) {
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        for (int index = 0; index < values.length; index += 2) {
+            result.put((String) values[index], values[index + 1]);
+        }
+        return result;
+    }
+
+    public record ToolSpec(String toolId, String toolVersion, String title, String summaryText,
+                           List<String> tags, String requiredScope,
+                           Map<String, Object> summary, Map<String, Object> detail) {
+    }
+}

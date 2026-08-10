@@ -10,6 +10,8 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
+import org.gms.data.mapper.ApiKeyMapper;
+import org.gms.data.mapper.ApiRequestAuditMapper;
 import org.gms.data.mapper.AiUsageMapper;
 import org.gms.data.mapper.BuddyListMapper;
 import org.gms.data.mapper.BusOutboxMapper;
@@ -19,11 +21,16 @@ import org.gms.data.mapper.InventoryItemMapper;
 import org.gms.data.mapper.ParamConfMapper;
 import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
+import org.gms.data.mapper.ToolExecutionAuditMapper;
 import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.ApiKeyRepository;
+import org.gms.data.repo.ApiRequestAuditRepository;
 import org.gms.data.repo.AiUsageRepository;
 import org.gms.data.repo.BuddyListRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.FlexAccountRepository;
+import org.gms.data.repo.FlexApiKeyRepository;
+import org.gms.data.repo.FlexApiRequestAuditRepository;
 import org.gms.data.repo.FlexAiUsageRepository;
 import org.gms.data.repo.FlexBuddyListRepository;
 import org.gms.data.repo.FlexBusOutboxRepository;
@@ -32,6 +39,8 @@ import org.gms.data.repo.FlexInventoryItemRepository;
 import org.gms.data.repo.FlexQuestRepository;
 import org.gms.data.repo.InventoryItemRepository;
 import org.gms.data.repo.QuestRepository;
+import org.gms.data.repo.ToolExecutionAuditRepository;
+import org.gms.data.repo.FlexToolExecutionAuditRepository;
 import org.gms.event.OutboxRepository;
 
 import javax.sql.DataSource;
@@ -58,7 +67,7 @@ public class MyBatisFlexFactory {
     @Singleton
     @Context
     public MybatisFlexBootstrap flexBootstrap(DataSource dataSource) {
-        // 关 MyBatis-Flex 启动 banner（架构红线 6：日志统一，禁 System.out 污染）。
+        // 关 MyBatis-Flex 启动 banner（架构红线 6：日志统一，禁止直接写标准输出）。
         // 非 Spring 场景（MybatisFlexBootstrap 手写装配）yml 的 mybatis-flex.global-config
         // 键无人解析，必须在这里显式设置 FlexGlobalConfig。
         FlexGlobalConfig.getDefaultConfig().setPrintBanner(false);
@@ -75,8 +84,11 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(BusOutboxMapper.class);
         bootstrap.addMapper(BusStreamMapper.class);
         bootstrap.addMapper(BuddyListMapper.class);
+        bootstrap.addMapper(ApiKeyMapper.class);
+        bootstrap.addMapper(ApiRequestAuditMapper.class);
+        bootstrap.addMapper(ToolExecutionAuditMapper.class);
         bootstrap.start();
-        log.info("MyBatis-Flex 装配完成：ParamConf/Account/Character/InventoryItem/QuestStatus/QuestProgress/AiUsage/BusOutbox/BusStream/BuddyList 十个 Mapper 已注册");
+        log.info("MyBatis-Flex 装配完成：十三个 Mapper 已注册（含 Credential、HTTP 审计与 Tool 审计）");
         return bootstrap;
     }
 
@@ -142,6 +154,24 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public ApiKeyMapper apiKeyMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(ApiKeyMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public ApiRequestAuditMapper apiRequestAuditMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(ApiRequestAuditMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public ToolExecutionAuditMapper toolExecutionAuditMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(ToolExecutionAuditMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -187,5 +217,23 @@ public class MyBatisFlexFactory {
     @Singleton
     public BuddyListRepository buddyListRepository(BuddyListMapper mapper) {
         return new FlexBuddyListRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public ApiKeyRepository apiKeyRepository(ApiKeyMapper mapper) {
+        return new FlexApiKeyRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public ApiRequestAuditRepository apiRequestAuditRepository(ApiRequestAuditMapper mapper) {
+        return new FlexApiRequestAuditRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public ToolExecutionAuditRepository toolExecutionAuditRepository(ToolExecutionAuditMapper mapper) {
+        return new FlexToolExecutionAuditRepository(mapper);
     }
 }

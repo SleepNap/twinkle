@@ -45,10 +45,30 @@ class OnlinePlayerMirrorTest {
         try (OnlinePlayerMirror mirror = new OnlinePlayerMirror(bus)) {
             bus.send(OnlinePlayerEvents.TARGET,
                     new OnlinePlayerEvents.PlayerOnline(7L, "C", 100000000, 10, 0));
+            long version = mirror.snapshotState().version();
             bus.send(OnlinePlayerEvents.TARGET,
                     new OnlinePlayerEvents.PlayerOnline(7L, "C", 100000000, 10, 0));
 
             assertThat(mirror.onlineCount()).isEqualTo(1);  // 同角色覆盖，不重复
+            assertThat(mirror.snapshotState().version()).isEqualTo(version);
+        }
+    }
+
+    @Test
+    void snapshotIsVersionedAndStablySorted() {
+        InProcessEventBus bus = new InProcessEventBus();
+        try (OnlinePlayerMirror mirror = new OnlinePlayerMirror(bus)) {
+            bus.send(OnlinePlayerEvents.TARGET,
+                    new OnlinePlayerEvents.PlayerOnline(9L, "Later", 2, 10, 0));
+            bus.send(OnlinePlayerEvents.TARGET,
+                    new OnlinePlayerEvents.PlayerOnline(2L, "Earlier", 1, 20, 100));
+
+            OnlinePlayerMirror.Snapshot snapshot = mirror.snapshotState();
+            assertThat(snapshot.version()).isEqualTo(2);
+            assertThat(snapshot.observedAt()).isNotNull();
+            assertThat(snapshot.players())
+                    .extracting(OnlinePlayerEvents.PlayerOnline::characterId)
+                    .containsExactly(2L, 9L);
         }
     }
 }

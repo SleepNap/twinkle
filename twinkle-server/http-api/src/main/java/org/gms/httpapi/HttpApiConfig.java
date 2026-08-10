@@ -6,12 +6,24 @@ import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.ApiKeyRepository;
+import org.gms.data.repo.ApiRequestAuditRepository;
+import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.event.EventBus;
 import org.gms.httpapi.limit.ApiRateLimiter;
+import org.gms.httpapi.auth.ApiAccessPolicy;
+import org.gms.httpapi.auth.ApiAuditService;
+import org.gms.httpapi.auth.ApiKeyService;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
 import org.gms.httpapi.service.AdminApiService;
+import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.httpapi.capability.ToolCatalogService;
+import org.gms.httpapi.execution.OnlinePlayerPageService;
+import org.gms.httpapi.execution.ServerHealthTool;
+import org.gms.httpapi.execution.ToolExecutionService;
 import org.gms.observability.Metrics;
+import org.gms.observability.HealthRegistry;
 import org.gms.role.ManagementProcessCondition;
 import org.gms.service.admin.AdminService;
 
@@ -26,6 +38,16 @@ import org.gms.service.admin.AdminService;
 @Factory
 @Requires(condition = ManagementProcessCondition.class)
 public class HttpApiConfig {
+
+    @Bean
+    @Singleton
+    public ServerIdentity serverIdentity(
+            @Property(name = "twinkle.server.id", defaultValue = "twinkle-local") String serverId,
+            @Property(name = "twinkle.server.name", defaultValue = "twinkle") String displayName,
+            @Property(name = "twinkle.server.environment", defaultValue = "development") String environment,
+            @Property(name = "twinkle.server.version", defaultValue = "") String version) {
+        return new ServerIdentity(serverId, displayName, environment, version);
+    }
 
     @Bean
     @Singleton
@@ -49,5 +71,58 @@ public class HttpApiConfig {
                                            AdminService adminService,
                                            OnlinePlayerMirror mirror) {
         return new AdminApiService(accountRepository, characterRepository, adminService, mirror);
+    }
+
+    @Bean
+    @Singleton
+    public ApiAccessPolicy apiAccessPolicy() {
+        return new ApiAccessPolicy();
+    }
+
+    @Bean
+    @Singleton
+    public ApiKeyService apiKeyService(ApiKeyRepository repository,
+                                       @Property(name = "twinkle.http.api.bootstrap-key", defaultValue = "")
+                                       String bootstrapKey,
+                                       ServerIdentity serverIdentity) {
+        return new ApiKeyService(repository, bootstrapKey, serverIdentity);
+    }
+
+    @Bean
+    @Singleton
+    public ApiAuditService apiAuditService(ApiRequestAuditRepository repository) {
+        return new ApiAuditService(repository);
+    }
+
+    @Bean
+    @Singleton
+    public ToolCatalogService toolCatalogService(ServerIdentity serverIdentity) {
+        return new ToolCatalogService(serverIdentity);
+    }
+
+    @Bean
+    @Singleton
+    public ServerHealthTool serverHealthTool(HealthRegistry healthRegistry,
+                                             ServerIdentity serverIdentity) {
+        return new ServerHealthTool(healthRegistry, serverIdentity);
+    }
+
+    @Bean
+    @Singleton
+    public OnlinePlayerPageService onlinePlayerPageService(
+            OnlinePlayerMirror mirror, ServerIdentity serverIdentity,
+            @Property(name = "twinkle.http.api.cursor-signing-key", defaultValue = "")
+            String cursorSigningKey) {
+        return new OnlinePlayerPageService(mirror, serverIdentity, cursorSigningKey);
+    }
+
+    @Bean
+    @Singleton
+    public ToolExecutionService toolExecutionService(
+            ToolCatalogService catalogService, ServerHealthTool healthTool,
+            OnlinePlayerPageService onlineTool, ToolExecutionAuditRepository auditRepository,
+            ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity) {
+        return new ToolExecutionService(catalogService, healthTool, onlineTool, auditRepository,
+                rateLimiter, metrics, serverIdentity);
     }
 }

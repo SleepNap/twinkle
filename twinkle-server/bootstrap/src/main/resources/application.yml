@@ -36,7 +36,11 @@ twinkle:
 
   # 服务器列表展示名（LoginServer 响应 SERVERLIST 用）
   server:
+    # twish 权限与 Cursor 绑定使用的稳定 ID；生产环境必须显式配置且不得随展示名变化。
+    id: ${TWINKLE_SERVER_ID:twinkle-local}
     name: ${TWINKLE_SERVER_NAME:twinkle}
+    environment: ${TWINKLE_SERVER_ENVIRONMENT:development}
+    version: ${TWINKLE_SERVER_VERSION:}
 
   # ============== WZ / 脚本数据源（架构 6.4：直接指定路径、单份数据、读不到启动报错） ==============
   wz:
@@ -53,6 +57,11 @@ twinkle:
   # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
   http:
     api:
+      # twish 首次签发管理密钥的根凭据。必须由环境变量注入；留空时除 OpenAPI 外全部拒绝。
+      # 建议仅首次签发 keys:manage key 时使用，随后从运行环境移除。
+      bootstrap-key: ${TWINKLE_API_BOOTSTRAP_KEY:}
+      # 短期分页 Cursor 的 HMAC 密钥；生产环境应显式配置以支持重启后继续分页。
+      cursor-signing-key: ${TWINKLE_CURSOR_SIGNING_KEY:}
       rate-limit:
         # 令牌桶容量（峰值并发请求数）
         capacity: ${TWINKLE_HTTP_RATE_CAPACITY:100}

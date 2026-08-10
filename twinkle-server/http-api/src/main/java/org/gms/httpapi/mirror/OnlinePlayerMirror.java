@@ -5,8 +5,10 @@ import org.gms.event.EventBus;
 import org.gms.service.admin.OnlinePlayerEvents;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Instant;
 
 /**
  * 在线玩家只读镜像（架构 M3-1 数据三路第③路：事件驱动快照）。
@@ -23,9 +25,11 @@ public final class OnlinePlayerMirror implements AutoCloseable {
 
 
 
-    private final Map<Long, OnlinePlayerEvents.PlayerOnline> byId = new ConcurrentHashMap<>();
+    private final Map<Long, OnlinePlayerEvents.PlayerOnline> byId = new HashMap<>();
     private final AutoCloseable subscriptionOnline;
     private final AutoCloseable subscriptionOffline;
+    private long snapshotVersion;
+    private Instant observedAt = Instant.now();
 
     public OnlinePlayerMirror(EventBus bus) {
         this.subscriptionOnline = bus.subscribe(
@@ -34,22 +38,39 @@ public final class OnlinePlayerMirror implements AutoCloseable {
                 OnlinePlayerEvents.TARGET, OnlinePlayerEvents.PlayerOffline.class, this::onOffline);
     }
 
-    private void onOnline(OnlinePlayerEvents.PlayerOnline ev) {
-        byId.put(ev.characterId(), ev);
+    private synchronized void onOnline(OnlinePlayerEvents.PlayerOnline ev) {
+        OnlinePlayerEvents.PlayerOnline previous = byId.put(ev.characterId(), ev);
+        if (!ev.equals(previous)) {
+            markChanged();
+        }
     }
 
-    private void onOffline(OnlinePlayerEvents.PlayerOffline ev) {
-        byId.remove(ev.characterId());
+    private synchronized void onOffline(OnlinePlayerEvents.PlayerOffline ev) {
+        if (byId.remove(ev.characterId()) != null) {
+            markChanged();
+        }
     }
 
     /** 在线人数。 */
-    public int onlineCount() {
+    public synchronized int onlineCount() {
         return byId.size();
     }
 
     /** 在线玩家只读快照（不可变列表）。 */
-    public List<OnlinePlayerEvents.PlayerOnline> snapshot() {
-        return List.copyOf(byId.values());
+    public synchronized List<OnlinePlayerEvents.PlayerOnline> snapshot() {
+        return snapshotState().players();
+    }
+
+    /** 版本、观测时间和玩家列表在同一锁内取得，避免分页混合不同快照。 */
+    public synchronized Snapshot snapshotState() {
+        List<OnlinePlayerEvents.PlayerOnline> players = new ArrayList<>(byId.values());
+        players.sort(java.util.Comparator.comparingLong(OnlinePlayerEvents.PlayerOnline::characterId));
+        return new Snapshot(snapshotVersion, observedAt, List.copyOf(players));
+    }
+
+    private void markChanged() {
+        snapshotVersion++;
+        observedAt = Instant.now();
     }
 
     @Override
@@ -60,5 +81,9 @@ public final class OnlinePlayerMirror implements AutoCloseable {
         } catch (Exception e) {
             log.warn("关闭在线镜像订阅异常", e);
         }
+    }
+
+    public record Snapshot(long version, Instant observedAt,
+                           List<OnlinePlayerEvents.PlayerOnline> players) {
     }
 }
