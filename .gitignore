@@ -57,8 +57,9 @@ Thumbs.db
 CLAUDE.local.md
 
 # ===== 运行时数据目录（WZ 缓存 / DB，运行期生成不入仓） =====
-data/
+# 注意：不要写裸 data/（会匹配任意层级 data 目录，把 data 模块源码/迁移也忽略）。
+# 运行时产物只落在 twinkle-server/data/ 下的 db 文件与 cache，精确忽略即可。
+twinkle-server/data/cache/
 bootstrap/data/
-
-# ===== 前端（twinkle-web，形态未设计，暂不入仓） =====
-twinkle-web/
+**/data/twinkle.db
+**/data/cache/

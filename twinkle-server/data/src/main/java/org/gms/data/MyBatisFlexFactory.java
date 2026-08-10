@@ -1,5 +1,6 @@
 package org.gms.data;
 
+import com.mybatisflex.core.FlexGlobalConfig;
 import com.mybatisflex.core.MybatisFlexBootstrap;
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
@@ -57,6 +58,10 @@ public class MyBatisFlexFactory {
     @Singleton
     @Context
     public MybatisFlexBootstrap flexBootstrap(DataSource dataSource) {
+        // 关 MyBatis-Flex 启动 banner（架构红线 6：日志统一，禁 System.out 污染）。
+        // 非 Spring 场景（MybatisFlexBootstrap 手写装配）yml 的 mybatis-flex.global-config
+        // 键无人解析，必须在这里显式设置 FlexGlobalConfig。
+        FlexGlobalConfig.getDefaultConfig().setPrintBanner(false);
         MybatisFlexBootstrap bootstrap = new MybatisFlexBootstrap();
         bootstrap.setDataSource(dataSource);
         bootstrap.addMapper(ParamConfMapper.class);
