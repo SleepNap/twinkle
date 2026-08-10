@@ -75,8 +75,10 @@
 
 ### 决策 3：agent 客户端独立仓库，不放本项目
 
+> **命名：twish**（2026-08-10 定）。合成词 twinkle（闪闪）× wish（愿），与 twinkle 成"tw"前缀一对。设计来源：twinkle 的"闪闪"承载"星愿"，agent 是帮玩家实现心愿的助手（客服能力即此角色的具象）。项目名用英文（中文无法命名项目），twish 为自造词，需接受对外解释成本。
+
 ```
-twinkle 仓库（服务端） ──▶ 能力面 HTTP + api-key ──▶ agent 客户端（独立仓库）
+twinkle 仓库（服务端） ──▶ 能力面 HTTP + api-key ──▶ twish（独立仓库）
    Java / Maven / 2C2G                                 CLI / 本地工具 / 记忆
 ```
 
@@ -87,13 +89,13 @@ twinkle 仓库（服务端） ──▶ 能力面 HTTP + api-key ──▶ agent
 
 ### 决策 4：twinkle-web 留在本仓库
 
-| | twinkle-web | agent 客户端 |
+| | twinkle-web | twish（agent 客户端） |
 |---|---|---|
 | 与服务端关系 | **不可分割的展示层**（同一个"控制台"功能） | 独立工具（能连任何能力面） |
 | 迭代节奏 | 跟服务端功能走 | 快（模型/工具/本地能力高频变） |
 | 复用性 | 只服务 twinkle | 可服务多个后端 |
 
-web 是服务端的一部分，agent 客户端是消费者，两者归属不同。
+web 是服务端的一部分，twish 是消费者，两者归属不同。
 
 ### 决策 5：敏感操作必须服务端授权 + 审计
 
@@ -110,7 +112,7 @@ web 是服务端的一部分，agent 客户端是消费者，两者归属不同�
 
 > **服务端 = 能力面（REST + api-key + scope + 审计）+ 可选 agent 宿主（`twinkle.ai.enabled`，2C2G 默认关）+ 薄 LLM 客户端。外部 agent = 智慧。web = 能力面的可视化。**
 
-三个独立的东西：**twinkle（服务端）、twinkle-web（控制台）、agent 客户端**。服务端与 agent 之间只靠 api-key + OpenAPI 说话，谁都不臃肿谁。服务端 agent 宿主作为可选能力保留在 twinkle 内，不拆不删，覆盖"服务端主动"场景。
+三个独立的东西：**twinkle（服务端）、twinkle-web（控制台）、twish（agent 客户端）**。服务端与 twish 之间只靠 api-key + OpenAPI 说话，谁都不臃肿谁。服务端 agent 宿主作为可选能力保留在 twinkle 内，不拆不删，覆盖"服务端主动"场景。
 
 ---
 
@@ -158,7 +160,7 @@ web 是服务端的一部分，agent 客户端是消费者，两者归属不同�
 2. **ai 模块可选化（已完成 2026-08-10）**：`AiEnabledCondition` + `twinkle.ai.enabled`（默认 false），管理进程 + 开关双条件才装配；默认 2C2G 不装配省资源。
 3. **服务端 agent 完善（启用后，核心方向=客服能力）**：接入真实 LLM（`ChatModel` bean 换 OpenAI/Ollama，api-key 走 env）→ 落地"AI 值班 GM"：理解玩家自然语言 → 服务端取证（背包/交易/DB，写审计）→ 自然语言回应。这是 agent 保留的立足点。
 4. **web 控制台**：作为能力面的可视化，后做。
-5. **agent 客户端**：独立仓库，先最小化（登录授权签 key → 调能力面），再逐步加本地工具。
+5. **twish（agent 客户端）**：独立仓库，先最小化（登录授权签 key → 调能力面），再逐步加本地工具。
 
 ---
 
