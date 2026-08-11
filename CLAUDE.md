@@ -4,11 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目状态
 
-**热更新、扩展性好的冒险岛后台（MapleStory v83 服务端）**。参考项目：北斗（`E:\LocalGit\GitHub\BeiDou-Server`）。
+**热更新、扩展性好的冒险岛后台（MapleStory v83 服务端）**。参考项目：北斗（`E:\LocalGit\GitHub\BeiDou-Server`，GPL，只作理解、禁止逐字复制）。
 
-当前为**仓库骨架**：尚无 pom.xml / 构建脚本 / 业务代码。`twinkle-server`（Java，包根 `org.gms`）与 `twinkle-web`（前端占位）均为空目录。**任何构建命令尚不存在，不要编造**；落地时按 `ARCHITECTURE.md` 从 M0 里程碑开始。
+**M0-M6 全部完成**（2026-08-09）：17 个 Maven 模块、全量测试通过。当前焦点转向**能力面**：twinkle 定位为服务端能力提供方，经 `/api/v1` 向外部 agent 客户端 **twish** 提供 Tool-first 能力面（api-key + scope + 审计）；`ai/` 模块改为可选装配（`twinkle.ai.enabled`，默认关，同 WAL 按需启用）。契约与形态决策见 `docs/twish-capability-api.md`、`docs/ai-agent-architecture-decision.md`。
 
 **`ARCHITECTURE.md` 是唯一权威规范**——设计决策、模块划分、运行拓扑均以该文档为准，改动前必须先读。所有文档、注释使用中文。
+
+各里程碑进度、遗留与"完成范围诚实标注"见共享记忆 `.claude/memory/twinkle-project-context.md` 与 `twinkle-server/tasks/` 任务文档（根 CLAUDE.md 不复述逐项明细）。
+
+## 常用命令
+
+在 `twinkle-server/` 下执行（构建基线：**JDK 用 GraalVM for JDK 21**，版本须与 pom 的 `graalvm-js.version` 匹配，见 README「环境要求」）。
+
+- **全量构建 + 测试**：`mvn -B verify`（17 模块；含 JaCoCo 覆盖率报告 + ArchUnit 架构测试 + LoggingDiscipline 静态扫描）
+- **单模块单测**：`mvn -pl <模块> -am -Dtest=<测试类> -Dsurefire.failIfNoSpecifiedTests=false test`（`-am` 带上游依赖；`-Dsurefire.failIfNoSpecifiedTests=false` 防上游模块因无匹配测试报错——实测必需）。例：`mvn -pl bootstrap -am -Dtest=BootstrapContextTest -Dsurefire.failIfNoSpecifiedTests=false test`
+- **只编译不测**：`mvn -B -DskipTests compile`
+- **启动（single 档）**：`./scripts/start.sh`（前置：`mvn -B verify` 产物作 `target/twinkle-server.jar`；默认 `--profile=single`）
+- **split 多进程 / 滚动重启 / 回滚**：`./scripts/split-start.sh` / `./scripts/rolling-restart.sh [频道号]` / `./scripts/rollback.sh`（见 `docs/ops/split-deployment.md`、`docs/ops/switch-to-production.md`）
+- **启动自检**：`curl http://127.0.0.1:8080/admin/v1/health`、`/admin/v1/channels`、`/internal/v1/health`
+
+关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`micronaut.server.host`=`127.0.0.1`（默认绑 loopback，红线 20）、`micronaut.server.port`=`8080`。`data/twinkle.db` 为运行期产物不入仓。
+
+## 能力面与外部 agent（twish）
+
+twinkle 服务端 = **能力面（主）+ 可选 agent 宿主（辅）**。对外能力统一经 `/api/v1` 暴露，鉴权走 **API-key（Bearer）+ scope 授权 + 审计**（`api_request_audit`/`tool_execution_audit` 落库）；客户端不可信，危险操作一律服务端执行后回传结果，不直踩游戏内存。
+
+- **twish**：外部 agent 客户端，独立仓库（契约真值在 twish 仓库 `docs/server-tasks/`，twinkle 侧接入说明见 `docs/twish-capability-api.md`）。只读闭环：`identity/me → capabilities → tool-executions → auditRef`，首批 Tool 为 `server.health.read@1.0.0` 与 `player.online.list@1.0.0`。
+- **服务端 agent 宿主**（`ai/` 模块）：保留但不默认装配，`twinkle.ai.enabled=true` 显式启用（2C2G 红线）。覆盖"玩家触发游戏事件 / 日志突变"等外部 agent 覆盖不了的服务端主动场景。`LocalRuleChatModel` 为自研规则路由，换真实 LLM 只换 `ChatModel` bean（`TWINKLE_LLM_API_KEY` env）。
+- **生产身份配置**（必配）：`TWINKLE_SERVER_ID` / `TWINKLE_SERVER_NAME` / `TWINKLE_SERVER_ENVIRONMENT` / `TWINKLE_CURSOR_SIGNING_KEY`（≥32 字节 HMAC）；首次签发用 loopback-only 的 `TWINKLE_API_BOOTSTRAP_KEY`。
+- 管理侧/能力面不得依赖 `domain-game`（红线 3）；数据三路：查 DB（data repository）/ 经 `AdminService` core 契约 / 事件快照只读镜像（`OnlinePlayerMirror`）。
 
 ## 架构（三条铁律 + 关键约束）
 
@@ -20,7 +44,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **性能是硬指标**：2C2G 单进程必须能跑（硬红线）。任何默认引入重服务、常驻大内存、独立进程的方案都违反此线。
 3. **状态与逻辑分离**：游戏实体 = 纯数据 + 操作数据的逻辑系统。这是热重载、分布式、插件三者的共同地基。
 
-### 模块结构（规划的 Maven 多模块，依赖单向无环）
+### 模块结构（Maven 多模块，依赖单向无环）
 
 - **公共底座**：`bootstrap`（唯一 main，读 `--profile`）、`core`（DI/EventBus/配置/调度/插件/热更新）、`net-netty`、`net-packet`（v83 opcode/HandlerRegistry）、`data`（MyBatis-Flex + 自研迁移器）、`db-dialect`、`plugin-api`
 - **游戏域**（频道进程）：`domain-game`、`domain-script`（GraalVM JS）、`wz-provider`、`channel`
@@ -76,4 +100,4 @@ Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM 
 
 ## 里程碑
 
-按 `ARCHITECTURE.md` 第十一节推进：M0（骨架+基础验证+热更新地基）→ M1（协议+Netty）→ M2（游戏逻辑重写，参考项目作 parity 真值）→ M3（HTTP+AI+渐进重载）→ M4（插件+热更新 L1-L4）→ M5（Web 控制台+迁移）→ M6（分布式）。**M0-M6 全部完成**（M6 三阶段 2026-08-09：内部通信网络总线 + split 拆进程 + 可靠总线恰好一次 + CC 迁移跨进程 + 升级滚动；M5 Web 控制台前端页面未做；各里程碑遗留项见任务文档"完成范围诚实标注"节）。**事故报告阶段 B 已完成**（2026-08-09，`docs/ghost-player-monster-controller-incident.md`）：分阶段心跳 + 会话代际 + 怪物控制租约三块稳定层落地，见项目记忆"幽灵玩家事故报告阶段 B 完成"节。
+按 `ARCHITECTURE.md` 第十一节推进：M0（骨架+基础验证+热更新地基）→ M1（协议+Netty）→ M2（游戏逻辑重写，参考项目作 parity 真值）→ M3（HTTP+AI+渐进重载）→ M4（插件+热更新 L1-L4）→ M5（Web 控制台+迁移）→ M6（分布式）。**M0-M6 全部完成**（M6 三阶段 2026-08-09：内部通信网络总线 + split 拆进程 + 可靠总线恰好一次 + CC 迁移跨进程 + 升级滚动；M5 Web 控制台前端页面未做——2026-08-10 起 twinkle-web 重启，设计系统已定稿（Notion 风格，React 19 + Vite + shadcn/ui + Tailwind，见 `twinkle-web/docs/design-system.md` 与 `src/styles/tokens.css`），页面未开工；各里程碑遗留项见任务文档"完成范围诚实标注"节）。**事故报告阶段 B 已完成**（2026-08-09，`docs/ghost-player-monster-controller-incident.md`）：分阶段心跳 + 会话代际 + 怪物控制租约三块稳定层落地，见项目记忆"幽灵玩家事故报告阶段 B 完成"节。
