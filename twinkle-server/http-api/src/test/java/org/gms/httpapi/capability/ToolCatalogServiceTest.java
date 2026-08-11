@@ -57,6 +57,19 @@ public final class ToolCatalogServiceTest {
                 .isEqualTo("available"));
     }
 
+    @Test
+    public void inventoryToolRequiresDedicatedScopeAndDeclaresCharacterInput() {
+        ToolCatalogService service = new ToolCatalogService(identity());
+        ApiPrincipal principal = principal(Set.of(ApiScopes.PLAYER_INVENTORY_READ), "server-1");
+
+        assertThat(service.detail(principal, ToolCatalogService.INVENTORY_TOOL)).isPresent()
+                .get().satisfies(detail -> {
+                    assertThat(detail.get("toolId")).isEqualTo(ToolCatalogService.INVENTORY_TOOL);
+                    assertThat(detail.toString()).contains("characterId").contains("player.inventory:read");
+                });
+        assertThat(service.detail(principal, ToolCatalogService.ONLINE_TOOL)).isEmpty();
+    }
+
     private static final class AvailableAgent implements ServerAgentService {
         @Override
         public boolean available() {

@@ -37,6 +37,7 @@ public final class ToolExecutionService {
     private final ToolCatalogService catalogService;
     private final ServerHealthTool healthTool;
     private final OnlinePlayerPageService onlineTool;
+    private final PlayerInventoryTool inventoryTool;
     private final ToolExecutionAuditRepository auditRepository;
     private final ApiRateLimiter rateLimiter;
     private final Metrics metrics;
@@ -48,12 +49,14 @@ public final class ToolExecutionService {
 
     public ToolExecutionService(ToolCatalogService catalogService, ServerHealthTool healthTool,
                                 OnlinePlayerPageService onlineTool,
+                                PlayerInventoryTool inventoryTool,
                                 ToolExecutionAuditRepository auditRepository,
                                 ApiRateLimiter rateLimiter, Metrics metrics,
                                 ServerIdentity serverIdentity, ServerAgentService serverAgent) {
         this.catalogService = catalogService;
         this.healthTool = healthTool;
         this.onlineTool = onlineTool;
+        this.inventoryTool = inventoryTool;
         this.auditRepository = auditRepository;
         this.rateLimiter = rateLimiter;
         this.metrics = metrics;
@@ -88,7 +91,8 @@ public final class ToolExecutionService {
                     "tool_unavailable", "服务端 Agent 当前未启用", true, null,
                     call.requestId(), Map.of());
         }
-        if (ToolCatalogService.ONLINE_TOOL.equals(call.toolId())
+        if ((ToolCatalogService.ONLINE_TOOL.equals(call.toolId())
+                || ToolCatalogService.INVENTORY_TOOL.equals(call.toolId()))
                 && (call.intentSummary() == null || call.intentSummary().isBlank())) {
             throw invalidInput("敏感读取必须提供 clientContext.intentSummary",
                     call.requestId(), null);
@@ -127,6 +131,8 @@ public final class ToolExecutionService {
                 output = healthTool.read(call.requestId(), executionId);
             } else if (ToolCatalogService.ONLINE_TOOL.equals(call.toolId())) {
                 output = onlineTool.page(principal, call.input(), call.requestId(), executionId);
+            } else if (ToolCatalogService.INVENTORY_TOOL.equals(call.toolId())) {
+                output = inventoryTool.read(call.input(), call.requestId(), executionId);
             } else if (ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())) {
                 output = investigateWithAgent(principal, call);
             } else if (ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) {
@@ -263,6 +269,9 @@ public final class ToolExecutionService {
         }
         if (ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) {
             return "conversationIdHash=" + shortHash(String.valueOf(call.input().get("conversationId")));
+        }
+        if (ToolCatalogService.INVENTORY_TOOL.equals(call.toolId())) {
+            return "characterId=" + call.input().get("characterId");
         }
         return "none";
     }

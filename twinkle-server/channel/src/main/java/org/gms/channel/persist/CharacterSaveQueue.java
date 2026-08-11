@@ -4,6 +4,8 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.PlayerStorage;
 import org.gms.data.repo.CharacterRepository;
+import org.gms.data.repo.CharacterSnapshotRepository;
+import org.gms.data.repo.InventoryItemRepository;
 import org.gms.domain.game.Character;
 
 import java.util.Map;
@@ -32,13 +34,35 @@ public final class CharacterSaveQueue implements AutoCloseable {
 
 
     private final CharacterRepository repository;
+    private final InventoryItemRepository inventoryItemRepository;
+    private final CharacterSnapshotRepository snapshotRepository;
     private final CharacterLoader loader;
     private final PlayerStorage playerStorage;
     private final ExecutorService singleWriter;
     private final ConcurrentMap<Long, Boolean> pending = new ConcurrentHashMap<>();
 
     public CharacterSaveQueue(CharacterRepository repository, CharacterLoader loader, PlayerStorage playerStorage) {
+        this(repository, null, null, loader, playerStorage);
+    }
+
+    public CharacterSaveQueue(CharacterRepository repository, InventoryItemRepository inventoryItemRepository,
+                              CharacterLoader loader, PlayerStorage playerStorage) {
+        this(repository, inventoryItemRepository, null, loader, playerStorage);
+    }
+
+    /** 生产装配入口：角色与背包经同一事务原子落盘。 */
+    public CharacterSaveQueue(CharacterSnapshotRepository snapshotRepository,
+                              CharacterLoader loader, PlayerStorage playerStorage) {
+        this(null, null, snapshotRepository, loader, playerStorage);
+    }
+
+    private CharacterSaveQueue(CharacterRepository repository,
+                               InventoryItemRepository inventoryItemRepository,
+                               CharacterSnapshotRepository snapshotRepository,
+                               CharacterLoader loader, PlayerStorage playerStorage) {
         this.repository = repository;
+        this.inventoryItemRepository = inventoryItemRepository;
+        this.snapshotRepository = snapshotRepository;
         this.loader = loader;
         this.playerStorage = playerStorage;
         this.singleWriter = Executors.newSingleThreadExecutor(r -> {
@@ -61,9 +85,10 @@ public final class CharacterSaveQueue implements AutoCloseable {
             return; // 已在队列，去重
         }
         singleWriter.execute(() -> {
+            long savedVersion = chr.dirtyVersion();
             try {
-                repository.save(loader.toData(chr));
-                chr.clearDirty();
+                persist(chr);
+                chr.clearDirty(savedVersion);
             } catch (RuntimeException e) {
                 log.error("角色存档失败: id={}", chr.getId(), e);
             } finally {
@@ -83,9 +108,10 @@ public final class CharacterSaveQueue implements AutoCloseable {
         if (chr == null) {
             return;
         }
+        long savedVersion = chr.dirtyVersion();
         try {
-            repository.save(loader.toData(chr));
-            chr.clearDirty();
+            persist(chr);
+            chr.clearDirty(savedVersion);
         } catch (RuntimeException e) {
             log.error("角色同步存档失败: id={}", chr.getId(), e);
         }
@@ -121,12 +147,29 @@ public final class CharacterSaveQueue implements AutoCloseable {
         int flushed = 0;
         for (Character chr : playerStorage.all()) {
             if (chr.isDirty()) {
-                repository.save(loader.toData(chr));
-                chr.clearDirty();
+                long savedVersion = chr.dirtyVersion();
+                persist(chr);
+                chr.clearDirty(savedVersion);
                 flushed++;
             }
         }
         return flushed;
+    }
+
+    private void persist(Character chr) {
+        if (snapshotRepository != null) {
+            synchronized (chr) {
+                snapshotRepository.save(loader.toData(chr), loader.toInventoryData(chr),
+                        loader.toQuestStatusData(chr), loader.toQuestProgressData(chr), loader.toSkillData(chr));
+            }
+            return;
+        }
+        if (repository != null) {
+            repository.save(loader.toData(chr));
+        }
+        if (inventoryItemRepository != null) {
+            inventoryItemRepository.replaceAll(chr.getId(), loader.toInventoryData(chr));
+        }
     }
 
     /**

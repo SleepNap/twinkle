@@ -20,10 +20,13 @@ Bearer Credential
 |---|---|---|---|
 | `server.health.read@1.0.0` | `server.health:read` | `read` | `HealthRegistry` 安全映射 |
 | `player.online.list@1.0.0` | `player.online:read` | `sensitive_read` | `OnlinePlayerMirror` 只读快照 |
+| `player.inventory.read@1.0.0` | `player.inventory:read` | `sensitive_read` | 频道内存态背包真值，经 `AdminService`/RPC 纯 DTO 投影 |
 | `server.agent.investigate@1.0.0` | `ai:use` | `sensitive_read` | 服务端 Agent + 只读取证工具 |
 | `server.agent.conversation.close@1.0.0` | `ai:use` | `read` | Subject 隔离的会话记忆 |
 
 在线玩家 Tool 按角色 ID 稳定排序，支持 1–200 条分页。Cursor 使用 HMAC 防篡改，并绑定 Subject、Credential、`serverId`、快照版本和有效期；镜像变化后旧 Cursor 返回 `409 snapshot_changed`。
+
+在线背包 Tool 输入正整数字符串 `characterId`，只读取当前频道在线角色，不回退到可能过期的数据库存档。输出按背包类型、槽位稳定排序，包含五类背包的精确实例字段、装备扩展与宠物状态；角色不在线返回 `404 resource_not_found`。该 Tool 在 single 下直读频道服务，在 split 下走同一 `AdminService` RPC 契约。
 
 Agent Tool 仅在 `twinkle.ai.enabled=true` 时标记为 `available`；关闭时仍可发现，但状态为
 `unavailable`，执行返回 `503 tool_unavailable`。twish 应先读取目录状态，再通过统一
@@ -38,7 +41,7 @@ Agent Tool 仅在 `twinkle.ai.enabled=true` 时标记为 `available`；关闭时
 | 能力 | twinkle 服务端 | twish Desktop | 结论 |
 |---|---|---|---|
 | Bearer Credential、身份快照、scope 展示 | 已支持 | 已支持连接检测与展示 | 已闭环 |
-| Capability 目录及 `availability` | 已支持四个 Tool | 已读取通用目录 | 已闭环 |
+| Capability 目录及 `availability` | 已支持五个 Tool | 已读取通用目录 | 已闭环 |
 | `server.health.read` | 已支持 | 已支持任务执行与结果展示 | 已闭环 |
 | `player.online.list` | 已支持 | 已支持任务执行与结果展示 | 已闭环 |
 | `server.agent.investigate` | 已支持发现、执行、审计和 Subject 隔离 | 尚无任务类型、调用分支和 UI 入口 | **未闭环** |
@@ -82,7 +85,7 @@ Agent”。
 curl -X POST http://127.0.0.1:8080/api/v1/auth/keys \
   -H "Authorization: Bearer $TWINKLE_API_BOOTSTRAP_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"displayName":"twish-readonly","scopes":["server.health:read","player.online:read","ai:use"]}'
+  -d '{"displayName":"twish-readonly","scopes":["server.health:read","player.online:read","player.inventory:read","ai:use"]}'
 ```
 
 API Key 绑定 Subject 与当前 `serverId`。非 bootstrap 签发者只能创建自身 scope 和有效期的子集，不能借 `keys:manage` 扩权或跨服签发。支持禁用、恢复、吊销和轮换；轮换后旧秘密立即失效。

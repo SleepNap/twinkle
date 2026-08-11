@@ -2,6 +2,10 @@ package org.gms.bootstrap;
 
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.runtime.server.EmbeddedServer;
+import org.gms.channel.PlayerStorage;
+import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.PetItem;
 import org.gms.event.EventBus;
 import org.gms.data.repo.ApiRequestAuditRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
@@ -330,7 +334,7 @@ class HttpApiE2ETest {
                     authorized(base + "/api/v1/auth/keys")
                             .header("Content-Type", "application/json")
                             .POST(HttpRequest.BodyPublishers.ofString(
-                                    "{\"displayName\":\"twish-readonly\",\"scopes\":[\"server.health:read\",\"player.online:read\"]}"))
+                                    "{\"displayName\":\"twish-readonly\",\"scopes\":[\"server.health:read\",\"player.online:read\",\"player.inventory:read\"]}"))
                             .build(), HttpResponse.BodyHandlers.ofString());
             assertThat(issued.statusCode()).isEqualTo(201);
             String token = jsonString(issued.body(), "token");
@@ -349,6 +353,7 @@ class HttpApiE2ETest {
             assertThat(catalog.statusCode()).isEqualTo(200);
             assertThat(catalog.body()).contains("catalogVersion")
                     .contains("server.health.read").contains("player.online.list")
+                    .contains("player.inventory.read")
                     .doesNotContain("inputSchema");
             assertThat(catalog.headers().firstValue("ETag")).isPresent();
 
@@ -421,6 +426,32 @@ class HttpApiE2ETest {
             String cursor = jsonString(online.body(), "nextCursor");
             assertThat(cursor).isNotBlank();
             assertThat(toolAudits.count()).isEqualTo(2);
+
+            Character inventoryCharacter = new Character(1L);
+            inventoryCharacter.setId(42L);
+            inventoryCharacter.setName("InventoryHero");
+            PetItem pet = new PetItem(5_000_000, 9001);
+            pet.setPosition((short) 2);
+            pet.setPetName("小黑");
+            pet.setCloseness((short) 3456);
+            inventoryCharacter.getInventory(InventoryType.CASH).putAtSlot((short) 2, pet);
+            inventoryCharacter.markDirty();
+            ctx.getBean(PlayerStorage.class).add(inventoryCharacter);
+            String inventoryRequestId = "req_inventory_e2e_01";
+            HttpResponse<String> inventory = client.send(
+                    bearer(base + "/api/v1/tool-executions", token)
+                            .header("X-Request-Id", inventoryRequestId)
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(toolBody(inventoryRequestId,
+                                    "player.inventory.read", "{\"characterId\":\"42\"}",
+                                    "核对在线角色背包"))).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(inventory.statusCode()).isEqualTo(200);
+            assertThat(inventory.body()).contains("\"characterId\":\"42\"")
+                    .contains("InventoryHero").contains("\"itemType\":\"pet\"")
+                    .contains("\"petId\":\"9001\"").contains("小黑")
+                    .contains("\"closeness\":3456");
+            assertThat(toolAudits.count()).isEqualTo(3);
 
             eventBus.send(OnlinePlayerEvents.TARGET,
                     new OnlinePlayerEvents.PlayerOnline(40L, "Forty", 100000040, 40, 400));

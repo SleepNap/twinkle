@@ -74,12 +74,18 @@ public class Inventory {
     }
 
     public boolean isFull() {
-        return items.size() >= slotLimit;
+        return freeSlots() == 0;
     }
 
     /** 空槽数（槽位上限 - 已用）。 */
     public int freeSlots() {
-        return Math.max(0, slotLimit - items.size());
+        int usedSlots = 0;
+        for (short position : items.keySet()) {
+            if (position > 0 && position <= slotLimit) {
+                usedSlots++;
+            }
+        }
+        return Math.max(0, slotLimit - usedSlots);
     }
 
     /** 全部物品（不可变视图）。 */

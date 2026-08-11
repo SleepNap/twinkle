@@ -49,6 +49,15 @@ public final class RemoteAdminService implements AdminService {
     }
 
     @Override
+    public PlayerInventory inventorySnapshot(long characterId) {
+        InternalProtocol.RpcResponse response = rpc("inventorySnapshot", characterId);
+        if (response == null || !response.ok() || "null".equals(response.value())) {
+            return null;
+        }
+        return JsonCodec.decode(response.value(), PlayerInventory.class.getName());
+    }
+
+    @Override
     public boolean kick(long characterId) {
         InternalProtocol.RpcResponse resp = rpc("kick", characterId);
         if (resp == null || !resp.ok()) {

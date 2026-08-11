@@ -4,8 +4,10 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.spi.TradeItemSnapshot;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,7 +21,7 @@ public final class TradeSide {
     private final CharacterState trader;
 
     @Getter(AccessLevel.NONE)
-    private final Map<Integer, Integer> offeredItems = new HashMap<>();
+    private final Map<Byte, TradeItemSnapshot> offeredItems = new LinkedHashMap<>();
 
     private int meso;
     private boolean locked;
@@ -28,9 +30,21 @@ public final class TradeSide {
         this.trader = trader;
     }
 
-    /** 添加出价物品（同物品合并数量）。 */
-    public void offerItem(int itemId, int quantity) {
-        offeredItems.merge(itemId, quantity, Integer::sum);
+    /**
+     * 添加精确槽位出价。交易窗口目标槽和背包源槽均只能使用一次，防止重复承诺同一实例。
+     */
+    public boolean offerItem(byte targetSlot, TradeItemSnapshot item) {
+        if (item == null || Byte.toUnsignedInt(targetSlot) > 8 || offeredItems.containsKey(targetSlot)) {
+            return false;
+        }
+        for (TradeItemSnapshot offered : offeredItems.values()) {
+            if (offered.inventoryType() == item.inventoryType()
+                    && offered.sourcePosition() == item.sourcePosition()) {
+                return false;
+            }
+        }
+        offeredItems.put(targetSlot, item);
+        return true;
     }
 
     /** 清空出价物品（显式中断交易时回滚用：物品从未离背包，清 offer 即归位）。 */
@@ -38,8 +52,8 @@ public final class TradeSide {
         offeredItems.clear();
     }
 
-    /** 出价物品（不可变视图：itemId → quantity）。 */
-    public Map<Integer, Integer> offeredItems() {
-        return Map.copyOf(offeredItems);
+    /** 出价物品（按交易窗口槽位加入顺序的不可变视图）。 */
+    public List<TradeItemSnapshot> offeredItems() {
+        return List.copyOf(offeredItems.values());
     }
 }

@@ -20,6 +20,7 @@ import org.gms.httpapi.service.AdminApiService;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.execution.OnlinePlayerPageService;
+import org.gms.httpapi.execution.PlayerInventoryTool;
 import org.gms.httpapi.execution.ServerHealthTool;
 import org.gms.httpapi.execution.ToolExecutionService;
 import org.gms.service.agent.ServerAgentService;
@@ -120,12 +121,20 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
+    public PlayerInventoryTool playerInventoryTool(AdminService adminService,
+                                                   ServerIdentity serverIdentity) {
+        return new PlayerInventoryTool(adminService, serverIdentity);
+    }
+
+    @Bean
+    @Singleton
     public ToolExecutionService toolExecutionService(
             ToolCatalogService catalogService, ServerHealthTool healthTool,
-            OnlinePlayerPageService onlineTool, ToolExecutionAuditRepository auditRepository,
+            OnlinePlayerPageService onlineTool, PlayerInventoryTool inventoryTool,
+            ToolExecutionAuditRepository auditRepository,
             ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity,
             ServerAgentService serverAgentService) {
-        return new ToolExecutionService(catalogService, healthTool, onlineTool, auditRepository,
-                rateLimiter, metrics, serverIdentity, serverAgentService);
+        return new ToolExecutionService(catalogService, healthTool, onlineTool, inventoryTool,
+                auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService);
     }
 }

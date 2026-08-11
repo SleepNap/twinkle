@@ -4,7 +4,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -23,22 +24,47 @@ public class QuestStatus {
     private State state = State.NOT_STARTED;
 
     @Getter(AccessLevel.NONE)
-    private final Map<Integer, Integer> progress = new HashMap<>();
+    private final Map<Integer, String> progress = new LinkedHashMap<>();
+
+    /** 完成时间（Unix 毫秒）；未记录为 0。 */
+    private long completionTime;
+    private long expirationTime;
+    private int forfeited;
+    private int completed;
+    /** WZ infoNumber 对应的附加任务记录；无则为 0。 */
+    private int infoNumber;
 
     public QuestStatus(int questId) {
         this.questId = questId;
     }
 
     public void setProgress(int key, int value) {
-        progress.put(key, value);
+        progress.put(key, Integer.toString(value));
+    }
+
+    public void setProgressText(int key, String value) {
+        progress.put(key, value == null ? "" : value);
     }
 
     public int getProgress(int key) {
-        return progress.getOrDefault(key, 0);
+        String value = progress.get(key);
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     /** 全部进度（不可变视图）。 */
-    public Map<Integer, Integer> progress() {
-        return Map.copyOf(progress);
+    public Map<Integer, String> progress() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(progress));
+    }
+
+    /** v83 进图任务段使用的拼接进度串，顺序按持久化进度行保持。 */
+    public String progressData() {
+        return String.join("", progress.values());
     }
 }

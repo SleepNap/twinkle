@@ -9,8 +9,22 @@ import org.gms.data.SimpleDriverDataSource;
 import org.gms.data.entity.Account;
 import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.CharacterMapper;
+import org.gms.data.mapper.InventoryItemMapper;
+import org.gms.data.mapper.QuestProgressMapper;
+import org.gms.data.mapper.QuestStatusMapper;
+import org.gms.data.mapper.SkillMapper;
 import org.gms.data.migrate.MigrationRunner;
 import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.data.repo.FlexCharacterSnapshotRepository;
+import org.gms.data.repo.FlexInventoryItemRepository;
+import org.gms.data.repo.FlexQuestRepository;
+import org.gms.data.repo.FlexSkillRepository;
+import org.gms.domain.game.inventory.Equip;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
+import org.gms.domain.game.inventory.PetItem;
+import org.gms.domain.game.quest.QuestStatus;
+import org.gms.domain.game.skill.SkillEntry;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
@@ -51,6 +65,10 @@ class L4RestartE2ETest {
         flex.setDataSource(ds);
         flex.addMapper(AccountMapper.class);
         flex.addMapper(CharacterMapper.class);
+        flex.addMapper(InventoryItemMapper.class);
+        flex.addMapper(QuestStatusMapper.class);
+        flex.addMapper(QuestProgressMapper.class);
+        flex.addMapper(SkillMapper.class);
         flex.start();
         CharacterMapper characterMapper = flex.getMapper(CharacterMapper.class);
 
@@ -91,10 +109,19 @@ class L4RestartE2ETest {
 
         // ---- 频道装配：loader / 在线表 / 存档队列 / 重启编排 ----
         DefaultVersionGate versionGate = new DefaultVersionGate();
-        CharacterLoader loader = new CharacterLoader(versionGate);
+        FlexInventoryItemRepository inventoryRepo = new FlexInventoryItemRepository(
+                flex.getMapper(InventoryItemMapper.class));
+        FlexQuestRepository questRepo = new FlexQuestRepository(
+                flex.getMapper(QuestStatusMapper.class), flex.getMapper(QuestProgressMapper.class));
+        FlexSkillRepository skillRepo = new FlexSkillRepository(flex.getMapper(SkillMapper.class));
+        CharacterLoader loader = new CharacterLoader(versionGate, inventoryRepo, questRepo, skillRepo);
         PlayerStorage players = new PlayerStorage();
         FlexCharacterRepository repo = new FlexCharacterRepository(characterMapper);
-        CharacterSaveQueue saveQueue = new CharacterSaveQueue(repo, loader, players);
+        FlexCharacterSnapshotRepository snapshotRepo = new FlexCharacterSnapshotRepository(
+                characterMapper, flex.getMapper(InventoryItemMapper.class),
+                flex.getMapper(QuestStatusMapper.class), flex.getMapper(QuestProgressMapper.class),
+                flex.getMapper(SkillMapper.class));
+        CharacterSaveQueue saveQueue = new CharacterSaveQueue(snapshotRepo, loader, players);
         GameTickLoop tickLoop = new GameTickLoop(5);
         EntityReloadCoordinator coordinator = new EntityReloadCoordinator();
         EntityReloadService reloadService = new EntityReloadService(coordinator, versionGate);
@@ -106,6 +133,36 @@ class L4RestartE2ETest {
             var chr = loader.fromData(repo.findById(heroId).get());
             chr.setMap(999999999); // 换图（持久化字段，标脏）
             chr.setMeso(12345);
+            Item potion = new Item(2000000);
+            potion.setPosition((short) 1);
+            potion.setQuantity((short) 25);
+            chr.getInventory(InventoryType.USE).putAtSlot((short) 1, potion);
+            Equip coat = new Equip(1040002);
+            coat.setPosition((short) -5);
+            coat.setUpgradeSlots((byte) 5);
+            coat.setStr((short) 12);
+            coat.setWatk((short) 3);
+            coat.setItemLevel((byte) 4);
+            coat.setItemExp(4567L);
+            chr.getInventory(InventoryType.EQUIP).putAtSlot((short) -5, coat);
+            PetItem pet = new PetItem(5_000_000, 9001);
+            pet.setPosition((short) 2);
+            pet.setPetName("小黑");
+            pet.setPetLevel((byte) 12);
+            pet.setCloseness((short) 3456);
+            pet.setFullness((byte) 87);
+            pet.setPetAttribute((short) 3);
+            pet.setPetSkill((short) 4);
+            pet.setRemainLife(17_500);
+            pet.setAttribute((short) 5);
+            chr.getInventory(InventoryType.CASH).putAtSlot((short) 2, pet);
+            QuestStatus quest = new QuestStatus(1000);
+            quest.setState(QuestStatus.State.STARTED);
+            quest.setProgressText(100_001, "003");
+            quest.setExpirationTime(1_800_000_000_000L);
+            chr.putQuest(quest);
+            chr.putSkill(new SkillEntry(1_121_000, 10, 20, -1L));
+            chr.markDirty();
             players.add(chr);
             assertThat(chr.isDirty()).isTrue();
 
@@ -131,6 +188,29 @@ class L4RestartE2ETest {
             assertThat(recovered.getMeso()).isEqualTo(12345);
             assertThat(recovered.getMap()).isEqualTo(999999999);
             assertThat(recovered.getLevel()).isEqualTo(10);
+            assertThat(recovered.getInventory(InventoryType.USE).getItem((short) 1).getQuantity())
+                    .isEqualTo((short) 25);
+            Equip recoveredCoat = (Equip) recovered.getInventory(InventoryType.EQUIP).getItem((short) -5);
+            assertThat(recoveredCoat.getStr()).isEqualTo((short) 12);
+            assertThat(recoveredCoat.getWatk()).isEqualTo((short) 3);
+            assertThat(recoveredCoat.getItemLevel()).isEqualTo((byte) 4);
+            assertThat(recoveredCoat.getItemExp()).isEqualTo(4567L);
+            PetItem recoveredPet = (PetItem) recovered.getInventory(InventoryType.CASH).getItem((short) 2);
+            assertThat(recoveredPet.getPetId()).isEqualTo(9001);
+            assertThat(recoveredPet.getPetName()).isEqualTo("小黑");
+            assertThat(recoveredPet.getPetLevel()).isEqualTo((byte) 12);
+            assertThat(recoveredPet.getCloseness()).isEqualTo((short) 3456);
+            assertThat(recoveredPet.getFullness()).isEqualTo((byte) 87);
+            assertThat(recoveredPet.getPetAttribute()).isEqualTo((short) 3);
+            assertThat(recoveredPet.getPetSkill()).isEqualTo((short) 4);
+            assertThat(recoveredPet.getRemainLife()).isEqualTo(17_500);
+            assertThat(recoveredPet.getAttribute()).isEqualTo((short) 5);
+            QuestStatus recoveredQuest = recovered.getQuestStatus(1000);
+            assertThat(recoveredQuest.getState()).isEqualTo(QuestStatus.State.STARTED);
+            assertThat(recoveredQuest.progressData()).isEqualTo("003");
+            assertThat(recoveredQuest.getExpirationTime()).isEqualTo(1_800_000_000_000L);
+            assertThat(recovered.getSkill(1_121_000)).isEqualTo(
+                    new SkillEntry(1_121_000, 10, 20, -1L));
             assertThat(recovered.isDirty()).isFalse(); // 加载态即已落盘
         } finally {
             saveQueue.close();

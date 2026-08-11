@@ -10,7 +10,7 @@ import org.gms.channel.PlayerStorage;
 import org.gms.channel.persist.CharacterFlushTickHandler;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.channel.persist.RestartService;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.observability.Metrics;
@@ -32,9 +32,10 @@ public class PersistConfig {
 
     @Bean
     @Singleton
-    public CharacterSaveQueue characterSaveQueue(CharacterRepository repository, CharacterLoader loader,
+    public CharacterSaveQueue characterSaveQueue(CharacterSnapshotRepository snapshotRepository,
+                                                 CharacterLoader loader,
                                                  PlayerStorage playerStorage) {
-        return new CharacterSaveQueue(repository, loader, playerStorage);
+        return new CharacterSaveQueue(snapshotRepository, loader, playerStorage);
     }
 
     @Bean

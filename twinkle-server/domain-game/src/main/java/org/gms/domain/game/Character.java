@@ -5,16 +5,22 @@ import lombok.Getter;
 import lombok.Setter;
 import org.gms.domain.game.inventory.Inventory;
 import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.inventory.ItemConstants;
+import org.gms.domain.game.inventory.PetItem;
 import org.gms.domain.game.quest.QuestStatus;
 import org.gms.domain.game.skill.SkillEntry;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.spi.TradeItemSnapshot;
 
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * 角色（纯数据，稳定层，内存态权威）。字段对齐 characters 表 74 列（红线 3 存档格式兼容），
@@ -145,6 +151,11 @@ public class Character implements CharacterState {
     @Setter(AccessLevel.NONE)
     private transient volatile boolean dirty;
 
+    /** 每次持久化状态变更递增；存档线程据此避免清除较新的脏状态。 */
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private transient long dirtyVersion;
+
     public org.gms.domain.game.map.MapleMap getMapObject() {
         return mapObject;
     }
@@ -155,7 +166,8 @@ public class Character implements CharacterState {
 
     /** 标记自上次落盘后已变更（持久化字段 setter / 背包/任务 mutation 内调用）。 */
     @Override
-    public void markDirty() {
+    public synchronized void markDirty() {
+        this.dirtyVersion++;
         this.dirty = true;
     }
 
@@ -165,8 +177,22 @@ public class Character implements CharacterState {
     }
 
     @Override
-    public void clearDirty() {
+    public synchronized void clearDirty() {
         this.dirty = false;
+    }
+
+    /** 返回当前持久化状态版本，供异步存档建立确认点。 */
+    public synchronized long dirtyVersion() {
+        return dirtyVersion;
+    }
+
+    /** 仅当存档期间没有新变更时清脏。 */
+    public synchronized boolean clearDirty(long savedVersion) {
+        if (dirtyVersion != savedVersion) {
+            return false;
+        }
+        dirty = false;
+        return true;
     }
 
     // ---- 持久化字段手写 setter（覆盖 Lombok 生成，赋值后标脏，红线 17 增量 FLUSH 依据） ----
@@ -202,7 +228,11 @@ public class Character implements CharacterState {
         markDirty();
     }
 
-    public void setMeso(int meso) {
+    public synchronized int getMeso() {
+        return meso;
+    }
+
+    public synchronized void setMeso(int meso) {
         this.meso = meso;
         markDirty();
     }
@@ -278,10 +308,12 @@ public class Character implements CharacterState {
 
     public void putSkill(SkillEntry entry) {
         skills.put(entry.skillId(), entry);
+        markDirty();
     }
 
     public void removeSkill(int skillId) {
         skills.remove(skillId);
+        markDirty();
     }
 
     /** 全部技能（不可变视图）。 */
@@ -289,8 +321,19 @@ public class Character implements CharacterState {
         return Map.copyOf(skills);
     }
 
+    /** 加载存档时放入完整任务状态。 */
+    public void putQuest(QuestStatus status) {
+        quests.put(status.getQuestId(), status);
+        markDirty();
+    }
+
+    /** 全部任务状态（不可变视图）。 */
+    public Map<Integer, QuestStatus> quests() {
+        return Map.copyOf(quests);
+    }
+
     @Override
-    public boolean addItem(int itemId, int quantity, int slotMax) {
+    public synchronized boolean addItem(int itemId, int quantity, int slotMax) {
         if (quantity <= 0 || slotMax <= 0) {
             return false;
         }
@@ -340,7 +383,38 @@ public class Character implements CharacterState {
     }
 
     @Override
-    public int getItemCount(int itemId) {
+    public synchronized boolean canAddItems(Map<Integer, Integer> quantities,
+                                            Map<Integer, Integer> slotMaxByItem) {
+        EnumMap<InventoryType, Integer> requiredSlots = new EnumMap<>(InventoryType.class);
+        for (Map.Entry<Integer, Integer> entry : quantities.entrySet()) {
+            int itemId = entry.getKey();
+            int quantity = entry.getValue();
+            int slotMax = slotMaxByItem.getOrDefault(itemId, 0);
+            InventoryType type = ItemConstants.getInventoryType(itemId);
+            if (quantity <= 0 || slotMax <= 0 || type == InventoryType.UNDEFINED) {
+                return false;
+            }
+            long stackCapacity = 0;
+            Inventory inventory = getInventory(type);
+            for (Item existing : inventory.items()) {
+                if (existing.getId() == itemId) {
+                    stackCapacity += Math.max(0, slotMax - existing.getQuantity());
+                }
+            }
+            long remaining = Math.max(0L, (long) quantity - stackCapacity);
+            int slots = (int) ((remaining + slotMax - 1L) / slotMax);
+            requiredSlots.merge(type, slots, Integer::sum);
+        }
+        for (Map.Entry<InventoryType, Integer> entry : requiredSlots.entrySet()) {
+            if (entry.getValue() > getInventory(entry.getKey()).freeSlots()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public synchronized int getItemCount(int itemId) {
         int count = 0;
         for (InventoryType type : InventoryType.values()) {
             Inventory inv = inventories.get(type);
@@ -357,7 +431,7 @@ public class Character implements CharacterState {
     }
 
     @Override
-    public boolean removeItem(int itemId, int quantity) {
+    public synchronized boolean removeItem(int itemId, int quantity) {
         if (quantity <= 0) {
             return false;
         }
@@ -390,6 +464,269 @@ public class Character implements CharacterState {
     }
 
     @Override
+    public synchronized TradeItemSnapshot snapshotTradeItem(byte inventoryType,
+                                                            short sourcePosition,
+                                                            int quantity) {
+        InventoryType type = InventoryType.getByType(inventoryType);
+        if (type == InventoryType.UNDEFINED || sourcePosition <= 0 || quantity <= 0) {
+            return null;
+        }
+        Item item = getInventory(type).getItem(sourcePosition);
+        if (item == null || quantity > item.getQuantity()
+                || ItemConstants.getInventoryType(item.getId()) != type
+                || item instanceof Equip && quantity != 1) {
+            return null;
+        }
+        return toTradeSnapshot(type, item, quantity);
+    }
+
+    @Override
+    public synchronized boolean hasTradeItems(List<TradeItemSnapshot> items) {
+        Set<Long> sources = new HashSet<>();
+        for (TradeItemSnapshot offered : items) {
+            if (offered == null || !sources.add(sourceKey(offered))) {
+                return false;
+            }
+            TradeItemSnapshot current = snapshotTradeItem(
+                    offered.inventoryType(), offered.sourcePosition(), offered.quantity());
+            if (!offered.equals(current)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public synchronized boolean canExchangeTradeItems(List<TradeItemSnapshot> outgoing,
+                                                      List<TradeItemSnapshot> incoming,
+                                                      Map<Integer, Integer> slotMaxByItem) {
+        EnumMap<InventoryType, Inventory> simulated = copyInventories();
+        return removeTradeItems(simulated, outgoing)
+                && addTradeItems(simulated, incoming, slotMaxByItem);
+    }
+
+    @Override
+    public synchronized boolean removeTradeItems(List<TradeItemSnapshot> items) {
+        if (!hasTradeItems(items) || !removeTradeItems(inventories, items)) {
+            return false;
+        }
+        if (!items.isEmpty()) {
+            markDirty();
+        }
+        return true;
+    }
+
+    @Override
+    public synchronized boolean addTradeItems(List<TradeItemSnapshot> items,
+                                              Map<Integer, Integer> slotMaxByItem) {
+        for (TradeItemSnapshot item : items) {
+            if (item != null) {
+                InventoryType type = InventoryType.getByType(item.inventoryType());
+                if (type != InventoryType.UNDEFINED) {
+                    getInventory(type);
+                }
+            }
+        }
+        EnumMap<InventoryType, Inventory> simulated = copyInventories();
+        if (!addTradeItems(simulated, items, slotMaxByItem)
+                || !addTradeItems(inventories, items, slotMaxByItem)) {
+            return false;
+        }
+        if (!items.isEmpty()) {
+            markDirty();
+        }
+        return true;
+    }
+
+    private EnumMap<InventoryType, Inventory> copyInventories() {
+        EnumMap<InventoryType, Inventory> copy = new EnumMap<>(InventoryType.class);
+        for (InventoryType type : InventoryType.values()) {
+            if (type == InventoryType.UNDEFINED) {
+                continue;
+            }
+            Inventory source = inventories.get(type);
+            Inventory target = new Inventory(type, slotLimitFor(type));
+            if (source != null) {
+                for (Item item : source.items()) {
+                    Item cloned = item.copy();
+                    target.putAtSlot(cloned.getPosition(), cloned);
+                }
+            }
+            copy.put(type, target);
+        }
+        return copy;
+    }
+
+    private static boolean removeTradeItems(EnumMap<InventoryType, Inventory> target,
+                                            List<TradeItemSnapshot> items) {
+        Set<Long> sources = new HashSet<>();
+        for (TradeItemSnapshot offered : items) {
+            if (offered == null || !sources.add(sourceKey(offered))) {
+                return false;
+            }
+            InventoryType type = InventoryType.getByType(offered.inventoryType());
+            Inventory inventory = target.get(type);
+            Item current = inventory == null ? null : inventory.getItem(offered.sourcePosition());
+            if (current == null || !offered.equals(toTradeSnapshot(type, current, offered.quantity()))) {
+                return false;
+            }
+        }
+        for (TradeItemSnapshot offered : items) {
+            Inventory inventory = target.get(InventoryType.getByType(offered.inventoryType()));
+            Item current = inventory.getItem(offered.sourcePosition());
+            if (current.getQuantity() == offered.quantity()) {
+                inventory.removeItem(offered.sourcePosition());
+            } else {
+                current.setQuantity((short) (current.getQuantity() - offered.quantity()));
+            }
+        }
+        return true;
+    }
+
+    private static boolean addTradeItems(EnumMap<InventoryType, Inventory> target,
+                                         List<TradeItemSnapshot> items,
+                                         Map<Integer, Integer> slotMaxByItem) {
+        for (TradeItemSnapshot offered : items) {
+            if (offered == null || offered.quantity() <= 0) {
+                return false;
+            }
+            InventoryType type = InventoryType.getByType(offered.inventoryType());
+            int slotMax = slotMaxByItem.getOrDefault(offered.itemId(), 0);
+            if (type == InventoryType.UNDEFINED || slotMax <= 0
+                    || ItemConstants.getInventoryType(offered.itemId()) != type
+                    || (offered.equip() != null || offered.pet() != null)
+                    && (offered.quantity() != 1 || slotMax != 1)) {
+                return false;
+            }
+            Inventory inventory = target.get(type);
+            if (inventory == null) {
+                return false;
+            }
+            int remaining = offered.quantity();
+            Item template = fromTradeSnapshot(offered);
+            if (offered.equip() == null && offered.pet() == null) {
+                for (Item existing : inventory.items()) {
+                    if (!stackCompatible(existing, template)) {
+                        continue;
+                    }
+                    int space = Math.max(0, slotMax - existing.getQuantity());
+                    int added = Math.min(space, remaining);
+                    if (added > 0) {
+                        existing.setQuantity((short) (existing.getQuantity() + added));
+                        remaining -= added;
+                    }
+                    if (remaining == 0) {
+                        break;
+                    }
+                }
+            }
+            while (remaining > 0) {
+                Item added = fromTradeSnapshot(offered);
+                int quantity = Math.min(slotMax, remaining);
+                added.setQuantity((short) quantity);
+                if (!inventory.addItem(added)) {
+                    return false;
+                }
+                remaining -= quantity;
+            }
+        }
+        return true;
+    }
+
+    private static boolean stackCompatible(Item existing, Item incoming) {
+        return existing.getClass() == incoming.getClass()
+                && existing.getId() == incoming.getId()
+                && existing.getCashId() == incoming.getCashId()
+                && existing.getPetId() == incoming.getPetId()
+                && Objects.equals(existing.getOwner(), incoming.getOwner())
+                && existing.getFlag() == incoming.getFlag()
+                && existing.getExpiration() == incoming.getExpiration()
+                && Objects.equals(existing.getGiftFrom(), incoming.getGiftFrom());
+    }
+
+    private static long sourceKey(TradeItemSnapshot item) {
+        return (((long) item.inventoryType() & 0xffL) << 32)
+                | ((long) item.sourcePosition() & 0xffffL);
+    }
+
+    private static TradeItemSnapshot toTradeSnapshot(InventoryType type, Item item, int quantity) {
+        if (type == null || type == InventoryType.UNDEFINED || item == null
+                || quantity <= 0 || quantity > item.getQuantity()) {
+            return null;
+        }
+        TradeItemSnapshot.EquipSnapshot equip = null;
+        TradeItemSnapshot.PetSnapshot pet = null;
+        if (item instanceof Equip value) {
+            equip = new TradeItemSnapshot.EquipSnapshot(
+                    value.getUpgradeSlots(), value.getLevel(), value.getStr(), value.getDex(),
+                    value.getIntStat(), value.getLuk(), value.getHp(), value.getMp(), value.getWatk(),
+                    value.getMatk(), value.getWdef(), value.getMdef(), value.getAcc(), value.getAvoid(),
+                    value.getHands(), value.getSpeed(), value.getJump(), value.getVicious(),
+                    value.getItemLevel(), value.getItemExp(), value.getRingId());
+        } else if (item instanceof PetItem value) {
+            pet = new TradeItemSnapshot.PetSnapshot(
+                    value.getPetName(), value.getPetLevel(), value.getCloseness(), value.getFullness(),
+                    value.getPetAttribute(), value.getPetSkill(), value.getRemainLife(), value.getAttribute());
+        }
+        return new TradeItemSnapshot(type.getType(), item.getPosition(), item.getId(), quantity,
+                item.getCashId(), item.getPetId(), item.getOwner(), item.getFlag(), item.getExpiration(),
+                item.getGiftFrom(), equip, pet);
+    }
+
+    private static Item fromTradeSnapshot(TradeItemSnapshot snapshot) {
+        Item item;
+        if (snapshot.pet() != null) {
+            TradeItemSnapshot.PetSnapshot source = snapshot.pet();
+            PetItem pet = new PetItem(snapshot.itemId(), snapshot.petId());
+            pet.setPetName(source.name());
+            pet.setPetLevel(source.level());
+            pet.setCloseness(source.closeness());
+            pet.setFullness(source.fullness());
+            pet.setPetAttribute(source.attribute());
+            pet.setPetSkill(source.skill());
+            pet.setRemainLife(source.remainLife());
+            pet.setAttribute(source.itemAttribute());
+            item = pet;
+        } else if (snapshot.equip() == null) {
+            item = new Item(snapshot.itemId());
+        } else {
+            TradeItemSnapshot.EquipSnapshot source = snapshot.equip();
+            Equip equip = new Equip(snapshot.itemId());
+            equip.setUpgradeSlots(source.upgradeSlots());
+            equip.setLevel(source.level());
+            equip.setStr(source.str());
+            equip.setDex(source.dex());
+            equip.setIntStat(source.intStat());
+            equip.setLuk(source.luk());
+            equip.setHp(source.hp());
+            equip.setMp(source.mp());
+            equip.setWatk(source.watk());
+            equip.setMatk(source.matk());
+            equip.setWdef(source.wdef());
+            equip.setMdef(source.mdef());
+            equip.setAcc(source.acc());
+            equip.setAvoid(source.avoid());
+            equip.setHands(source.hands());
+            equip.setSpeed(source.speed());
+            equip.setJump(source.jump());
+            equip.setVicious(source.vicious());
+            equip.setItemLevel(source.itemLevel());
+            equip.setItemExp(source.itemExp());
+            equip.setRingId(source.ringId());
+            item = equip;
+        }
+        item.setCashId(snapshot.cashId());
+        item.setPosition(snapshot.sourcePosition());
+        item.setQuantity((short) snapshot.quantity());
+        item.setPetId(snapshot.petId());
+        item.setOwner(snapshot.owner());
+        item.setFlag(snapshot.flag());
+        item.setExpiration(snapshot.expiration());
+        item.setGiftFrom(snapshot.giftFrom());
+        return item;
+    }
+
+    @Override
     public QuestStatus getQuestStatus(int questId) {
         return quests.get(questId);
     }
@@ -414,6 +751,8 @@ public class Character implements CharacterState {
             return false;
         }
         qs.setState(QuestStatus.State.COMPLETED);
+        qs.setCompletionTime(System.currentTimeMillis());
+        qs.setCompleted(qs.getCompleted() + 1);
         markDirty();
         return true;
     }

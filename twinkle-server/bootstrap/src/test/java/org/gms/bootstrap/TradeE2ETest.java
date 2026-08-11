@@ -24,6 +24,8 @@ import org.gms.data.mapper.CharacterMapper;
 import org.gms.data.migrate.MigrationRunner;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.mob.MobData;
 import org.gms.domain.script.ScriptEngine;
@@ -179,6 +181,11 @@ class TradeE2ETest {
 
                 Client a = Client.login(sockA, heroA.getId());
                 Client b = Client.login(sockB, heroB.getId());
+                org.gms.domain.game.Character onlineA = players.getById(heroA.getId());
+                Item potion = new Item(2000000);
+                potion.setPosition((short) 1);
+                potion.setQuantity((short) 10);
+                onlineA.getInventory(InventoryType.USE).putAtSlot((short) 1, potion);
 
                 // A 邀请 B（目标角色 id = heroB）
                 ByteArrayOutPacket invite = new ByteArrayOutPacket();
@@ -211,6 +218,18 @@ class TradeE2ETest {
                 InPacket bRoom = b.readPacket();
                 assertThat(bRoom.readUnsignedShort()).isEqualTo(SendOpcode.PLAYER_INTERACTION.getValue());
                 assertThat(bRoom.readByte()).isEqualTo((byte) 0x05);     // ROOM
+
+                // A 放入 4 个红药水到交易槽 0，双方收到完整 addItemInfo 段
+                ByteArrayOutPacket setItem = new ByteArrayOutPacket();
+                setItem.writeShort(RecvOpcode.PLAYER_INTERACTION.getValue());
+                setItem.writeByte(0x0F);       // SET_ITEMS
+                setItem.writeByte(2);          // USE
+                setItem.writeShort(1);         // 背包槽位
+                setItem.writeShort(4);         // 数量
+                setItem.writeByte(0);          // 交易窗口槽位
+                a.send(setItem);
+                assertTradeItemPacket(a.readPacket());
+                assertTradeItemPacket(b.readPacket());
 
                 // B 发 SET_MESO 1000
                 ByteArrayOutPacket meso = new ByteArrayOutPacket();
@@ -246,6 +265,8 @@ class TradeE2ETest {
                 org.gms.domain.game.Character chrB = players.getById(heroB.getId());
                 assertThat(chrA.getMeso()).isEqualTo(6000);
                 assertThat(chrB.getMeso()).isEqualTo(4000);
+                assertThat(chrA.getItemCount(2000000)).isEqualTo(6);
+                assertThat(chrB.getItemCount(2000000)).isEqualTo(4);
             }
         } finally {
             channelServer.close();
@@ -280,6 +301,21 @@ class TradeE2ETest {
         c.setEtcSlots(24);
         c.setMeso(5000);        // 初始金币（交易 SET_MESO 校验持有量）
         return c;
+    }
+
+    private static void assertTradeItemPacket(InPacket packet) {
+        assertThat(packet.readUnsignedShort()).isEqualTo(SendOpcode.PLAYER_INTERACTION.getValue());
+        assertThat(packet.readByte()).isEqualTo((byte) 0x0F);
+        assertThat(packet.readByte()).isZero();               // A 是交易方 0
+        assertThat(packet.readByte()).isZero();               // 交易窗口槽位 0
+        assertThat(packet.readByte()).isEqualTo((byte) 2);    // 普通物品
+        assertThat(packet.readInt()).isEqualTo(2000000);
+        assertThat(packet.readByte()).isZero();               // 非现金
+        packet.readLong();
+        assertThat(packet.readShort()).isEqualTo((short) 4);
+        assertThat(packet.readString()).isEmpty();
+        assertThat(packet.readShort()).isZero();
+        assertThat(packet.available()).isZero();
     }
 
     /** 客户端 helper（握手 + 进图 + 加密收发）。 */

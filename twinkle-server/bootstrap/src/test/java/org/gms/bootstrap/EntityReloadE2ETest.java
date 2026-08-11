@@ -8,6 +8,7 @@ import org.gms.hotreload.versioned.VersionGate;
 import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.TradeSystem;
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.trade.Trade;
 import org.gms.domain.game.trade.TradeSide;
@@ -50,7 +51,7 @@ class EntityReloadE2ETest {
 
         // ---- 玩家 A 进入交易（长操作在途）----
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
-        tradeSystem.offer(trade, a, 2_000_000, 5);
+        tradeSystem.offer(trade, a, InventoryType.USE.getType(), (short) 1, 5, (byte) 0);
         tradeSystem.offerMeso(trade, b, 1000);
         coordinator.beginOperation(a.getId());
         coordinator.beginOperation(b.getId());

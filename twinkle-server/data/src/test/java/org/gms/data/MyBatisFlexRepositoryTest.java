@@ -3,16 +3,27 @@ package org.gms.data;
 import com.mybatisflex.core.MybatisFlexBootstrap;
 import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
+import org.gms.data.entity.InventoryItemEntity;
+import org.gms.data.entity.QuestStatusEntity;
 import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.CharacterMapper;
+import org.gms.data.mapper.InventoryItemMapper;
+import org.gms.data.mapper.QuestProgressMapper;
+import org.gms.data.mapper.QuestStatusMapper;
+import org.gms.data.mapper.SkillMapper;
 import org.gms.data.migrate.MigrationRunner;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.data.repo.FlexCharacterSnapshotRepository;
+import org.gms.data.repo.FlexInventoryItemRepository;
+import org.gms.data.repo.FlexQuestRepository;
+import org.gms.data.repo.QuestProgressSnapshot;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * M1 data 层集成验证：V2 迁移建表 + MyBatis-Flex 账号/角色增查（红线 2/3 结构兼容）。
@@ -22,6 +33,188 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 每个测试类独立装配，Mappers 静态注册表按环境 ID 覆盖，Surefire 串行下安全。
  */
 class MyBatisFlexRepositoryTest {
+
+    @Test
+    void questReplaceAllRebuildsForeignKeysAndDeletesOldProgress() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-quest-replace").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+        MybatisFlexBootstrap bootstrap = new MybatisFlexBootstrap();
+        bootstrap.setDataSource(ds);
+        bootstrap.setEnvironmentId("quest-" + dbPath);
+        bootstrap.addMapper(QuestStatusMapper.class);
+        bootstrap.addMapper(QuestProgressMapper.class);
+        bootstrap.start();
+
+        FlexQuestRepository repository = new FlexQuestRepository(
+                bootstrap.getMapper(QuestStatusMapper.class),
+                bootstrap.getMapper(QuestProgressMapper.class));
+        QuestStatusEntity status = new QuestStatusEntity();
+        status.setCharacterId(9);
+        status.setQuest(1000);
+        status.setStatus(1);
+        status.setTime(-1);
+        repository.replaceAll(9L, java.util.List.of(status),
+                java.util.List.of(new QuestProgressSnapshot(1000, 100_001, "003")));
+
+        QuestStatusEntity savedStatus = repository.findStatusesByCharacterId(9L).getFirst();
+        assertThat(savedStatus.getQuestStatusId()).isPositive();
+        assertThat(repository.findProgressByCharacterId(9L)).singleElement().satisfies(saved -> {
+            assertThat(saved.getQuestStatusId()).isEqualTo(savedStatus.getQuestStatusId().intValue());
+            assertThat(saved.getProgressId()).isEqualTo(100_001);
+            assertThat(saved.getProgress()).isEqualTo("003");
+        });
+
+        repository.replaceAll(9L, java.util.List.of(), java.util.List.of());
+        assertThat(repository.findStatusesByCharacterId(9L)).isEmpty();
+        assertThat(repository.findProgressByCharacterId(9L)).isEmpty();
+    }
+
+    @Test
+    void characterAndInventorySnapshotRollBackTogether() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-snapshot-transaction").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+
+        MybatisFlexBootstrap bootstrap = new MybatisFlexBootstrap();
+        bootstrap.setDataSource(ds);
+        bootstrap.setEnvironmentId("snapshot-" + dbPath);
+        bootstrap.addMapper(CharacterMapper.class);
+        bootstrap.addMapper(InventoryItemMapper.class);
+        bootstrap.addMapper(QuestStatusMapper.class);
+        bootstrap.addMapper(QuestProgressMapper.class);
+        bootstrap.addMapper(SkillMapper.class);
+        bootstrap.start();
+
+        CharacterMapper characterMapper = bootstrap.getMapper(CharacterMapper.class);
+        InventoryItemMapper inventoryMapper = bootstrap.getMapper(InventoryItemMapper.class);
+        FlexCharacterRepository characterRepository = new FlexCharacterRepository(characterMapper);
+        FlexInventoryItemRepository inventoryRepository = new FlexInventoryItemRepository(inventoryMapper);
+        FlexCharacterSnapshotRepository snapshotRepository = new FlexCharacterSnapshotRepository(
+                characterMapper, inventoryMapper,
+                bootstrap.getMapper(QuestStatusMapper.class),
+                bootstrap.getMapper(QuestProgressMapper.class),
+                bootstrap.getMapper(SkillMapper.class));
+
+        Character hero = new Character();
+        hero.setAccountId(1L);
+        hero.setWorld(0);
+        hero.setName("SnapshotHero");
+        hero.setLevel(10);
+        characterRepository.insert(hero);
+
+        InventoryItemEntity original = new InventoryItemEntity();
+        original.setCharacterId(hero.getId().intValue());
+        original.setAccountId(1);
+        original.setItemId(2_000_000);
+        original.setInventoryType(2);
+        original.setPosition(1);
+        original.setQuantity(5);
+        original.setOwner("");
+        original.setGiftFrom("");
+        inventoryRepository.insert(original);
+
+        Character changed = characterRepository.findById(hero.getId()).orElseThrow();
+        changed.setLevel(99);
+        InventoryItemEntity invalid = new InventoryItemEntity();
+        invalid.setCharacterId(hero.getId().intValue());
+        invalid.setAccountId(1);
+        invalid.setItemId(2_000_001);
+        invalid.setInventoryType(2);
+        invalid.setPosition(1);
+        invalid.setQuantity(1);
+        invalid.setOwner(null); // owner NOT NULL：故意让背包写入失败，验证主表更新与删除均回滚。
+        invalid.setGiftFrom("");
+
+        assertThatThrownBy(() -> snapshotRepository.save(
+                changed, java.util.List.of(invalid), java.util.List.of(),
+                java.util.List.of(), java.util.List.of()))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(characterRepository.findById(hero.getId()).orElseThrow().getLevel()).isEqualTo(10);
+        assertThat(inventoryRepository.findByCharacterId(hero.getId()))
+                .singleElement()
+                .satisfies(saved -> {
+                    assertThat(saved.getItemId()).isEqualTo(2_000_000);
+                    assertThat(saved.getQuantity()).isEqualTo(5);
+                });
+    }
+
+    @Test
+    void inventoryDetailsRoundTripViaFlex() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-inventory-test").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+
+        MybatisFlexBootstrap bootstrap = new MybatisFlexBootstrap();
+        bootstrap.setDataSource(ds);
+        bootstrap.setEnvironmentId("inventory-" + dbPath);
+        bootstrap.addMapper(InventoryItemMapper.class);
+        bootstrap.start();
+
+        FlexInventoryItemRepository repository = new FlexInventoryItemRepository(
+                bootstrap.getMapper(InventoryItemMapper.class));
+        InventoryItemEntity equip = new InventoryItemEntity();
+        equip.setType(1);
+        equip.setCharacterId(9);
+        equip.setAccountId(3);
+        equip.setItemId(1040002);
+        equip.setInventoryType(1);
+        equip.setPosition(-5);
+        equip.setQuantity(1);
+        equip.setOwner("Hero");
+        equip.setGiftFrom("");
+        equip.setCashId(7001);
+        equip.setUpgradeSlots(5);
+        equip.setStr(12);
+        equip.setWatk(3);
+        equip.setItemLevel(4);
+        equip.setItemExp(4567L);
+        InventoryItemEntity pet = new InventoryItemEntity();
+        pet.setType(3);
+        pet.setCharacterId(9);
+        pet.setAccountId(3);
+        pet.setItemId(5_000_000);
+        pet.setInventoryType(5);
+        pet.setPosition(2);
+        pet.setQuantity(1);
+        pet.setOwner("");
+        pet.setGiftFrom("");
+        pet.setPetId(9001);
+        pet.setPetName("小黑");
+        pet.setPetLevel(12);
+        pet.setPetCloseness(3456);
+        pet.setPetFullness(87);
+        pet.setPetAttribute(3);
+        pet.setPetSkill(4);
+        pet.setPetRemainLife(17_500);
+        pet.setItemAttribute(5);
+
+        repository.replaceAll(9L, java.util.List.of(equip, pet));
+
+        assertThat(repository.findByCharacterId(9L)).hasSize(2);
+        assertThat(repository.findByCharacterId(9L)).filteredOn(saved -> saved.getType() == 1)
+                .singleElement().satisfies(saved -> {
+            assertThat(saved.getCashId()).isEqualTo(7001);
+            assertThat(saved.getUpgradeSlots()).isEqualTo(5);
+            assertThat(saved.getStr()).isEqualTo(12);
+            assertThat(saved.getWatk()).isEqualTo(3);
+            assertThat(saved.getItemLevel()).isEqualTo(4);
+            assertThat(saved.getItemExp()).isEqualTo(4567L);
+        });
+        assertThat(repository.findByCharacterId(9L)).filteredOn(saved -> saved.getType() == 3)
+                .singleElement().satisfies(saved -> {
+            assertThat(saved.getPetId()).isEqualTo(9001);
+            assertThat(saved.getPetName()).isEqualTo("小黑");
+            assertThat(saved.getPetLevel()).isEqualTo(12);
+            assertThat(saved.getPetCloseness()).isEqualTo(3456);
+            assertThat(saved.getPetFullness()).isEqualTo(87);
+            assertThat(saved.getPetAttribute()).isEqualTo(3);
+            assertThat(saved.getPetSkill()).isEqualTo(4);
+            assertThat(saved.getPetRemainLife()).isEqualTo(17_500);
+            assertThat(saved.getItemAttribute()).isEqualTo(5);
+        });
+    }
 
     @Test
     void accountAndCharacterCrudViaFlex() throws Exception {

@@ -6,7 +6,12 @@ import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.OutPacket;
+import org.gms.net.packet.v83.V83CharacterLook;
+import org.gms.net.packet.v83.V83CharacterPacketWriter;
+import org.gms.net.packet.v83.V83CharacterStats;
+import org.gms.net.packet.v83.V83EquippedItem;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -238,8 +243,8 @@ public final class LoginPacketFactory {
     }
 
     private static void addCharEntry(OutPacket p, Character c, List<InventoryItemEntity> equipped, boolean viewall) {
-        addCharStats(p, c);
-        addCharLook(p, c, equipped);
+        V83CharacterPacketWriter.writeStats(p, toProtocolStats(c));
+        V83CharacterPacketWriter.writeLook(p, toProtocolLook(c, equipped), false);
         if (!viewall) {
             p.writeByte(0);         // 普通列表的额外字节（查看所有角色模式省略）
         }
@@ -250,102 +255,21 @@ public final class LoginPacketFactory {
         p.writeInt(c.getJobRankMove());
     }
 
-    private static void addCharStats(OutPacket p, Character c) {
-        p.writeInt(c.getId().intValue());
-        writeFixedString(p, c.getName(), 13);
-        p.writeByte(c.getGender());
-        p.writeByte(c.getSkinColor());
-        p.writeInt(c.getFace());
-        p.writeInt(c.getHair());
-        p.writeLong(0);             // 宠物 x3
-        p.writeLong(0);
-        p.writeLong(0);
-        p.writeByte(c.getLevel());
-        p.writeShort(c.getJob());
-        p.writeShort(c.getStr());
-        p.writeShort(c.getDex());
-        p.writeShort(c.getIntStat());
-        p.writeShort(c.getLuk());
-        p.writeShort(c.getHp());
-        p.writeShort(c.getMaxHp());
-        p.writeShort(c.getMp());
-        p.writeShort(c.getMaxMp());
-        p.writeShort(c.getAp());
-        p.writeShort(remainingSp(c)); // 非 Aran 职业用 short
-        p.writeInt((int) c.getExp());
-        p.writeShort(c.getFame());
-        p.writeInt((int) c.getGachaExp());
-        p.writeInt(c.getMap());
-        p.writeByte(c.getSpawnPoint());
-        p.writeInt(0);
+    private static V83CharacterStats toProtocolStats(Character c) {
+        return new V83CharacterStats(
+                c.getId().intValue(), c.getName(), c.getGender(), c.getSkinColor(), c.getFace(), c.getHair(),
+                c.getLevel(), c.getJob(), c.getStr(), c.getDex(), c.getIntStat(), c.getLuk(),
+                c.getHp(), c.getMaxHp(), c.getMp(), c.getMaxMp(), c.getAp(), c.getSp(),
+                c.getExp(), c.getFame(), c.getGachaExp(), c.getMap(), c.getSpawnPoint());
     }
 
-    private static void addCharLook(OutPacket p, Character c, List<InventoryItemEntity> equipped) {
-        p.writeByte(c.getGender());
-        p.writeByte(c.getSkinColor());
-        p.writeInt(c.getFace());
-        p.writeBool(true);          // !mega
-        p.writeInt(c.getHair());
-        addCharEquips(p, equipped);
-    }
-
-    /**
-     * 已穿戴装备外观（v83 addCharEquips）。
-     *
-     * <p>每件写 {@code byte 槽位 + int 物品id}，普通装备与 masked（现金覆盖）分别以 0xFF 收尾；
-     * 随后武器 int + 宠物 int×3。槽位取正（-5→5）。思路参考自 BeiDou-Server PacketCreator。
-     */
-    private static void addCharEquips(OutPacket p, List<InventoryItemEntity> equipped) {
-        if (equipped == null || equipped.isEmpty()) {
-            p.writeByte(0xFF);      // 普通装备结束
-            p.writeByte(0xFF);      // masked 装备结束
-            p.writeInt(0);          // 武器
-            p.writeInt(0);          // 宠物 x3
-            p.writeInt(0);
-            p.writeInt(0);
-            return;
-        }
-        int weapon = 0;
-        boolean hasWeapon = false;
-        for (InventoryItemEntity e : equipped) {
-            int pos = -e.getPosition();       // 负位置转正（-5→5 帽、-6→6 脸饰、-7→7、-11→11 武器）
-            if (pos == 11) {                  // 武器槽位
-                weapon = e.getItemId();
-                hasWeapon = true;
-                continue;
+    private static V83CharacterLook toProtocolLook(Character c, List<InventoryItemEntity> equipped) {
+        List<V83EquippedItem> items = new ArrayList<>();
+        if (equipped != null) {
+            for (InventoryItemEntity item : equipped) {
+                items.add(new V83EquippedItem(item.getPosition(), item.getItemId()));
             }
-            p.writeByte((byte) pos);
-            p.writeInt(e.getItemId());
         }
-        p.writeByte(0xFF);          // 普通装备结束
-        p.writeByte(0xFF);          // masked 装备结束（无现金覆盖）
-        p.writeInt(hasWeapon ? weapon : 0);
-        p.writeInt(0);              // 宠物 x3
-        p.writeInt(0);
-        p.writeInt(0);
-    }
-
-    /**
-     * Aran 系职业用 SP 表（M1 简化为统一 short remainingSp，测试角色均为新手职业）。
-     */
-    private static short remainingSp(Character c) {
-        String sp = c.getSp();
-        if (sp == null || sp.isEmpty()) {
-            return 0;
-        }
-        int comma = sp.indexOf(',');
-        String first = comma > 0 ? sp.substring(0, comma) : sp;
-        try {
-            return Short.parseShort(first.trim());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    private static void writeFixedString(OutPacket p, String value, int fixed) {
-        byte[] bytes = value.getBytes(InPacket.DEFAULT_CHARSET);
-        byte[] out = new byte[fixed];
-        System.arraycopy(bytes, 0, out, 0, Math.min(bytes.length, fixed));
-        p.writeBytes(out);
+        return new V83CharacterLook(c.getGender(), c.getSkinColor(), c.getFace(), c.getHair(), items);
     }
 }

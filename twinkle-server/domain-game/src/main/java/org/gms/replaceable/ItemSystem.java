@@ -2,9 +2,12 @@ package org.gms.replaceable;
 
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.spi.TradeItemSnapshot;
 import org.gms.hotreload.versioned.VersionDecision;
 import org.gms.hotreload.versioned.VersionGate;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -64,8 +67,70 @@ public final class ItemSystem {
         return state.removeItem(itemId, quantity);
     }
 
+    /** 批量给予前的整体容量预检，不修改角色状态。 */
+    public boolean canGiveItems(CharacterState state, Map<Integer, Integer> quantities) {
+        if (quantities.isEmpty()) {
+            return true;
+        }
+        if (versionGate.decide(state) != VersionDecision.ALLOW) {
+            return false;
+        }
+        Map<Integer, Integer> slotMaxByItem = new HashMap<>();
+        for (Map.Entry<Integer, Integer> entry : quantities.entrySet()) {
+            if (entry.getValue() <= 0) {
+                return false;
+            }
+            ItemData data = itemData.get(entry.getKey());
+            int slotMax = data != null && data.getSlotMax() > 0 ? data.getSlotMax() : DEFAULT_SLOT_MAX;
+            slotMaxByItem.put(entry.getKey(), slotMax);
+        }
+        return state.canAddItems(quantities, slotMaxByItem);
+    }
+
     /** 持有数量（跨背包类型合计）。 */
     public int countItem(CharacterState state, int itemId) {
         return state.getItemCount(itemId);
+    }
+
+    /** 读取指定背包槽位的精确交易快照。 */
+    public TradeItemSnapshot snapshotTradeItem(CharacterState state, byte inventoryType,
+                                               short sourcePosition, int quantity) {
+        if (versionGate.decide(state) != VersionDecision.ALLOW) {
+            return null;
+        }
+        return state.snapshotTradeItem(inventoryType, sourcePosition, quantity);
+    }
+
+    /** 复验出价物品并模拟本方先移出、再接收后的背包容量。 */
+    public boolean canExchangeTradeItems(CharacterState state,
+                                         List<TradeItemSnapshot> outgoing,
+                                         List<TradeItemSnapshot> incoming) {
+        if (versionGate.decide(state) != VersionDecision.ALLOW || !state.hasTradeItems(outgoing)) {
+            return false;
+        }
+        return state.canExchangeTradeItems(outgoing, incoming, slotMaxByItem(incoming));
+    }
+
+    /** 精确移出交易物品；保留按原槽位复验语义。 */
+    public boolean takeTradeItems(CharacterState state, List<TradeItemSnapshot> items) {
+        return versionGate.decide(state) == VersionDecision.ALLOW && state.removeTradeItems(items);
+    }
+
+    /** 按完整实例快照接收交易物品。 */
+    public boolean giveTradeItems(CharacterState state, List<TradeItemSnapshot> items) {
+        return versionGate.decide(state) == VersionDecision.ALLOW
+                && state.addTradeItems(items, slotMaxByItem(items));
+    }
+
+    private Map<Integer, Integer> slotMaxByItem(List<TradeItemSnapshot> items) {
+        Map<Integer, Integer> result = new HashMap<>();
+        for (TradeItemSnapshot item : items) {
+            ItemData data = itemData.get(item.itemId());
+            int slotMax = item.equip() != null ? 1
+                    : data != null && data.getSlotMax() > 0
+                    ? data.getSlotMax() : DEFAULT_SLOT_MAX;
+            result.put(item.itemId(), slotMax);
+        }
+        return result;
     }
 }

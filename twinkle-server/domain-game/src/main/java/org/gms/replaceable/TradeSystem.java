@@ -1,6 +1,7 @@
 package org.gms.replaceable;
 
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.spi.TradeItemSnapshot;
 import org.gms.domain.game.trade.Trade;
 import org.gms.domain.game.trade.TradeSide;
 import org.gms.hotreload.versioned.VersionDecision;
@@ -16,6 +17,14 @@ import org.gms.hotreload.versioned.VersionGate;
  */
 public final class TradeSystem {
 
+    /** 单次确认的原子结果，供两个网络会话并发确认时避免重复结算。 */
+    public enum ConfirmResult {
+        REJECTED,
+        WAITING,
+        COMPLETED,
+        FAILED
+    }
+
     private final VersionGate versionGate;
     private final ItemSystem itemSystem;
 
@@ -28,23 +37,27 @@ public final class TradeSystem {
         return new Trade(first, second);
     }
 
-    /** 添加出价物品（ACTIVE + 未锁定 + 持有足够）。 */
-    public boolean offer(Trade trade, CharacterState trader, int itemId, int quantity) {
+    /** 添加精确背包槽位的出价物品（ACTIVE + 未锁定 + 实例有效）。 */
+    public boolean offer(Trade trade, CharacterState trader, byte inventoryType,
+                         short sourcePosition, int quantity, byte targetSlot) {
         if (versionGate.decide(trader) != VersionDecision.ALLOW) {
             return false;
         }
-        if (trade.getState() != Trade.State.ACTIVE || quantity <= 0) {
-            return false;
+        synchronized (trade) {
+            if (trade.getState() != Trade.State.ACTIVE || quantity <= 0) {
+                return false;
+            }
+            TradeSide side = trade.sideOf(trader);
+            if (side == null || side.isLocked()) {
+                return false;
+            }
+            TradeItemSnapshot item = itemSystem.snapshotTradeItem(
+                    trader, inventoryType, sourcePosition, quantity);
+            if (item == null) {
+                return false;
+            }
+            return side.offerItem(targetSlot, item);
         }
-        TradeSide side = trade.sideOf(trader);
-        if (side == null || side.isLocked()) {
-            return false;
-        }
-        if (itemSystem.countItem(trader, itemId) < quantity) {
-            return false;
-        }
-        side.offerItem(itemId, quantity);
-        return true;
     }
 
     /** 添加出价金币（v83 交易含 meso）。 */
@@ -52,41 +65,73 @@ public final class TradeSystem {
         if (versionGate.decide(trader) != VersionDecision.ALLOW) {
             return false;
         }
-        if (trade.getState() != Trade.State.ACTIVE || amount < 0) {
-            return false;
+        synchronized (trade) {
+            if (trade.getState() != Trade.State.ACTIVE || amount < 0) {
+                return false;
+            }
+            TradeSide side = trade.sideOf(trader);
+            if (side == null || side.isLocked()) {
+                return false;
+            }
+            if (trader.getMeso() < amount) {
+                return false;
+            }
+            side.setMeso(amount);
+            return true;
         }
-        TradeSide side = trade.sideOf(trader);
-        if (side == null || side.isLocked()) {
-            return false;
-        }
-        if (trader.getMeso() < amount) {
-            return false;
-        }
-        side.setMeso(amount);
-        return true;
     }
 
     /** 锁定出价（锁定后不可再改）。 */
     public boolean lock(Trade trade, CharacterState trader) {
-        TradeSide side = trade.sideOf(trader);
-        if (side == null || side.isLocked()) {
-            return false;
+        synchronized (trade) {
+            TradeSide side = trade.sideOf(trader);
+            if (trade.getState() != Trade.State.ACTIVE || side == null || side.isLocked()) {
+                return false;
+            }
+            side.setLocked(true);
+            return true;
         }
-        side.setLocked(true);
-        return true;
+    }
+
+    /**
+     * 原子执行“本方锁定 → 判断双方锁定 → 至多一次结算”。
+     *
+     * <p>两个玩家位于不同 Netty EventLoop，确认包可能同时到达；若把 lock、bothLocked 和
+     * complete 拆成三步，两个线程都可能观察到双方已锁并重复扣除。以 Trade 实例为锁把
+     * 状态转换和结算合成单一临界区。
+     */
+    public ConfirmResult confirm(Trade trade, CharacterState trader) {
+        synchronized (trade) {
+            TradeSide side = trade.sideOf(trader);
+            if (trade.getState() != Trade.State.ACTIVE || side == null || side.isLocked()) {
+                return ConfirmResult.REJECTED;
+            }
+            side.setLocked(true);
+            if (!trade.bothLocked()) {
+                return ConfirmResult.WAITING;
+            }
+            if (!settle(trade)) {
+                trade.setState(Trade.State.CANCELLED);
+                return ConfirmResult.FAILED;
+            }
+            trade.setState(Trade.State.DONE);
+            return ConfirmResult.COMPLETED;
+        }
     }
 
     /** 双方锁定后结算：交换物品与 meso。 */
     public boolean complete(Trade trade) {
-        if (trade.getState() != Trade.State.ACTIVE || !trade.bothLocked()) {
-            return false;
+        synchronized (trade) {
+            if (trade.getState() != Trade.State.ACTIVE || !trade.bothLocked()) {
+                return false;
+            }
+            if (!settle(trade)) {
+                trade.setState(Trade.State.CANCELLED);
+                return false;
+            }
+            trade.setState(Trade.State.DONE);
+            return true;
         }
-        if (!settle(trade)) {
-            trade.setState(Trade.State.CANCELLED);
-            return false;
-        }
-        trade.setState(Trade.State.DONE);
-        return true;
     }
 
     /**
@@ -99,38 +144,83 @@ public final class TradeSystem {
      * @return 是否确实中断了一个 ACTIVE 交易（已结束/未开始返回 false）
      */
     public boolean interrupt(Trade trade) {
-        if (trade.getState() != Trade.State.ACTIVE) {
-            return false;
+        synchronized (trade) {
+            if (trade.getState() != Trade.State.ACTIVE) {
+                return false;
+            }
+            trade.getFirst().clearOffer();
+            trade.getFirst().setMeso(0);
+            trade.getFirst().setLocked(false);
+            trade.getSecond().clearOffer();
+            trade.getSecond().setMeso(0);
+            trade.getSecond().setLocked(false);
+            trade.setState(Trade.State.CANCELLED);
+            return true;
         }
-        trade.getFirst().clearOffer();
-        trade.getFirst().setMeso(0);
-        trade.getFirst().setLocked(false);
-        trade.getSecond().clearOffer();
-        trade.getSecond().setMeso(0);
-        trade.getSecond().setLocked(false);
-        trade.setState(Trade.State.CANCELLED);
-        return true;
     }
 
     private boolean settle(Trade trade) {
-        return transfer(trade.getFirst(), trade.getSecond())
-                && transfer(trade.getSecond(), trade.getFirst());
+        CharacterState first = trade.getFirst().getTrader();
+        CharacterState second = trade.getSecond().getTrader();
+        CharacterState lower = first.getId() <= second.getId() ? first : second;
+        CharacterState higher = lower == first ? second : first;
+        synchronized (lower) {
+            synchronized (higher) {
+                if (!canSettle(trade)) {
+                    return false;
+                }
+                transferItems(trade);
+                int firstMeso = first.getMeso() - trade.getFirst().getMeso() + trade.getSecond().getMeso();
+                int secondMeso = second.getMeso() - trade.getSecond().getMeso() + trade.getFirst().getMeso();
+                first.setMeso(firstMeso);
+                second.setMeso(secondMeso);
+                return true;
+            }
+        }
     }
 
-    /** 一方 → 另一方（物品 + meso）。单线程下 offer 已校验持有，take 不会失败；give 容量不足返回 false。 */
-    private boolean transfer(TradeSide from, TradeSide to) {
-        for (var e : from.offeredItems().entrySet()) {
-            if (!itemSystem.takeItem(from.getTrader(), e.getKey(), e.getValue())) {
-                return false;
-            }
-            if (!itemSystem.giveItem(to.getTrader(), e.getKey(), e.getValue())) {
-                return false;
-            }
+    private boolean canSettle(Trade trade) {
+        TradeSide first = trade.getFirst();
+        TradeSide second = trade.getSecond();
+        if (!hasOffer(first) || !hasOffer(second)) {
+            return false;
         }
-        if (from.getMeso() > 0) {
-            to.getTrader().setMeso(to.getTrader().getMeso() + from.getMeso());
-            from.getTrader().setMeso(from.getTrader().getMeso() - from.getMeso());
+        long firstMeso = (long) first.getTrader().getMeso() - first.getMeso() + second.getMeso();
+        long secondMeso = (long) second.getTrader().getMeso() - second.getMeso() + first.getMeso();
+        if (firstMeso < 0 || firstMeso > Integer.MAX_VALUE
+                || secondMeso < 0 || secondMeso > Integer.MAX_VALUE) {
+            return false;
+        }
+        return itemSystem.canExchangeTradeItems(first.getTrader(),
+                first.offeredItems(), second.offeredItems())
+                && itemSystem.canExchangeTradeItems(second.getTrader(),
+                second.offeredItems(), first.offeredItems());
+    }
+
+    private boolean hasOffer(TradeSide side) {
+        if (side.getMeso() < 0 || side.getTrader().getMeso() < side.getMeso()) {
+            return false;
         }
         return true;
+    }
+
+    /**
+     * 预检成功后先移出双方物品，再接收双方物品，使容量判断中的“出槽后入槽”语义与实际一致。
+     */
+    private void transferItems(Trade trade) {
+        TradeSide first = trade.getFirst();
+        TradeSide second = trade.getSecond();
+        if (!itemSystem.takeTradeItems(first.getTrader(), first.offeredItems())) {
+            throw new IllegalStateException("交易预检后移出发起方物品失败");
+        }
+        if (!itemSystem.takeTradeItems(second.getTrader(), second.offeredItems())) {
+            throw new IllegalStateException("交易预检后移出接受方物品失败");
+        }
+        if (!itemSystem.giveTradeItems(second.getTrader(), first.offeredItems())) {
+            throw new IllegalStateException("交易预检后接受方接收物品失败");
+        }
+        if (!itemSystem.giveTradeItems(first.getTrader(), second.offeredItems())) {
+            throw new IllegalStateException("交易预检后发起方接收物品失败");
+        }
     }
 }

@@ -3,6 +3,9 @@ package org.gms.domain.game.spi;
 import org.gms.domain.game.quest.QuestStatus;
 import org.gms.hotreload.versioned.Versioned;
 
+import java.util.Map;
+import java.util.List;
+
 /**
  * 角色状态契约（稳定层 SPI，架构第三节：可替换层经接口访问稳定层）。
  *
@@ -84,6 +87,14 @@ public interface CharacterState extends Versioned {
      */
     boolean addItem(int itemId, int quantity, int slotMax);
 
+    /**
+     * 批量物品容量预检；所有物品共享同一组空槽，必须整体可放入才返回 true。
+     * 默认拒绝，避免旧实现未提供无副作用预检时被交易结算误用。
+     */
+    default boolean canAddItems(Map<Integer, Integer> quantities, Map<Integer, Integer> slotMaxByItem) {
+        return false;
+    }
+
     /** 持有数量（跨背包类型合计）。 */
     int getItemCount(int itemId);
 
@@ -93,6 +104,40 @@ public interface CharacterState extends Versioned {
      * @return 持有不足时不动并返回 false；扣完返回 true
      */
     boolean removeItem(int itemId, int quantity);
+
+    // ---- 交易物品（精确实例，经稳定 SPI 投影） ----
+
+    /**
+     * 读取可交易背包槽位的精确快照。槽位不存在、数量非法、已穿戴装备或类型不匹配时返回 null。
+     */
+    default TradeItemSnapshot snapshotTradeItem(byte inventoryType, short sourcePosition, int quantity) {
+        return null;
+    }
+
+    /** 结算前复验出价物品仍位于原槽位且实例属性、可用数量均未变化。 */
+    default boolean hasTradeItems(List<TradeItemSnapshot> items) {
+        return false;
+    }
+
+    /**
+     * 模拟先移出本方出价、再接收对方物品后的容量；不得修改真实背包。
+     */
+    default boolean canExchangeTradeItems(List<TradeItemSnapshot> outgoing,
+                                          List<TradeItemSnapshot> incoming,
+                                          Map<Integer, Integer> slotMaxByItem) {
+        return false;
+    }
+
+    /** 按原槽位精确移出已复验的出价物品。 */
+    default boolean removeTradeItems(List<TradeItemSnapshot> items) {
+        return false;
+    }
+
+    /** 保留全部实例属性接收物品；调用前必须完成整体容量预检。 */
+    default boolean addTradeItems(List<TradeItemSnapshot> items,
+                                  Map<Integer, Integer> slotMaxByItem) {
+        return false;
+    }
 
     // ---- 任务（经接口操作，可替换层不触碰具体实现） ----
 

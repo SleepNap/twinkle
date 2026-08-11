@@ -72,8 +72,10 @@ public class ChannelConfig {
     @Bean
     @Singleton
     public CharacterLoader characterLoader(VersionGate versionGate,
-                                           org.gms.data.repo.InventoryItemRepository inventoryItemRepository) {
-        return new CharacterLoader(versionGate, inventoryItemRepository);
+                                           org.gms.data.repo.InventoryItemRepository inventoryItemRepository,
+                                           org.gms.data.repo.QuestRepository questRepository,
+                                           org.gms.data.repo.SkillRepository skillRepository) {
+        return new CharacterLoader(versionGate, inventoryItemRepository, questRepository, skillRepository);
     }
 
     @Bean

@@ -32,6 +32,8 @@ public final class AdminRpcDispatcher {
         try {
             return switch (method) {
                 case "onlineSummary" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.onlineSummary()));
+                case "inventorySnapshot" -> InternalProtocol.RpcResponse.ok(
+                        JsonCodec.encode(admin.inventorySnapshot(longArg(args, 0))));
                 case "kick" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.kick(longArg(args, 0))));
                 case "reloadScripts" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadScripts()));
                 case "requestRestart" -> {

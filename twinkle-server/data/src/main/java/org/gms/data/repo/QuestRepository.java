@@ -17,5 +17,6 @@ public interface QuestRepository {
     List<QuestProgressEntity> findProgressByCharacterId(long characterId);
 
     /** 覆盖落库：删除旧行 + 插入当前快照（含状态与进度）。 */
-    void replaceAll(long characterId, List<QuestStatusEntity> statuses, List<QuestProgressEntity> progress);
+    void replaceAll(long characterId, List<QuestStatusEntity> statuses,
+                    List<QuestProgressSnapshot> progress);
 }

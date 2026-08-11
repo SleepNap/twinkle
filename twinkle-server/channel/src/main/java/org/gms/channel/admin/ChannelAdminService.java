@@ -5,6 +5,10 @@ import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.persist.RestartService;
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.Equip;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
+import org.gms.domain.game.inventory.PetItem;
 import org.gms.domain.script.ScriptManager;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.net.packet.PacketSession;
@@ -58,6 +62,30 @@ public final class ChannelAdminService implements AdminService {
     }
 
     @Override
+    public PlayerInventory inventorySnapshot(long characterId) {
+        Character character = players.getById(characterId);
+        if (character == null) {
+            return null;
+        }
+        synchronized (character) {
+            java.util.List<InventoryItemView> items = new java.util.ArrayList<>();
+            for (InventoryType inventoryType : InventoryType.values()) {
+                if (inventoryType == InventoryType.UNDEFINED) {
+                    continue;
+                }
+                for (Item item : character.getInventory(inventoryType).items()) {
+                    items.add(toItemView(inventoryType, item));
+                }
+            }
+            items.sort(java.util.Comparator.comparingInt(InventoryItemView::inventoryType)
+                    .thenComparingInt(InventoryItemView::position));
+            return new PlayerInventory(character.getId(),
+                    character.getName() == null ? "" : character.getName(),
+                    character.dirtyVersion(), java.util.List.copyOf(items));
+        }
+    }
+
+    @Override
     public boolean kick(long characterId) {
         PacketSession session = sessions.get(characterId);
         if (session == null) {
@@ -96,5 +124,30 @@ public final class ChannelAdminService implements AdminService {
 
     private OnlinePlayer toDto(Character chr) {
         return new OnlinePlayer(chr.getId(), chr.getName(), chr.getMap(), chr.getLevel(), chr.getJob());
+    }
+
+    private static InventoryItemView toItemView(InventoryType inventoryType, Item item) {
+        EquipView equipView = null;
+        PetView petView = null;
+        String itemType = "item";
+        if (item instanceof Equip equip) {
+            itemType = "equip";
+            equipView = new EquipView(
+                    equip.getUpgradeSlots(), equip.getLevel(), equip.getStr(), equip.getDex(),
+                    equip.getIntStat(), equip.getLuk(), equip.getHp(), equip.getMp(), equip.getWatk(),
+                    equip.getMatk(), equip.getWdef(), equip.getMdef(), equip.getAcc(), equip.getAvoid(),
+                    equip.getHands(), equip.getSpeed(), equip.getJump(), equip.getVicious(),
+                    equip.getItemLevel(), equip.getItemExp(), equip.getRingId());
+        } else if (item instanceof PetItem pet) {
+            itemType = "pet";
+            petView = new PetView(
+                    pet.getPetName() == null ? "" : pet.getPetName(),
+                    pet.getPetLevel(), pet.getCloseness(), pet.getFullness(),
+                    pet.getPetAttribute(), pet.getPetSkill(), pet.getRemainLife(), pet.getAttribute());
+        }
+        return new InventoryItemView(
+                inventoryType.getType(), item.getPosition(), itemType, item.getId(), item.getQuantity(),
+                item.getCashId(), item.getPetId(), item.getOwner() == null ? "" : item.getOwner(),
+                item.getFlag(), item.getExpiration(), equipView, petView);
     }
 }

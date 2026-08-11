@@ -28,10 +28,41 @@ public interface AdminService {
     public record ChannelSummary(int onlineCount, long channelId, List<OnlinePlayer> players) {
     }
 
+    /** 装备扩展状态；非装备物品为 {@code null}。 */
+    public record EquipView(
+            int upgradeSlots, int level, int strength, int dexterity, int intelligence, int luck,
+            int hp, int mp, int weaponAttack, int magicAttack, int weaponDefense, int magicDefense,
+            int accuracy, int avoidability, int hands, int speed, int jump, int vicious,
+            int itemLevel, long itemExp, int ringId) {
+    }
+
+    /** 宠物实例状态；非宠物物品为 {@code null}。 */
+    public record PetView(
+            String name, int level, int closeness, int fullness, int attribute, int skill,
+            int remainLife, int itemAttribute) {
+    }
+
+    /** 在线角色背包中的单个精确物品实例。 */
+    public record InventoryItemView(
+            int inventoryType, int position, String itemType, int itemId, int quantity,
+            long cashId, int petId, String owner, int flag, long expiration,
+            EquipView equip, PetView pet) {
+    }
+
+    /** 频道内存真值投影；角色不在线时 {@link #inventorySnapshot(long)} 返回 {@code null}。 */
+    public record PlayerInventory(
+            long characterId, String name, long stateVersion, List<InventoryItemView> items) {
+    }
+
     /**
      * 频道在线玩家快照（只读，经 DTO 拷贝，不泄漏内存对象）。
      */
     ChannelSummary onlineSummary();
+
+    /** 获取在线角色当前背包快照，不回退读取可能过期的数据库存档。 */
+    public default PlayerInventory inventorySnapshot(long characterId) {
+        return null;
+    }
 
     /**
      * 按角色 id 踢下线（管理侧运维操作，经 service 接口 RPC 到频道）。

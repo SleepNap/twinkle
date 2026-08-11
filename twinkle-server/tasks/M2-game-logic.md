@@ -2,7 +2,7 @@
 
 > 对应 [ARCHITECTURE.md](../../ARCHITECTURE.md) 第三节（domain-game 纯数据模型 + 索引/服务、状态/逻辑分层）、第五节 5.3（按实体渐进重载）、第十节红线（newmaple 兼容 / 存档格式兼容 / 游戏对象不进容器）、第十一节 M2。
 >
-> 状态：未开始 ｜ 前置依赖：M1 ｜ 影响模块：`domain-game`、`domain-script`、`wz-provider`、`channel`
+> 状态：进行中（基础能力已大部落地，真实客户端 parity 仍待环境） ｜ 前置依赖：M1 ｜ 影响模块：`domain-game`、`domain-script`、`wz-provider`、`channel`
 
 ## 目标
 
@@ -16,7 +16,7 @@
 
 - [x] 游戏对象模型（Character/Item/Equip/Inventory/InventoryType/ItemConstants/SkillEntry/MapleMap/Portal/SpawnPoint/PortalType）**纯数据**（版本化 schema，Character 实现 Versioned）+ 手动 new 不进容器（红线 4）；WZ 加载填充留 M2-4
 - [x] 稳定层：数据模型为稳定层，可替换层经接口访问（M2-2 定义接口边界）
-- [x] `characters` 存档结构兼容：74 列全映射到 domain-game.Character（红线 3）；keymap/skills/queststatus/inventory 结构由后续 M2-2/M2-3 补充映射
+- [x] `characters` 74 列、五类背包完整物品、装备扩展、宠物实例、技能与任务/进度均已完成 data↔domain 映射；角色全量状态使用同一事务覆盖保存
 - [x] MySQL `newmaple` 库兼容：表结构不改（红线 2，V2 建表已对齐）
 
 > 2026-08-06 第一片交付：Character（74 列 + 内存态背包/技能 + Versioned 契约）、Item/Equip（copy 深拷贝）、Inventory（槽位分配）、InventoryType、ItemConstants（id→背包类型推导）、SkillEntry。17 测试通过。domain-game 新增 core 依赖（Versioned 热重载契约，上层依赖底座合法）。
@@ -61,7 +61,7 @@
 
 - [x] 游戏 tick 单线程框架（core `org.gms.tick`：TickHandler/TickScheduler/GameTickLoop，tick 帧边界暂停 = 热重载换点干净，2026-08-06，6 测试）——放 core 因架构 core 含"调度"，且避免 replaceable→channel→domain-game 循环
 - [x] **频道初版 + 玩家在线表**（2026-08-06）：`ChannelServer`（复用 V83ServerInitializer，独立 EventLoop）+ `PlayerStorage` 在线表 + `ChannelMapManager` 地图缓存 + bootstrap 装配（ChannelConfig/ChannelNetworkInitializer）；CC 迁移留 M4/M6
-- [x] **玩家进图打通**（2026-08-06）：data↔domain 角色加载投影 `CharacterLoader`（data.Character 74 列 → domain.Character，Versioned）+ `PlayerLoggedinHandler`/`PlayerMapTransitionHandler` + `ChannelPacketFactory.getCharInfo`（SET_FIELD + addCharacterInfo 空数据版）+ `ChannelFlowE2ETest` 全链路字节级验证（登录→选角→连频道→PLAYER_LOGGEDIN→SET_FIELD→PLAYER_MAP_TRANSFER→在线表/地图持有角色断言）
+- [x] **玩家进图打通**（2026-08-06，2026-08-11 扩展）：data↔domain 角色加载投影 + `PlayerLoggedinHandler`/`PlayerMapTransitionHandler` + `ChannelPacketFactory.charInfo`；SET_FIELD 已写入完整五类背包、装备/宠物实例、技能与任务状态，并由字节布局测试和频道全链路 E2E 固化
 
 > 2026-08-06 第三片交付：进图链路打通。关键结论——本 v83 分支（HeavenMS 系）无经典 OdinMS 的 getMapData 大包，地图静态数据（foothold/VR/传送点）由客户端本地 WZ 自取，服务端只发 SET_FIELD + 角色全量 + 动态对象，进图工程量因此大减（思路参考自 BeiDou-Server）。
 
@@ -75,7 +75,7 @@
 
 - [ ] 客户端登录、进图（协议链路 E2E 已验证：登录→选角→连频道→SET_FIELD→地图转移完成；**真实 v83 客户端接入待客户端环境**）
 - [ ] 移动 / 战斗 / 交易 / 任务 / 背包行为对齐参考项目（parity 通过）——**逻辑侧已就绪（六个 system，M2-2），协议 handler 接入转 M3（见 M3 任务文档第 5 节）**
-- [ ] 存档读写在 `newmaple` 兼容结构上正确（老存档可读）——data.Character 74 列映射 + 进图加载投影已落地；背包/技能存档表随 M2-2 落地
+- [x] 存档读写正确：角色 74 列、五类背包、装备/宠物实例、技能与任务进度均可加载与覆盖保存；角色全量快照事务回滚、SQLite 实库往返和 L4 重启恢复已有测试
 - [ ] 状态/逻辑分离架构测试通过（可替换层引用纪律）
 - [ ] 脚本热重载生效（改 JS 即生效）
 

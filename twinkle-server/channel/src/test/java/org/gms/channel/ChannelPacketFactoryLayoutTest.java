@@ -1,12 +1,16 @@
 package org.gms.channel;
 
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.inventory.Inventory;
 import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.quest.QuestStatus;
+import org.gms.domain.game.skill.SkillEntry;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.OutPacket;
+import org.gms.net.packet.v83.V83FileTime;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,9 +43,29 @@ class ChannelPacketFactoryLayoutTest {
 
         // 一件已穿戴装备（上衣 1040002，位置 -5）
         Inventory equip = chr.getInventory(InventoryType.EQUIP);
-        Item top = new Item(1040002);
+        Item top = new Equip(1040002);
         top.setPosition((short) -5);
         equip.putAtSlot((short) -5, top);
+        Item potion = new Item(2000000);
+        potion.setPosition((short) 2);
+        potion.setQuantity((short) 20);
+        potion.setOwner("Hero");
+        chr.getInventory(InventoryType.USE).putAtSlot((short) 2, potion);
+        QuestStatus started = new QuestStatus(1000);
+        started.setState(QuestStatus.State.STARTED);
+        started.setProgressText(1, "003");
+        started.setInfoNumber(2000);
+        chr.putQuest(started);
+        QuestStatus info = new QuestStatus(2000);
+        info.setProgressText(1, "info");
+        chr.putQuest(info);
+        QuestStatus completed = new QuestStatus(3000);
+        completed.setState(QuestStatus.State.COMPLETED);
+        completed.setCompletionTime(1_700_000_000_000L);
+        chr.putQuest(completed);
+        chr.putSkill(new SkillEntry(1_001_004, 3));
+        chr.putSkill(new SkillEntry(1_121_000, 10, 20, 1_800_000_000_000L));
+        chr.putSkill(new SkillEntry(21_110_007, 1)); // 隐藏派生技能不进入封包计数。
 
         OutPacket packet = ChannelPacketFactory.charInfo(chr, 1);
         InPacket p = new ByteArrayInPacket(packet.getBytes());
@@ -111,19 +135,41 @@ class ChannelPacketFactoryLayoutTest {
         assertThat(p.readShort()).isZero();
         // equip 背包结束 → use 起始
         assertThat(p.readInt()).isZero();
+        // use：槽位 + 普通物品完整段
+        assertThat(p.readByte()).isEqualTo((byte) 2);
+        assertThat(p.readByte()).isEqualTo((byte) 2);
+        assertThat(p.readInt()).isEqualTo(2000000);
+        assertThat(p.readByte()).isZero();
+        p.readLong();
+        assertThat(p.readShort()).isEqualTo((short) 20);
+        assertThat(p.readString()).isEqualTo("Hero");
+        assertThat(p.readShort()).isZero();
         // use/setup/etc 结束
         assertThat(p.readByte()).isZero();
         assertThat(p.readByte()).isZero();
         assertThat(p.readByte()).isZero();
 
-        // addSkillInfo：byte 0 + short 0 + short 0
+        // addSkillInfo：普通技能 + 四转技能（额外 masterLevel）+ cooldown 0
         assertThat(p.readByte()).isZero();
-        assertThat(p.readShort()).isZero();
+        assertThat(p.readShort()).isEqualTo((short) 2);
+        assertThat(p.readInt()).isEqualTo(1_001_004);
+        assertThat(p.readInt()).isEqualTo(3);
+        assertThat(p.readLong()).isEqualTo(V83FileTime.encode(-1));
+        assertThat(p.readInt()).isEqualTo(1_121_000);
+        assertThat(p.readInt()).isEqualTo(10);
+        assertThat(p.readLong()).isEqualTo(V83FileTime.encode(1_800_000_000_000L));
+        assertThat(p.readInt()).isEqualTo(20);
         assertThat(p.readShort()).isZero();
 
-        // addQuestInfo：short 0 + short 0
-        assertThat(p.readShort()).isZero();
-        assertThat(p.readShort()).isZero();
+        // addQuestInfo：进行中任务 + infoNumber 附加记录 + 已完成时间
+        assertThat(p.readShort()).isEqualTo((short) 2);
+        assertThat(p.readShort()).isEqualTo((short) 1000);
+        assertThat(p.readString()).isEqualTo("003");
+        assertThat(p.readShort()).isEqualTo((short) 2000);
+        assertThat(p.readString()).isEqualTo("info");
+        assertThat(p.readShort()).isEqualTo((short) 1);
+        assertThat(p.readShort()).isEqualTo((short) 3000);
+        assertThat(p.readLong()).isEqualTo(133_444_736_000_000_000L);
 
         // miniGame：short 0
         assertThat(p.readShort()).isZero();

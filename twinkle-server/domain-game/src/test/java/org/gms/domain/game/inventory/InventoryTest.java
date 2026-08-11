@@ -60,4 +60,20 @@ class InventoryTest {
 
         assertThat(inv.items()).containsExactly(inv.getItem((short) 1));
     }
+
+    @Test
+    @DisplayName("已穿戴装备的负槽位不占用正背包容量")
+    void equippedNegativeSlotsDoNotConsumeBagCapacity() {
+        Inventory equip = new Inventory(InventoryType.EQUIP, 2);
+        Equip worn = new Equip(1_040_002);
+        worn.setPosition((short) -5);
+        equip.putAtSlot((short) -5, worn);
+
+        assertThat(equip.freeSlots()).isEqualTo(2);
+        assertThat(equip.isFull()).isFalse();
+        assertThat(equip.addItem(new Equip(1_000_000))).isTrue();
+        assertThat(equip.addItem(new Equip(1_000_001))).isTrue();
+        assertThat(equip.freeSlots()).isZero();
+        assertThat(equip.isFull()).isTrue();
+    }
 }

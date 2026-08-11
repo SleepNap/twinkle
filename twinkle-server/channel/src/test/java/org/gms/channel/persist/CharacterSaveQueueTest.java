@@ -2,8 +2,12 @@ package org.gms.channel.persist;
 
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.PlayerStorage;
+import org.gms.data.entity.InventoryItemEntity;
 import org.gms.data.repo.CharacterRepository;
+import org.gms.data.repo.InventoryItemRepository;
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,6 +56,69 @@ class CharacterSaveQueueTest {
         public void save(org.gms.data.entity.Character chr) {
             saved.add(chr);
             saveCalls.incrementAndGet();
+        }
+    }
+
+    static final class MemoryInventoryRepo implements InventoryItemRepository {
+        volatile long characterId;
+        volatile List<InventoryItemEntity> items = List.of();
+
+        @Override
+        public List<InventoryItemEntity> findByCharacterId(long characterId) {
+            return items;
+        }
+
+        @Override
+        public void insert(InventoryItemEntity item) {
+        }
+
+        @Override
+        public void replaceAll(long characterId, List<InventoryItemEntity> items) {
+            this.characterId = characterId;
+            this.items = List.copyOf(items);
+        }
+    }
+
+    static final class BlockingRepo implements CharacterRepository {
+        final List<org.gms.data.entity.Character> saved = new ArrayList<>();
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        volatile boolean block = true;
+
+        @Override
+        public List<org.gms.data.entity.Character> findByAccount(int accountId, int world) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<org.gms.data.entity.Character> findById(long id) {
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean existsByName(String name) {
+            return false;
+        }
+
+        @Override
+        public void insert(org.gms.data.entity.Character chr) {
+            saved.add(chr);
+        }
+
+        @Override
+        public void save(org.gms.data.entity.Character chr) {
+            saved.add(chr);
+            if (block) {
+                entered.countDown();
+                try {
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("等待测试释放存档超时");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("存档测试被中断", e);
+                }
+            }
         }
     }
 
@@ -132,6 +201,63 @@ class CharacterSaveQueueTest {
             queue.save(chr);
             queue.drain();
             assertThat(repo.saved).hasSize(1);
+        }
+    }
+
+    @Test
+    void savePersistsCompleteInventorySnapshot() throws Exception {
+        MemoryRepo repo = new MemoryRepo();
+        MemoryInventoryRepo inventoryRepo = new MemoryInventoryRepo();
+        CharacterLoader loader = new CharacterLoader(new DefaultVersionGate(), inventoryRepo);
+        PlayerStorage players = new PlayerStorage();
+        try (CharacterSaveQueue queue = new CharacterSaveQueue(repo, inventoryRepo, loader, players)) {
+            Character chr = newChar(8, 42);
+            chr.setAccountId(3L);
+            Item potion = new Item(2000000);
+            potion.setQuantity((short) 25);
+            chr.getInventory(InventoryType.USE).addItem(potion);
+            chr.markDirty();
+
+            queue.save(chr);
+            queue.drain();
+
+            assertThat(inventoryRepo.characterId).isEqualTo(8L);
+            assertThat(inventoryRepo.items).singleElement().satisfies(saved -> {
+                assertThat(saved.getItemId()).isEqualTo(2000000);
+                assertThat(saved.getInventoryType()).isEqualTo(InventoryType.USE.getType());
+                assertThat(saved.getPosition()).isEqualTo(1);
+                assertThat(saved.getQuantity()).isEqualTo(25);
+                assertThat(saved.getCharacterId()).isEqualTo(8);
+                assertThat(saved.getAccountId()).isEqualTo(3);
+            });
+            assertThat(chr.isDirty()).isFalse();
+        }
+    }
+
+    @Test
+    void mutationDuringAsyncSaveRemainsDirtyForNextFlush() throws Exception {
+        BlockingRepo repo = new BlockingRepo();
+        CharacterLoader loader = new CharacterLoader(new DefaultVersionGate());
+        PlayerStorage players = new PlayerStorage();
+        try (CharacterSaveQueue queue = new CharacterSaveQueue(repo, loader, players)) {
+            Character chr = newChar(11, 100);
+            queue.save(chr);
+            assertThat(repo.entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            chr.setMeso(200);
+            repo.release.countDown();
+            queue.drain();
+
+            assertThat(repo.saved).singleElement().extracting(org.gms.data.entity.Character::getMeso)
+                    .isEqualTo(100);
+            assertThat(chr.isDirty()).isTrue();
+
+            repo.block = false;
+            queue.save(chr);
+            queue.drain();
+            assertThat(repo.saved).extracting(org.gms.data.entity.Character::getMeso)
+                    .containsExactly(100, 200);
+            assertThat(chr.isDirty()).isFalse();
         }
     }
 }

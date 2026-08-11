@@ -9,6 +9,10 @@ import org.gms.data.SimpleDriverDataSource;
 import org.gms.data.mapper.CharacterMapper;
 import org.gms.data.migrate.MigrationRunner;
 import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.Equip;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.PetItem;
 import org.gms.domain.script.ScriptEngine;
 import org.gms.domain.script.ScriptManager;
 import org.gms.domain.script.ScriptRepository;
@@ -17,6 +21,7 @@ import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.packet.PacketSession;
+import org.gms.service.admin.AdminService;
 import org.gms.tick.GameTickLoop;
 import org.junit.jupiter.api.Test;
 
@@ -38,6 +43,10 @@ class ChannelAdminServiceTest {
 
     /** 构造一个完整装配的 ChannelAdminService（临时 SQLite + 手动频道组件，mock restart 不真退出）。 */
     private static ChannelAdminService buildAdmin() throws Exception {
+        return buildAdmin(new PlayerStorage());
+    }
+
+    private static ChannelAdminService buildAdmin(PlayerStorage players) throws Exception {
         String dbPath = Files.createTempDirectory("twinkle-chadmin").resolve("test.db").toString();
         SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
         MigrationRunner.applyMigrations(ds, "sqlite");
@@ -50,7 +59,6 @@ class ChannelAdminServiceTest {
 
         DefaultVersionGate versionGate = new DefaultVersionGate();
         CharacterLoader loader = new CharacterLoader(versionGate);
-        PlayerStorage players = new PlayerStorage();
         FlexCharacterRepository repo = new FlexCharacterRepository(characterMapper);
         CharacterSaveQueue saveQueue = new CharacterSaveQueue(repo, loader, players);
         GameTickLoop tickLoop = new GameTickLoop(5);
@@ -65,6 +73,43 @@ class ChannelAdminServiceTest {
         PlayerSessionRegistry sessions = new PlayerSessionRegistry();
         return new ChannelAdminService(players, sessions, 1, scriptManager, restartService, restartCoordinator,
                 () -> { /* mock restart：测试不真退出 */ });
+    }
+
+    @Test
+    void inventorySnapshotProjectsOnlineMemoryStateWithoutLeakingDomainObjects() throws Exception {
+        PlayerStorage players = new PlayerStorage();
+        Character character = new Character(1L);
+        character.setId(42L);
+        character.setName("Hero");
+        Equip equip = new Equip(1_040_002);
+        equip.setPosition((short) -5);
+        equip.setStr((short) 12);
+        equip.setWatk((short) 3);
+        character.getInventory(InventoryType.EQUIP).putAtSlot((short) -5, equip);
+        PetItem pet = new PetItem(5_000_000, 9001);
+        pet.setPosition((short) 2);
+        pet.setPetName("小黑");
+        pet.setCloseness((short) 3456);
+        character.getInventory(InventoryType.CASH).putAtSlot((short) 2, pet);
+        character.markDirty();
+        players.add(character);
+        ChannelAdminService admin = buildAdmin(players);
+
+        AdminService.PlayerInventory snapshot = admin.inventorySnapshot(42L);
+
+        assertThat(snapshot).isNotNull();
+        assertThat(snapshot.characterId()).isEqualTo(42L);
+        assertThat(snapshot.name()).isEqualTo("Hero");
+        assertThat(snapshot.stateVersion()).isEqualTo(character.dirtyVersion());
+        assertThat(snapshot.items()).hasSize(2);
+        assertThat(snapshot.items().getFirst().itemType()).isEqualTo("equip");
+        assertThat(snapshot.items().getFirst().equip().strength()).isEqualTo(12);
+        assertThat(snapshot.items().getFirst().equip().weaponAttack()).isEqualTo(3);
+        assertThat(snapshot.items().getLast().itemType()).isEqualTo("pet");
+        assertThat(snapshot.items().getLast().petId()).isEqualTo(9001);
+        assertThat(snapshot.items().getLast().pet().name()).isEqualTo("小黑");
+        assertThat(snapshot.items().getLast().pet().closeness()).isEqualTo(3456);
+        assertThat(admin.inventorySnapshot(999L)).isNull();
     }
 
     @Test

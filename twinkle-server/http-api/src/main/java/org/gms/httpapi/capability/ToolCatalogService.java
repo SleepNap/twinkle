@@ -20,10 +20,11 @@ public final class ToolCatalogService {
 
     public static final String HEALTH_TOOL = "server.health.read";
     public static final String ONLINE_TOOL = "player.online.list";
+    public static final String INVENTORY_TOOL = "player.inventory.read";
     public static final String AGENT_INVESTIGATE_TOOL = "server.agent.investigate";
     public static final String AGENT_CLOSE_TOOL = "server.agent.conversation.close";
     public static final String TOOL_VERSION = "1.0.0";
-    public static final String CATALOG_VERSION = "catalog_0.2.0";
+    public static final String CATALOG_VERSION = "catalog_0.3.0";
 
     private final ServerIdentity serverIdentity;
     private final Map<String, ToolSpec> specs;
@@ -33,6 +34,7 @@ public final class ToolCatalogService {
         this.specs = Map.of(
                 HEALTH_TOOL, healthSpec(),
                 ONLINE_TOOL, onlineSpec(),
+                INVENTORY_TOOL, inventorySpec(),
                 AGENT_INVESTIGATE_TOOL, agentInvestigateSpec(serverAgent.available()),
                 AGENT_CLOSE_TOOL, agentCloseSpec(serverAgent.available()));
     }
@@ -206,6 +208,81 @@ public final class ToolCatalogService {
                 "read", ApiScopes.AI_USE, input, output, List.of("server"),
                 "subject_conversation", "required_compact", "conversation_id_only",
                 List.of("application/json"), available, 5000);
+    }
+
+    private static ToolSpec inventorySpec() {
+        Map<String, Object> input = objectSchema(linkedMap(
+                "characterId", linkedMap("type", "string", "pattern", "^[1-9][0-9]{0,18}$")),
+                List.of("characterId"));
+        Map<String, Object> equip = objectSchema(linkedMap(
+                "upgradeSlots", Map.of("type", "integer"),
+                "level", Map.of("type", "integer"),
+                "strength", Map.of("type", "integer"),
+                "dexterity", Map.of("type", "integer"),
+                "intelligence", Map.of("type", "integer"),
+                "luck", Map.of("type", "integer"),
+                "hp", Map.of("type", "integer"),
+                "mp", Map.of("type", "integer"),
+                "weaponAttack", Map.of("type", "integer"),
+                "magicAttack", Map.of("type", "integer"),
+                "weaponDefense", Map.of("type", "integer"),
+                "magicDefense", Map.of("type", "integer"),
+                "accuracy", Map.of("type", "integer"),
+                "avoidability", Map.of("type", "integer"),
+                "hands", Map.of("type", "integer"),
+                "speed", Map.of("type", "integer"),
+                "jump", Map.of("type", "integer"),
+                "vicious", Map.of("type", "integer"),
+                "itemLevel", Map.of("type", "integer"),
+                "itemExp", Map.of("type", "integer"),
+                "ringId", Map.of("type", "integer")),
+                List.of("upgradeSlots", "level", "strength", "dexterity", "intelligence", "luck",
+                        "hp", "mp", "weaponAttack", "magicAttack", "weaponDefense", "magicDefense",
+                        "accuracy", "avoidability", "hands", "speed", "jump", "vicious",
+                        "itemLevel", "itemExp", "ringId"));
+        Map<String, Object> pet = objectSchema(linkedMap(
+                "name", Map.of("type", "string"),
+                "level", Map.of("type", "integer"),
+                "closeness", Map.of("type", "integer"),
+                "fullness", Map.of("type", "integer"),
+                "attribute", Map.of("type", "integer"),
+                "skill", Map.of("type", "integer"),
+                "remainLife", Map.of("type", "integer"),
+                "itemAttribute", Map.of("type", "integer")),
+                List.of("name", "level", "closeness", "fullness", "attribute", "skill",
+                        "remainLife", "itemAttribute"));
+        Map<String, Object> item = objectSchema(linkedMap(
+                "inventoryType", linkedMap("type", "integer", "minimum", 1, "maximum", 5),
+                "position", Map.of("type", "integer"),
+                "itemType", Map.of("enum", List.of("item", "equip", "pet")),
+                "itemId", Map.of("type", "integer"),
+                "quantity", linkedMap("type", "integer", "minimum", 1),
+                "cashId", Map.of("type", "string"),
+                "petId", Map.of("type", "string"),
+                "owner", Map.of("type", "string"),
+                "flag", Map.of("type", "integer"),
+                "expiration", Map.of("type", "integer"),
+                "equip", equip,
+                "pet", pet),
+                List.of("inventoryType", "position", "itemType", "itemId", "quantity",
+                        "cashId", "petId", "owner", "flag", "expiration"));
+        Map<String, Object> output = objectSchema(linkedMap(
+                "serverId", Map.of("type", "string"),
+                "characterId", Map.of("type", "string"),
+                "name", Map.of("type", "string"),
+                "stateVersion", Map.of("type", "string"),
+                "itemCount", linkedMap("type", "integer", "minimum", 0),
+                "items", Map.of("type", "array", "items", item),
+                "observedAt", Map.of("type", "string", "format", "date-time")),
+                List.of("serverId", "characterId", "name", "stateVersion", "itemCount",
+                        "items", "observedAt"));
+        return buildSpec(INVENTORY_TOOL, "读取在线角色背包", "返回频道内存中的精确背包快照",
+                "读取在线角色尚未必然落盘的五类背包、装备扩展和宠物实例状态。",
+                List.of("developer", "gm", "operations"),
+                List.of("player", "inventory", "incident", "item"),
+                "sensitive_read", ApiScopes.PLAYER_INVENTORY_READ, input, output,
+                List.of("server", "character", "inventory"), "online_character_id",
+                "required", "characterId", List.of("data/table", "text/markdown"));
     }
 
     private static ToolSpec buildSpec(String toolId, String title, String summary, String description,

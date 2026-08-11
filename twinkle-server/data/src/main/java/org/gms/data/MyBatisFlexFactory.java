@@ -21,6 +21,7 @@ import org.gms.data.mapper.InventoryItemMapper;
 import org.gms.data.mapper.ParamConfMapper;
 import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
+import org.gms.data.mapper.SkillMapper;
 import org.gms.data.mapper.ToolExecutionAuditMapper;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.ApiKeyRepository;
@@ -28,6 +29,7 @@ import org.gms.data.repo.ApiRequestAuditRepository;
 import org.gms.data.repo.AiUsageRepository;
 import org.gms.data.repo.BuddyListRepository;
 import org.gms.data.repo.CharacterRepository;
+import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexApiKeyRepository;
 import org.gms.data.repo.FlexApiRequestAuditRepository;
@@ -35,10 +37,13 @@ import org.gms.data.repo.FlexAiUsageRepository;
 import org.gms.data.repo.FlexBuddyListRepository;
 import org.gms.data.repo.FlexBusOutboxRepository;
 import org.gms.data.repo.FlexCharacterRepository;
+import org.gms.data.repo.FlexCharacterSnapshotRepository;
 import org.gms.data.repo.FlexInventoryItemRepository;
 import org.gms.data.repo.FlexQuestRepository;
 import org.gms.data.repo.InventoryItemRepository;
 import org.gms.data.repo.QuestRepository;
+import org.gms.data.repo.FlexSkillRepository;
+import org.gms.data.repo.SkillRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.FlexToolExecutionAuditRepository;
 import org.gms.event.OutboxRepository;
@@ -80,6 +85,7 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(InventoryItemMapper.class);
         bootstrap.addMapper(QuestStatusMapper.class);
         bootstrap.addMapper(QuestProgressMapper.class);
+        bootstrap.addMapper(SkillMapper.class);
         bootstrap.addMapper(AiUsageMapper.class);
         bootstrap.addMapper(BusOutboxMapper.class);
         bootstrap.addMapper(BusStreamMapper.class);
@@ -88,7 +94,7 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(ApiRequestAuditMapper.class);
         bootstrap.addMapper(ToolExecutionAuditMapper.class);
         bootstrap.start();
-        log.info("MyBatis-Flex 装配完成：十三个 Mapper 已注册（含 Credential、HTTP 审计与 Tool 审计）");
+        log.info("MyBatis-Flex 装配完成：十四个 Mapper 已注册（含技能、Credential、HTTP 审计与 Tool 审计）");
         return bootstrap;
     }
 
@@ -126,6 +132,12 @@ public class MyBatisFlexFactory {
     @Singleton
     public QuestProgressMapper questProgressMapper(MybatisFlexBootstrap bootstrap) {
         return bootstrap.getMapper(QuestProgressMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public SkillMapper skillMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(SkillMapper.class);
     }
 
     @Bean
@@ -197,8 +209,25 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public CharacterSnapshotRepository characterSnapshotRepository(CharacterMapper characterMapper,
+                                                                   InventoryItemMapper inventoryItemMapper,
+                                                                   QuestStatusMapper questStatusMapper,
+                                                                   QuestProgressMapper questProgressMapper,
+                                                                   SkillMapper skillMapper) {
+        return new FlexCharacterSnapshotRepository(
+                characterMapper, inventoryItemMapper, questStatusMapper, questProgressMapper, skillMapper);
+    }
+
+    @Bean
+    @Singleton
     public QuestRepository questRepository(QuestStatusMapper statusMapper, QuestProgressMapper progressMapper) {
         return new FlexQuestRepository(statusMapper, progressMapper);
+    }
+
+    @Bean
+    @Singleton
+    public SkillRepository skillRepository(SkillMapper mapper) {
+        return new FlexSkillRepository(mapper);
     }
 
     @Bean

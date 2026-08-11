@@ -29,6 +29,7 @@ public class Equip extends Item {
     private short speed;
     private short jump;
     private byte vicious;
+    private byte itemLevel;
     private long itemExp;
     private int ringId;
 
@@ -58,6 +59,7 @@ public class Equip extends Item {
         copy.speed = speed;
         copy.jump = jump;
         copy.vicious = vicious;
+        copy.itemLevel = itemLevel;
         copy.itemExp = itemExp;
         copy.ringId = ringId;
         return copy;

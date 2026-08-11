@@ -269,7 +269,7 @@ components:
       type: object
       required: [toolId, toolVersion, title, summary, provider, categories, tags, riskLevel, availability, permissionState]
       properties:
-        toolId: {enum: [server.health.read, player.online.list, server.agent.investigate, server.agent.conversation.close]}
+        toolId: {enum: [server.health.read, player.online.list, player.inventory.read, server.agent.investigate, server.agent.conversation.close]}
         toolVersion: {const: 1.0.0}
         title: {type: string}
         summary: {type: string}
@@ -306,7 +306,7 @@ components:
         requestId: {type: string, maxLength: 128}
         taskId: {type: [string, 'null'], maxLength: 128}
         stepId: {type: [string, 'null'], maxLength: 128}
-        toolId: {enum: [server.health.read, player.online.list, server.agent.investigate, server.agent.conversation.close]}
+        toolId: {enum: [server.health.read, player.online.list, player.inventory.read, server.agent.investigate, server.agent.conversation.close]}
         toolVersion: {const: 1.0.0}
         input: {type: object}
         dryRun: {const: false}
@@ -328,7 +328,7 @@ components:
         executionId: {type: string}
         requestId: {type: string}
         status: {const: succeeded}
-        output: {oneOf: [{$ref: '#/components/schemas/HealthOutput'}, {$ref: '#/components/schemas/OnlinePlayersOutput'}, {$ref: '#/components/schemas/AgentInvestigationOutput'}, {$ref: '#/components/schemas/AgentConversationCloseOutput'}]}
+        output: {oneOf: [{$ref: '#/components/schemas/HealthOutput'}, {$ref: '#/components/schemas/OnlinePlayersOutput'}, {$ref: '#/components/schemas/PlayerInventoryOutput'}, {$ref: '#/components/schemas/AgentInvestigationOutput'}, {$ref: '#/components/schemas/AgentConversationCloseOutput'}]}
         content: {type: array, items: {type: object}}
         artifacts: {type: array, items: {type: object}}
         auditRef: {type: string}
@@ -384,6 +384,75 @@ components:
       properties:
         conversationId: {type: string}
         evicted: {type: boolean}
+    PlayerInventoryOutput:
+      type: object
+      additionalProperties: false
+      required: [serverId, characterId, name, stateVersion, itemCount, items, observedAt]
+      properties:
+        serverId: {type: string}
+        characterId: {type: string, pattern: '^[1-9][0-9]*$'}
+        name: {type: string}
+        stateVersion: {type: string, pattern: '^[0-9]+$'}
+        itemCount: {type: integer, minimum: 0}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/InventoryItemView'}
+        observedAt: {type: string, format: date-time}
+    InventoryItemView:
+      type: object
+      additionalProperties: false
+      required: [inventoryType, position, itemType, itemId, quantity, cashId, petId, owner, flag, expiration]
+      properties:
+        inventoryType: {type: integer, minimum: 1, maximum: 5}
+        position: {type: integer}
+        itemType: {enum: [item, equip, pet]}
+        itemId: {type: integer}
+        quantity: {type: integer, minimum: 1}
+        cashId: {type: string, pattern: '^[0-9]+$'}
+        petId: {type: string, pattern: '^[0-9]+$'}
+        owner: {type: string}
+        flag: {type: integer}
+        expiration: {type: integer, format: int64}
+        equip: {$ref: '#/components/schemas/InventoryEquipView'}
+        pet: {$ref: '#/components/schemas/InventoryPetView'}
+    InventoryEquipView:
+      type: object
+      additionalProperties: false
+      properties:
+        upgradeSlots: {type: integer}
+        level: {type: integer}
+        strength: {type: integer}
+        dexterity: {type: integer}
+        intelligence: {type: integer}
+        luck: {type: integer}
+        hp: {type: integer}
+        mp: {type: integer}
+        weaponAttack: {type: integer}
+        magicAttack: {type: integer}
+        weaponDefense: {type: integer}
+        magicDefense: {type: integer}
+        accuracy: {type: integer}
+        avoidability: {type: integer}
+        hands: {type: integer}
+        speed: {type: integer}
+        jump: {type: integer}
+        vicious: {type: integer}
+        itemLevel: {type: integer}
+        itemExp: {type: integer, format: int64}
+        ringId: {type: integer}
+    InventoryPetView:
+      type: object
+      additionalProperties: false
+      required: [name, level, closeness, fullness, attribute, skill, remainLife, itemAttribute]
+      properties:
+        name: {type: string}
+        level: {type: integer}
+        closeness: {type: integer}
+        fullness: {type: integer}
+        attribute: {type: integer}
+        skill: {type: integer}
+        remainLife: {type: integer}
+        itemAttribute: {type: integer}
     ErrorEnvelope:
       type: object
       required: [contractVersion, requestId, executionId, error]
@@ -410,7 +479,7 @@ components:
           minItems: 1
           uniqueItems: true
           items:
-            enum: [server.health:read, player.online:read, game:read, game:write, ai:use, keys:manage]
+            enum: [server.health:read, player.online:read, player.inventory:read, game:read, game:write, ai:use, keys:manage]
         expiresAt: {type: [string, 'null'], format: date-time}
     IssuedKey:
       type: object

@@ -1,6 +1,10 @@
 package org.gms.replaceable;
 
 import org.gms.domain.game.Character;
+import org.gms.domain.game.inventory.Equip;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
+import org.gms.domain.game.inventory.ItemConstants;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.trade.Trade;
 import org.gms.domain.game.trade.TradeSide;
@@ -10,6 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,6 +45,16 @@ class TradeSystemTest {
         assertThat(itemSystem.giveItem(c, id, qty)).isTrue();
     }
 
+    private boolean offer(Trade trade, Character trader, int itemId, int quantity, int targetSlot) {
+        InventoryType type = ItemConstants.getInventoryType(itemId);
+        Item source = trader.getInventory(type).items().stream()
+                .filter(item -> item.getId() == itemId && item.getQuantity() >= quantity)
+                .findFirst()
+                .orElse(null);
+        return source != null && tradeSystem.offer(trade, trader, type.getType(),
+                source.getPosition(), quantity, (byte) targetSlot);
+    }
+
     @Test
     @DisplayName("双方锁定后结算：物品双向转移")
     void completeTransfersItemsBothWays() {
@@ -48,8 +64,8 @@ class TradeSystemTest {
         give(b, 2_000_000, 20);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
-        assertThat(tradeSystem.offer(trade, a, 2_000_000, 30)).isTrue();
-        assertThat(tradeSystem.offer(trade, b, 2_000_000, 10)).isTrue();
+        assertThat(offer(trade, a, 2_000_000, 30, 0)).isTrue();
+        assertThat(offer(trade, b, 2_000_000, 10, 0)).isTrue();
         assertThat(tradeSystem.lock(trade, a)).isTrue();
         assertThat(tradeSystem.lock(trade, b)).isTrue();
         assertThat(tradeSystem.complete(trade)).isTrue();
@@ -77,15 +93,179 @@ class TradeSystemTest {
     }
 
     @Test
+    @DisplayName("两个网络会话并发确认时只结算一次")
+    void concurrentConfirmSettlesExactlyOnce() {
+        Character a = player(5000);
+        Character b = player(5000);
+        give(a, 2_000_000, 10);
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        assertThat(offer(trade, a, 2_000_000, 4, 0)).isTrue();
+        assertThat(tradeSystem.offerMeso(trade, b, 1000)).isTrue();
+
+        CompletableFuture<TradeSystem.ConfirmResult> first = CompletableFuture.supplyAsync(
+                () -> tradeSystem.confirm(trade, a));
+        CompletableFuture<TradeSystem.ConfirmResult> second = CompletableFuture.supplyAsync(
+                () -> tradeSystem.confirm(trade, b));
+        Set<TradeSystem.ConfirmResult> results = Set.of(first.join(), second.join());
+
+        assertThat(results).containsExactlyInAnyOrder(
+                TradeSystem.ConfirmResult.WAITING, TradeSystem.ConfirmResult.COMPLETED);
+        assertThat(a.getMeso()).isEqualTo(6000);
+        assertThat(b.getMeso()).isEqualTo(4000);
+        assertThat(a.getItemCount(2_000_000)).isEqualTo(6);
+        assertThat(b.getItemCount(2_000_000)).isEqualTo(4);
+        assertThat(trade.getState()).isEqualTo(Trade.State.DONE);
+    }
+
+    @Test
+    @DisplayName("接收方剩余槽位不足时整笔拒绝且不扣除任何物品")
+    void insufficientCombinedCapacityDoesNotPartiallySettle() {
+        Character a = player(0);
+        Character b = player(0);
+        give(a, 2_000_000, 5);
+        give(a, 2_000_001, 5);
+        for (int index = 0; index < 23; index++) {
+            give(b, 2_010_000 + index, 100);
+        }
+
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        assertThat(offer(trade, a, 2_000_000, 5, 0)).isTrue();
+        assertThat(offer(trade, a, 2_000_001, 5, 1)).isTrue();
+        assertThat(tradeSystem.lock(trade, a)).isTrue();
+        assertThat(tradeSystem.lock(trade, b)).isTrue();
+
+        assertThat(tradeSystem.complete(trade)).isFalse();
+        assertThat(a.getItemCount(2_000_000)).isEqualTo(5);
+        assertThat(a.getItemCount(2_000_001)).isEqualTo(5);
+        assertThat(b.getItemCount(2_000_000)).isZero();
+        assertThat(b.getItemCount(2_000_001)).isZero();
+        assertThat(trade.getState()).isEqualTo(Trade.State.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("装备交易保留唯一 ID、所有者、期限及全部强化属性")
+    void equipTransferPreservesExactInstance() {
+        Character a = player(0);
+        Character b = player(0);
+        Equip source = new Equip(1_302_000);
+        source.setCashId(7788);
+        source.setOwner("Alice");
+        source.setFlag(3);
+        source.setExpiration(1_900_000_000_000L);
+        source.setGiftFrom("Bob");
+        source.setUpgradeSlots((byte) 6);
+        source.setLevel((short) 4);
+        source.setStr((short) 12);
+        source.setWatk((short) 99);
+        source.setItemLevel((byte) 5);
+        source.setItemExp(12_345L);
+        source.setRingId(456);
+        assertThat(a.getInventory(InventoryType.EQUIP).addItem(source)).isTrue();
+
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        assertThat(tradeSystem.offer(trade, a, InventoryType.EQUIP.getType(),
+                source.getPosition(), 1, (byte) 0)).isTrue();
+        assertThat(tradeSystem.lock(trade, a)).isTrue();
+        assertThat(tradeSystem.lock(trade, b)).isTrue();
+        assertThat(tradeSystem.complete(trade)).isTrue();
+
+        assertThat(a.getInventory(InventoryType.EQUIP).items()).isEmpty();
+        Item received = b.getInventory(InventoryType.EQUIP).getItem((short) 1);
+        assertThat(received).isInstanceOf(Equip.class);
+        Equip equip = (Equip) received;
+        assertThat(equip.getCashId()).isEqualTo(7788);
+        assertThat(equip.getOwner()).isEqualTo("Alice");
+        assertThat(equip.getFlag()).isEqualTo(3);
+        assertThat(equip.getExpiration()).isEqualTo(1_900_000_000_000L);
+        assertThat(equip.getGiftFrom()).isEqualTo("Bob");
+        assertThat(equip.getUpgradeSlots()).isEqualTo((byte) 6);
+        assertThat(equip.getLevel()).isEqualTo((short) 4);
+        assertThat(equip.getStr()).isEqualTo((short) 12);
+        assertThat(equip.getWatk()).isEqualTo((short) 99);
+        assertThat(equip.getItemLevel()).isEqualTo((byte) 5);
+        assertThat(equip.getItemExp()).isEqualTo(12_345L);
+        assertThat(equip.getRingId()).isEqualTo(456);
+    }
+
+    @Test
+    @DisplayName("出价后原槽物品属性变化时整笔拒绝且不误扣同 ID 物品")
+    void changedOfferedInstanceRejectsSettlement() {
+        Character a = player(0);
+        Character b = player(0);
+        Item offered = new Item(2_000_000);
+        offered.setQuantity((short) 5);
+        offered.setOwner("before");
+        assertThat(a.getInventory(InventoryType.USE).addItem(offered)).isTrue();
+
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        assertThat(tradeSystem.offer(trade, a, InventoryType.USE.getType(),
+                offered.getPosition(), 5, (byte) 0)).isTrue();
+        offered.setOwner("after");
+        assertThat(tradeSystem.lock(trade, a)).isTrue();
+        assertThat(tradeSystem.lock(trade, b)).isTrue();
+
+        assertThat(tradeSystem.complete(trade)).isFalse();
+        assertThat(a.getInventory(InventoryType.USE).getItem((short) 1)).isSameAs(offered);
+        assertThat(b.getItemCount(2_000_000)).isZero();
+        assertThat(trade.getState()).isEqualTo(Trade.State.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("双方背包已满时可利用各自移出的槽位互换物品")
+    void outgoingItemsFreeSlotsForIncomingExchange() {
+        Character a = player(0);
+        Character b = player(0);
+        for (int index = 0; index < 24; index++) {
+            give(a, 2_010_000 + index, 1);
+            give(b, 2_020_000 + index, 1);
+        }
+        Item fromA = a.getInventory(InventoryType.USE).getItem((short) 1);
+        Item fromB = b.getInventory(InventoryType.USE).getItem((short) 1);
+        assertThat(a.getInventory(InventoryType.USE).freeSlots()).isZero();
+        assertThat(b.getInventory(InventoryType.USE).freeSlots()).isZero();
+
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        assertThat(tradeSystem.offer(trade, a, InventoryType.USE.getType(),
+                fromA.getPosition(), 1, (byte) 0)).isTrue();
+        assertThat(tradeSystem.offer(trade, b, InventoryType.USE.getType(),
+                fromB.getPosition(), 1, (byte) 0)).isTrue();
+        assertThat(tradeSystem.lock(trade, a)).isTrue();
+        assertThat(tradeSystem.lock(trade, b)).isTrue();
+
+        assertThat(tradeSystem.complete(trade)).isTrue();
+        assertThat(a.getItemCount(fromA.getId())).isZero();
+        assertThat(a.getItemCount(fromB.getId())).isEqualTo(1);
+        assertThat(b.getItemCount(fromB.getId())).isZero();
+        assertThat(b.getItemCount(fromA.getId())).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("锁定后金币减少时结算失败且双方余额不变")
+    void staleMesoOfferDoesNotPartiallySettle() {
+        Character a = player(1000);
+        Character b = player(500);
+        Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
+        assertThat(tradeSystem.offerMeso(trade, a, 800)).isTrue();
+        assertThat(tradeSystem.lock(trade, a)).isTrue();
+        assertThat(tradeSystem.lock(trade, b)).isTrue();
+        a.setMeso(100);
+
+        assertThat(tradeSystem.complete(trade)).isFalse();
+        assertThat(a.getMeso()).isEqualTo(100);
+        assertThat(b.getMeso()).isEqualTo(500);
+        assertThat(trade.getState()).isEqualTo(Trade.State.CANCELLED);
+    }
+
+    @Test
     @DisplayName("锁定后拒绝继续出价")
     void offerRejectedAfterLock() {
         Character a = player(0);
         give(a, 2_000_000, 10);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
-        assertThat(tradeSystem.offer(trade, a, 2_000_000, 5)).isTrue();
+        assertThat(offer(trade, a, 2_000_000, 5, 0)).isTrue();
         assertThat(tradeSystem.lock(trade, a)).isTrue();
-        assertThat(tradeSystem.offer(trade, a, 2_000_000, 3)).isFalse();
+        assertThat(offer(trade, a, 2_000_000, 3, 1)).isFalse();
     }
 
     @Test
@@ -95,7 +275,7 @@ class TradeSystemTest {
         give(a, 2_000_000, 10);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
-        assertThat(tradeSystem.offer(trade, a, 2_000_000, 5)).isTrue();
+        assertThat(offer(trade, a, 2_000_000, 5, 0)).isTrue();
         assertThat(tradeSystem.lock(trade, a)).isTrue();
         assertThat(tradeSystem.complete(trade)).isFalse();     // b 未锁定
         assertThat(trade.getState()).isEqualTo(Trade.State.ACTIVE);
@@ -108,7 +288,7 @@ class TradeSystemTest {
         give(a, 2_000_000, 5);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
-        assertThat(tradeSystem.offer(trade, a, 2_000_000, 6)).isFalse();
+        assertThat(offer(trade, a, 2_000_000, 6, 0)).isFalse();
     }
 
     @Test
@@ -119,7 +299,7 @@ class TradeSystemTest {
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
         versionGate.onReload();
-        assertThat(tradeSystem.offer(trade, a, 2_000_000, 5)).isFalse();
+        assertThat(offer(trade, a, 2_000_000, 5, 0)).isFalse();
     }
 
     // ---- 架构 5.3：显式中断 + 回滚（可感知极限 = 交易被取消） ----
@@ -131,7 +311,7 @@ class TradeSystemTest {
         Character b = player(1000);
         give(a, 2_000_000, 10);
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
-        tradeSystem.offer(trade, a, 2_000_000, 5);
+        offer(trade, a, 2_000_000, 5, 0);
         tradeSystem.offerMeso(trade, b, 300);
 
         assertThat(tradeSystem.interrupt(trade)).isTrue();

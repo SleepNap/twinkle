@@ -14,7 +14,14 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
+import org.gms.net.packet.v83.V83CharacterLook;
+import org.gms.net.packet.v83.V83CharacterPacketWriter;
+import org.gms.net.packet.v83.V83EquippedItem;
+import org.gms.net.packet.v83.V83ItemPacketWriter;
 import org.gms.replaceable.TradeSystem;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 玩家互动处理（RecvOpcode.PLAYER_INTERACTION）——交易。
@@ -27,8 +34,8 @@ import org.gms.replaceable.TradeSystem;
  * <p>状态与结算经 {@link TradeSystem}（版本门 + 双向结算）；交易实例存双方 session
  * attr（连接级状态，不跨操作）。handler 只做收包→调 system→发包。
  *
- * <p>简化：SET_ITEMS 按槽位取物品；物品展示广播发 itemId+quantity 简化段
- * （完整 addItemInfo 待后续）；加物品不校验槽位重复（take 时按 offer 累计扣）。
+ * <p>SET_ITEMS 按槽位取物品并用公共 v83 物品写入器广播；加物品不校验槽位重复
+ * （take 时按 offer 累计扣）。
  */
 @Log4j2
 public final class PlayerInteractionHandler implements PacketHandler {
@@ -182,20 +189,20 @@ public final class PlayerInteractionHandler implements PacketHandler {
         byte inventoryType = packet.readByte();
         short pos = packet.readShort();
         short quantity = packet.readShort();
-        packet.readByte();              // targetSlot
+        byte targetSlot = packet.readByte();
 
         Item item = chr.getInventory(InventoryType.getByType(inventoryType)).getItem(pos);
         if (item == null) {
             return;
         }
-        // 经 TradeSystem.offer（版本门 + 持有量校验）
-        if (!tradeSystem.offer(trade, chr, item.getId(), quantity)) {
+        // 经 TradeSystem.offer（版本门 + 原槽位精确实例校验）
+        if (!tradeSystem.offer(trade, chr, inventoryType, pos, quantity, targetSlot)) {
             return;
         }
-        // 广播 getTradeItemAdd（简化段：itemId + quantity）
+        // 广播完整物品段；目标槽位由客户端交易窗口分配
         TradeSide my = trade.sideOf(chr);
         TradeSide partner = my == trade.getFirst() ? trade.getSecond() : trade.getFirst();
-        OutPacket add = tradeItemAdd(number(session, trade), item.getId(), quantity);
+        OutPacket add = tradeItemAdd(number(session, trade), targetSlot, item, quantity);
         session.send(add);
         PacketSession partnerSession = sessions.get(partner.getTrader().getId());
         if (partnerSession != null) {
@@ -227,24 +234,23 @@ public final class PlayerInteractionHandler implements PacketHandler {
         if (trade == null) {
             return;
         }
-        tradeSystem.lock(trade, chr);
         TradeSide my = trade.sideOf(chr);
         TradeSide partner = my == trade.getFirst() ? trade.getSecond() : trade.getFirst();
         PacketSession partnerSession = sessions.get(partner.getTrader().getId());
-        // 双方锁定后才结算
-        if (trade.bothLocked()) {
-            boolean ok = tradeSystem.complete(trade);
-            byte result = ok ? (byte) RESULT_SUCCESS : (byte) RESULT_UNSUCCESSFUL;
-            session.send(tradeResult(number(session, trade), result));
+        TradeSystem.ConfirmResult result = tradeSystem.confirm(trade, chr);
+        if (result == TradeSystem.ConfirmResult.COMPLETED || result == TradeSystem.ConfirmResult.FAILED) {
+            byte operation = result == TradeSystem.ConfirmResult.COMPLETED
+                    ? (byte) RESULT_SUCCESS : (byte) RESULT_UNSUCCESSFUL;
+            session.send(tradeResult(number(session, trade), operation));
             if (partnerSession != null) {
-                partnerSession.send(tradeResult(number(partnerSession, trade), result));
+                partnerSession.send(tradeResult(number(partnerSession, trade), operation));
             }
             clearTrade(session);
             if (partnerSession != null) {
                 clearTrade(partnerSession);
             }
             endOperations(trade);
-        } else {
+        } else if (result == TradeSystem.ConfirmResult.WAITING) {
             session.send(tradeConfirmation());
             if (partnerSession != null) {
                 partnerSession.send(tradeConfirmation());
@@ -265,14 +271,13 @@ public final class PlayerInteractionHandler implements PacketHandler {
         return p;
     }
 
-    /** 对方进房：byte VISIT + 1 + 简化外观 + string 名字。 */
+    /** 对方进房：byte VISIT + 1 + addCharLook + string 名字。 */
     private static OutPacket tradePartnerAdd(Character chr) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.PLAYER_INTERACTION.getValue());
         p.writeByte(ACTION_VISIT);
         p.writeByte(1);
-        p.writeInt(chr.getHair());          // 简化外观：hair + face（完整 addCharLook 待后续）
-        p.writeInt(chr.getFace());
+        V83CharacterPacketWriter.writeLook(p, toProtocolLook(chr), false);
         p.writeString(chr.getName());
         return p;
     }
@@ -289,26 +294,24 @@ public final class PlayerInteractionHandler implements PacketHandler {
         if (number == 1) {
             Character partner = partnerOf(session, trade);
             p.writeByte(0);
-            p.writeInt(partner.getHair());
-            p.writeInt(partner.getFace());
+            V83CharacterPacketWriter.writeLook(p, toProtocolLook(partner), false);
             p.writeString(partner.getName());
         }
         p.writeByte(number);
-        p.writeInt(me.getHair());
-        p.writeInt(me.getFace());
+        V83CharacterPacketWriter.writeLook(p, toProtocolLook(me), false);
         p.writeString(me.getName());
         p.writeByte(0xFF);
         return p;
     }
 
-    /** 加物品：byte SET_ITEMS + number + 简化（itemId+quantity）。 */
-    private static OutPacket tradeItemAdd(byte number, int itemId, int quantity) {
+    /** 加物品：byte SET_ITEMS + number + targetSlot + 完整 addItemInfo（不重复写背包槽位）。 */
+    private static OutPacket tradeItemAdd(byte number, byte targetSlot, Item item, int quantity) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.PLAYER_INTERACTION.getValue());
         p.writeByte(ACTION_SET_ITEMS);
         p.writeByte(number);
-        p.writeInt(itemId);
-        p.writeShort(quantity);
+        p.writeByte(targetSlot);
+        V83ItemPacketWriter.write(p, ChannelItemProtocolMapper.toSnapshot(item, quantity), false);
         return p;
     }
 
@@ -353,6 +356,16 @@ public final class PlayerInteractionHandler implements PacketHandler {
         TradeSide my = trade.sideOf(me);
         TradeSide partner = my == trade.getFirst() ? trade.getSecond() : trade.getFirst();
         return (Character) partner.getTrader();
+    }
+
+    private static V83CharacterLook toProtocolLook(Character chr) {
+        List<V83EquippedItem> equipped = new ArrayList<>();
+        for (Item item : chr.getInventory(InventoryType.EQUIP).items()) {
+            if (item.getPosition() < 0) {
+                equipped.add(new V83EquippedItem(item.getPosition(), item.getId()));
+            }
+        }
+        return new V83CharacterLook(chr.getGender(), chr.getSkinColor(), chr.getFace(), chr.getHair(), equipped);
     }
 
     private static void clearTrade(PacketSession session) {
