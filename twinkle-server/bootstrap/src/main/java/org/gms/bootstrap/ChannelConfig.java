@@ -19,6 +19,7 @@ import org.gms.channel.ChannelLocationBinder;
 import org.gms.channel.ChannelServer;
 import org.gms.channel.CharacterLoader;
 import org.gms.channel.MonsterSpawnService;
+import org.gms.channel.GeneralChatHandler;
 import org.gms.channel.MoveLifeHandler;
 import org.gms.channel.MovePlayerHandler;
 import org.gms.channel.NpcTalkHandler;
@@ -47,6 +48,7 @@ import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.TradeSystem;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.service.admin.AdminService;
+import org.gms.service.agent.PlayerSupportAgent;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.wz.MapLoader;
 
@@ -177,6 +179,9 @@ public class ChannelConfig {
                                                            org.gms.data.repo.BuddyListRepository buddyListRepository,
                                                            org.gms.domain.game.lease.ControllerLeaseService leaseService,
                                                            org.gms.channel.persist.CharacterSaveQueue characterSaveQueue,
+                                                           PlayerSupportAgent playerSupportAgent,
+                                                           @Property(name = "twinkle.ai.player.cooldown-seconds", defaultValue = "15")
+                                                           int playerAgentCooldownSeconds,
                                                            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new ChannelHandlerRegistrar(
                 new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher, leaseService),
@@ -193,7 +198,8 @@ public class ChannelConfig {
                 new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry,
                         characterSaveQueue),
                 new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository),
-                new MoveLifeHandler(leaseService, playerSessionRegistry));
+                new MoveLifeHandler(leaseService, playerSessionRegistry),
+                new GeneralChatHandler(playerSessionRegistry, playerSupportAgent, playerAgentCooldownSeconds));
     }
 
     /** 频道消息订阅（跨频道悄悄话/公告投递，架构 4.4 消息总线）。 */

@@ -7,6 +7,8 @@ import org.gms.data.repo.ApiRequestAuditRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.service.admin.OnlinePlayerEvents;
 import org.junit.jupiter.api.Test;
+import org.gms.ai.service.AiPlayerSupportAgent;
+import org.gms.service.agent.PlayerSupportAgent;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -50,6 +52,7 @@ class HttpApiE2ETest {
                 "twinkle.http.api.rate-limit.refill-seconds", "600"))) {
 
             EmbeddedServer server = ctx.getBean(EmbeddedServer.class);
+            assertThat(ctx.getBean(PlayerSupportAgent.class).available()).isFalse();
             server.start();
             int port = server.getPort();
             String base = "http://127.0.0.1:" + port;
@@ -157,6 +160,7 @@ class HttpApiE2ETest {
                 "twinkle.http.api.bootstrap-key", BOOTSTRAP_KEY))) {
 
             EmbeddedServer server = ctx.getBean(EmbeddedServer.class);
+            assertThat(ctx.getBean(PlayerSupportAgent.class)).isInstanceOf(AiPlayerSupportAgent.class);
             server.start();
             int port = server.getPort();
             String base = "http://127.0.0.1:" + port;
@@ -171,7 +175,41 @@ class HttpApiE2ETest {
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(chat.statusCode()).isEqualTo(200);
-            assertThat(chat.body()).contains("AI 报表");
+            assertThat(chat.body()).contains("AI 报表", "local-rule/deterministic", "queryOnlineStats",
+                    "audit_agent_", "conversationId");
+
+            // twish 通过 Tool-first 能力面发现并执行服务端 Agent，而非依赖私有路由。
+            HttpResponse<String> agentCatalog = client.send(
+                    authorized(base + "/api/v1/capabilities?query=agent").GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(agentCatalog.statusCode()).isEqualTo(200);
+            assertThat(agentCatalog.body()).contains("server.agent.investigate",
+                    "server.agent.conversation.close", "\"availability\":\"available\"");
+
+            String agentRequestId = "req_agent_capability_01";
+            HttpResponse<String> agentExecution = client.send(
+                    authorized(base + "/api/v1/tool-executions")
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(toolBody(agentRequestId,
+                                    "server.agent.investigate",
+                                    "{\"conversationId\":\"twish-agent-e2e\",\"message\":\"在线统计\"}",
+                                    "调查当前在线情况"))).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(agentExecution.statusCode()).isEqualTo(200);
+            assertThat(agentExecution.body()).contains("twish-agent-e2e", "AI 报表",
+                    "queryOnlineStats", "audit_agent_", "local-rule/deterministic");
+
+            String closeRequestId = "req_agent_close_01";
+            HttpResponse<String> closeExecution = client.send(
+                    authorized(base + "/api/v1/tool-executions")
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(toolBody(closeRequestId,
+                                    "server.agent.conversation.close",
+                                    "{\"conversationId\":\"twish-agent-e2e\"}",
+                                    "结束本次调查会话"))).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(closeExecution.statusCode()).isEqualTo(200);
+            assertThat(closeExecution.body()).contains("twish-agent-e2e", "\"evicted\":true");
 
             // AI 结构化报表（POJO 自动解析）
             HttpResponse<String> report = client.send(

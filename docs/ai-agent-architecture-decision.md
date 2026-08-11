@@ -158,7 +158,7 @@ web 是服务端的一部分，twish 是消费者，两者归属不同。
 
 1. **能力面设计（twish v0.1 只读闭环已完成 2026-08-11）**：稳定服务端身份、Subject/Credential、专用 scope、身份快照、Capability 摘要与详情、统一 Tool 执行、健康与在线分页 Tool、标准信封和 `auditRef` 已落地；接入说明见 [`twish-capability-api.md`](twish-capability-api.md)。
 2. **ai 模块可选化（已完成 2026-08-10）**：`AiEnabledCondition` + `twinkle.ai.enabled`（默认 false），管理进程 + 开关双条件才装配；默认 2C2G 不装配省资源。
-3. **服务端 agent 完善（启用后，核心方向=客服能力）**：接入真实 LLM（`ChatModel` bean 换 OpenAI/Ollama，api-key 走 env）→ 落地"AI 值班 GM"：理解玩家自然语言 → 服务端取证（背包/交易/DB，写审计）→ 自然语言回应。这是 agent 保留的立足点。
+3. **服务端 agent 首个闭环（已完成 2026-08-11）**：已接入 OpenAI-compatible / DeepSeek 真实模型，游戏内 `@gm` 触发 AI 值班 GM，完成在线、本人角色存档与已落库背包的只读取证、审计引用和自然语言回应；模型调用与频道线程隔离，默认关闭且有会话上限/玩家限流。配置与边界见 [`server-agent.md`](server-agent.md)。尚缺交易/掉落/在线内存背包工具，以及 split 下 channel→coordinator 的玩家 Agent RPC。
 4. **web 控制台**：作为能力面的可视化，后做。
 5. **twish（agent 客户端）**：独立仓库，先最小化（登录授权签 key → 调能力面），再逐步加本地工具。
 6. **第三方 IM 渠道（服务端侧）**：微信 / 飞书 / Telegram / Discord 的 webhook 接入层在服务端，收消息 → 结构化解析 → 入能力面事件收件箱 → twish 补拉/订阅发起任务；twish 亦经能力面向 IM 推送结果/告警/审批（两端都做）。IM 文本按不可信输入处理，防提示词注入。

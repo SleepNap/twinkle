@@ -1,14 +1,20 @@
 package org.gms.ai.controller;
 
 import io.micronaut.http.MediaType;
+import io.micronaut.http.HttpRequest;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
+import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
+import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import org.gms.ai.service.AiFacade;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * AI 客户端接口（架构 M3-2：客户端流式接口 + 报表）。
@@ -18,6 +24,7 @@ import java.util.Map;
  */
 @Controller("/api/v1/ai")
 @Produces(MediaType.APPLICATION_JSON)
+@ExecuteOn(TaskExecutors.BLOCKING)
 public final class AiController {
 
     private final AiFacade aiFacade;
@@ -28,9 +35,23 @@ public final class AiController {
 
     /** 对话（阻塞，返回最终文本；工具自动循环）。 */
     @Post("/chat")
-    public Map<String, Object> chat(@Body Map<String, String> body) {
-        String reply = aiFacade.chat(body.getOrDefault("message", ""));
-        return Map.of("reply", reply);
+    public AiFacade.AgentReply chat(HttpRequest<?> request, @Body AgentChatRequest body) {
+        String conversationId = body.conversationId() == null || body.conversationId().isBlank()
+                ? "conv-" + UUID.randomUUID() : body.conversationId();
+        return aiFacade.investigate(conversationId, body.message(),
+                attribute(request, "twinkle.api.request-id", UUID.randomUUID().toString()),
+                attribute(request, "twinkle.api.subject-id", "api-agent"),
+                attribute(request, "twinkle.api.credential-id", "api-key"),
+                "api");
+    }
+
+    /** 主动结束会话并释放上下文。 */
+    @Delete("/chat/{conversationId}")
+    public Map<String, Object> closeConversation(HttpRequest<?> request,
+                                                 @PathVariable String conversationId) {
+        return Map.of("conversationId", conversationId,
+                "evicted", aiFacade.closeConversation(conversationId,
+                        attribute(request, "twinkle.api.subject-id", "api-agent")));
     }
 
     /** 在线统计报表（结构化输出）。 */
@@ -43,6 +64,16 @@ public final class AiController {
     /** 调用统计（观测）。 */
     @Get("/usage")
     public Map<String, Object> usage() {
-        return Map.of("callCount", aiFacade.callCount());
+        return Map.of("callCount", aiFacade.callCount(),
+                "model", aiFacade.modelDescriptor(),
+                "externalModel", aiFacade.externalModel());
+    }
+
+    private static String attribute(HttpRequest<?> request, String name, String fallback) {
+        return request.getAttribute(name, String.class).orElse(fallback);
+    }
+
+    /** Agent 对话请求；conversationId 省略时由服务端创建。 */
+    public record AgentChatRequest(String conversationId, String message) {
     }
 }

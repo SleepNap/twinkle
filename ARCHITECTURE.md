@@ -463,9 +463,10 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 
 - LangChain4j `AiServices` 声明式 Agent + `@Tool` 注解，多工具调用靠模型原生 function calling 自动循环。
 - 流式 `TokenStream` + 工具调用原生合一。
-- 场景：AI 报表 / AI 数据统计 / 多工具调用 / 每日总结（`@Scheduled`）/ 客户端流式接口。
+- 场景：AI 报表 / AI 数据统计 / 多工具调用 / 每日总结（`@Scheduled`）/ 玩家游戏内 `@gm` 值班入口。
 - 结构化输出：返回 POJO/Enum/JSON 自动解析；RAG 全套备查 WZ/游戏知识库。
 - **AI 工具不得直踩游戏内存对象**（同 HTTP 约束），只经 application service 接口。计费/记忆/配置落 SQLite（复用现有 Dao 设计；低配模式下 SQLite 本即主库）。
+- Agent 默认关闭；真实模型密钥只经环境变量注入。玩家入口只读本人数据，工具调用写权威审计；外部模型在独立线程池运行，不得阻塞 Netty/游戏 tick。
 
 ---
 

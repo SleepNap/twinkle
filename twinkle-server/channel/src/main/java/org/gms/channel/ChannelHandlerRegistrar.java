@@ -25,6 +25,7 @@ public final class ChannelHandlerRegistrar {
     private final ChangeChannelHandler changeChannel;
     private final BuddyHandler buddy;
     private final MoveLifeHandler moveLife;
+    private final GeneralChatHandler generalChat;
 
     public ChannelHandlerRegistrar(PlayerLoggedinHandler playerLoggedin,
                                    PlayerMapTransitionHandler mapTransition,
@@ -37,7 +38,7 @@ public final class ChannelHandlerRegistrar {
                                    NpcTalkMoreHandler npcTalkMore,
                                    UseItemHandler useItem) {
         this(playerLoggedin, mapTransition, movePlayer, closeRange, ranged, magic, interaction,
-                npcTalk, npcTalkMore, useItem, null, null, null, null);
+                npcTalk, npcTalkMore, useItem, null, null, null, null, null);
     }
 
     public ChannelHandlerRegistrar(PlayerLoggedinHandler playerLoggedin,
@@ -54,7 +55,7 @@ public final class ChannelHandlerRegistrar {
                                    ChangeChannelHandler changeChannel,
                                    BuddyHandler buddy) {
         this(playerLoggedin, mapTransition, movePlayer, closeRange, ranged, magic, interaction,
-                npcTalk, npcTalkMore, useItem, whisper, changeChannel, buddy, null);
+                npcTalk, npcTalkMore, useItem, whisper, changeChannel, buddy, null, null);
     }
 
     public ChannelHandlerRegistrar(PlayerLoggedinHandler playerLoggedin,
@@ -71,6 +72,25 @@ public final class ChannelHandlerRegistrar {
                                    ChangeChannelHandler changeChannel,
                                    BuddyHandler buddy,
                                    MoveLifeHandler moveLife) {
+        this(playerLoggedin, mapTransition, movePlayer, closeRange, ranged, magic, interaction,
+                npcTalk, npcTalkMore, useItem, whisper, changeChannel, buddy, moveLife, null);
+    }
+
+    public ChannelHandlerRegistrar(PlayerLoggedinHandler playerLoggedin,
+                                   PlayerMapTransitionHandler mapTransition,
+                                   MovePlayerHandler movePlayer,
+                                   AttackHandler closeRange,
+                                   AttackHandler ranged,
+                                   AttackHandler magic,
+                                   PlayerInteractionHandler interaction,
+                                   NpcTalkHandler npcTalk,
+                                   NpcTalkMoreHandler npcTalkMore,
+                                   UseItemHandler useItem,
+                                   WhisperHandler whisper,
+                                   ChangeChannelHandler changeChannel,
+                                   BuddyHandler buddy,
+                                   MoveLifeHandler moveLife,
+                                   GeneralChatHandler generalChat) {
         this.playerLoggedin = playerLoggedin;
         this.mapTransition = mapTransition;
         this.movePlayer = movePlayer;
@@ -85,6 +105,7 @@ public final class ChannelHandlerRegistrar {
         this.changeChannel = changeChannel;
         this.buddy = buddy;
         this.moveLife = moveLife;
+        this.generalChat = generalChat;
     }
 
     /** 注册全部频道 handler（进图链路 + M3-5 游戏内协议 + M4 三机制玩法 + 阶段 B 怪物移动）。 */
@@ -110,6 +131,9 @@ public final class ChannelHandlerRegistrar {
         }
         if (moveLife != null) {
             registry.register(RecvOpcode.MOVE_LIFE, moveLife);
+        }
+        if (generalChat != null) {
+            registry.register(RecvOpcode.GENERAL_CHAT, generalChat);
         }
     }
 }

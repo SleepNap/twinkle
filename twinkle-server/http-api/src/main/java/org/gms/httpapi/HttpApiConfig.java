@@ -22,6 +22,7 @@ import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.execution.OnlinePlayerPageService;
 import org.gms.httpapi.execution.ServerHealthTool;
 import org.gms.httpapi.execution.ToolExecutionService;
+import org.gms.service.agent.ServerAgentService;
 import org.gms.observability.Metrics;
 import org.gms.observability.HealthRegistry;
 import org.gms.role.ManagementProcessCondition;
@@ -96,8 +97,9 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
-    public ToolCatalogService toolCatalogService(ServerIdentity serverIdentity) {
-        return new ToolCatalogService(serverIdentity);
+    public ToolCatalogService toolCatalogService(ServerIdentity serverIdentity,
+                                                 ServerAgentService serverAgentService) {
+        return new ToolCatalogService(serverIdentity, serverAgentService);
     }
 
     @Bean
@@ -121,8 +123,9 @@ public class HttpApiConfig {
     public ToolExecutionService toolExecutionService(
             ToolCatalogService catalogService, ServerHealthTool healthTool,
             OnlinePlayerPageService onlineTool, ToolExecutionAuditRepository auditRepository,
-            ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity) {
+            ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity,
+            ServerAgentService serverAgentService) {
         return new ToolExecutionService(catalogService, healthTool, onlineTool, auditRepository,
-                rateLimiter, metrics, serverIdentity);
+                rateLimiter, metrics, serverIdentity, serverAgentService);
     }
 }

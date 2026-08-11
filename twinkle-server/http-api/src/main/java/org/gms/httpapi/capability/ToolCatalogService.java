@@ -4,6 +4,8 @@ import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.auth.ApiScopes;
 import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.service.agent.ServerAgentService;
+import org.gms.service.agent.UnavailableServerAgentService;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,17 +20,26 @@ public final class ToolCatalogService {
 
     public static final String HEALTH_TOOL = "server.health.read";
     public static final String ONLINE_TOOL = "player.online.list";
+    public static final String AGENT_INVESTIGATE_TOOL = "server.agent.investigate";
+    public static final String AGENT_CLOSE_TOOL = "server.agent.conversation.close";
     public static final String TOOL_VERSION = "1.0.0";
-    public static final String CATALOG_VERSION = "catalog_0.1.0";
+    public static final String CATALOG_VERSION = "catalog_0.2.0";
 
     private final ServerIdentity serverIdentity;
     private final Map<String, ToolSpec> specs;
 
-    public ToolCatalogService(ServerIdentity serverIdentity) {
+    public ToolCatalogService(ServerIdentity serverIdentity, ServerAgentService serverAgent) {
         this.serverIdentity = serverIdentity;
         this.specs = Map.of(
                 HEALTH_TOOL, healthSpec(),
-                ONLINE_TOOL, onlineSpec());
+                ONLINE_TOOL, onlineSpec(),
+                AGENT_INVESTIGATE_TOOL, agentInvestigateSpec(serverAgent.available()),
+                AGENT_CLOSE_TOOL, agentCloseSpec(serverAgent.available()));
+    }
+
+    /** 兼容独立目录单测：未传 Agent 时目录仍展示为不可用。 */
+    public ToolCatalogService(ServerIdentity serverIdentity) {
+        this(serverIdentity, new UnavailableServerAgentService());
     }
 
     public Map<String, Object> catalog(ApiPrincipal principal, String profile, String query) {
@@ -154,12 +165,67 @@ public final class ToolCatalogService {
                 List.of("data/table", "game/character-card", "text/markdown"));
     }
 
+    private static ToolSpec agentInvestigateSpec(boolean available) {
+        Map<String, Object> input = objectSchema(linkedMap(
+                "conversationId", linkedMap("type", List.of("string", "null"), "maxLength", 64,
+                        "pattern", "^[A-Za-z0-9._:-]{1,64}$"),
+                "message", linkedMap("type", "string", "minLength", 1, "maxLength", 2000)),
+                List.of("message"));
+        Map<String, Object> output = objectSchema(linkedMap(
+                "conversationId", Map.of("type", "string"),
+                "reply", Map.of("type", "string"),
+                "model", Map.of("type", "string"),
+                "executedTools", Map.of("type", "array", "items", Map.of("type", "string")),
+                "auditRefs", Map.of("type", "array", "items", Map.of("type", "string")),
+                "inputTokens", linkedMap("type", "integer", "minimum", 0),
+                "outputTokens", linkedMap("type", "integer", "minimum", 0)),
+                List.of("conversationId", "reply", "model", "executedTools", "auditRefs",
+                        "inputTokens", "outputTokens"));
+        return buildSpec(AGENT_INVESTIGATE_TOOL, "服务端 Agent 只读调查",
+                "让服务端 Agent 自主选择只读取证工具并返回可审计答复",
+                "提交自然语言问题；服务端按当前 Subject 隔离会话，并返回工具和审计引用。",
+                List.of("developer", "gm", "support"),
+                List.of("agent", "ai", "investigation", "audit"),
+                "sensitive_read", ApiScopes.AI_USE, input, output,
+                List.of("server", "character", "account"), "authorized_server_resources",
+                "required", "message_hash_and_length",
+                List.of("text/markdown", "application/json"), available, 60000);
+    }
+
+    private static ToolSpec agentCloseSpec(boolean available) {
+        Map<String, Object> input = objectSchema(linkedMap(
+                "conversationId", linkedMap("type", "string", "maxLength", 64,
+                        "pattern", "^[A-Za-z0-9._:-]{1,64}$")), List.of("conversationId"));
+        Map<String, Object> output = objectSchema(linkedMap(
+                "conversationId", Map.of("type", "string"),
+                "evicted", Map.of("type", "boolean")), List.of("conversationId", "evicted"));
+        return buildSpec(AGENT_CLOSE_TOOL, "关闭服务端 Agent 会话",
+                "释放当前 Subject 的指定 Agent 会话记忆",
+                "仅释放当前 Subject 命名空间内的会话，不影响其他身份或游戏状态。",
+                List.of("developer", "gm", "support"), List.of("agent", "ai", "conversation"),
+                "read", ApiScopes.AI_USE, input, output, List.of("server"),
+                "subject_conversation", "required_compact", "conversation_id_only",
+                List.of("application/json"), available, 5000);
+    }
+
     private static ToolSpec buildSpec(String toolId, String title, String summary, String description,
                                       List<String> categories, List<String> tags, String riskLevel,
                                       String requiredScope, Map<String, Object> input,
                                       Map<String, Object> output, List<String> resourceTypes,
                                       String resourceResolution, String auditMode,
                                       String parameterSummary, List<String> contentTypes) {
+        return buildSpec(toolId, title, summary, description, categories, tags, riskLevel,
+                requiredScope, input, output, resourceTypes, resourceResolution, auditMode,
+                parameterSummary, contentTypes, true, 5000);
+    }
+
+    private static ToolSpec buildSpec(String toolId, String title, String summary, String description,
+                                      List<String> categories, List<String> tags, String riskLevel,
+                                      String requiredScope, Map<String, Object> input,
+                                      Map<String, Object> output, List<String> resourceTypes,
+                                      String resourceResolution, String auditMode,
+                                      String parameterSummary, List<String> contentTypes,
+                                      boolean available, int timeoutMs) {
         LinkedHashMap<String, Object> summaryMap = new LinkedHashMap<>();
         summaryMap.put("toolId", toolId);
         summaryMap.put("toolVersion", TOOL_VERSION);
@@ -169,7 +235,7 @@ public final class ToolCatalogService {
         summaryMap.put("categories", categories);
         summaryMap.put("tags", tags);
         summaryMap.put("riskLevel", riskLevel);
-        summaryMap.put("availability", "available");
+        summaryMap.put("availability", available ? "available" : "unavailable");
         summaryMap.put("permissionState", "allowed");
 
         LinkedHashMap<String, Object> detail = new LinkedHashMap<>();
@@ -179,6 +245,7 @@ public final class ToolCatalogService {
         detail.put("title", title);
         detail.put("description", description);
         detail.put("provider", "server");
+        detail.put("availability", available ? "available" : "unavailable");
         detail.put("schemaDialect", "https://json-schema.org/draft/2020-12/schema");
         detail.put("inputSchema", input);
         detail.put("outputSchema", output);
@@ -189,12 +256,12 @@ public final class ToolCatalogService {
         detail.put("risk", linkedMap(
                 "level", riskLevel, "confirmation", "never", "supportsDryRun", false));
         detail.put("execution", linkedMap(
-                "mode", "sync", "timeoutMs", 5000,
+                "mode", "sync", "timeoutMs", timeoutMs,
                 "idempotency", "not_required", "retryPolicy", "safe_read_backoff"));
         detail.put("result", linkedMap(
                 "contentTypes", contentTypes, "dataClassification", "internal"));
         detail.put("audit", linkedMap("mode", auditMode, "parameterSummary", parameterSummary));
-        return new ToolSpec(toolId, TOOL_VERSION, title, summary, tags, requiredScope,
+        return new ToolSpec(toolId, TOOL_VERSION, title, summary, tags, requiredScope, available,
                 Map.copyOf(summaryMap), Map.copyOf(detail));
     }
 
@@ -219,7 +286,7 @@ public final class ToolCatalogService {
     }
 
     public record ToolSpec(String toolId, String toolVersion, String title, String summaryText,
-                           List<String> tags, String requiredScope,
+                           List<String> tags, String requiredScope, boolean available,
                            Map<String, Object> summary, Map<String, Object> detail) {
     }
 }

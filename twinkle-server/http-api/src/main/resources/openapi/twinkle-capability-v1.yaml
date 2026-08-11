@@ -132,6 +132,45 @@ paths:
         '201':
           description: Equal-or-narrower replacement Credential; old Credential is revoked
         '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/ai/chat:
+    post:
+      operationId: investigateWithServerAgent
+      x-required-scope: ai:use
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AgentChatRequest'}
+      responses:
+        '200':
+          description: Read-only Agent answer with executed tools and audit references
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentReply'}
+        '400': {$ref: '#/components/responses/InvalidInput'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /api/v1/ai/chat/{conversationId}:
+    delete:
+      operationId: closeServerAgentConversation
+      x-required-scope: ai:use
+      parameters:
+        - {name: conversationId, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._:-]{1,64}$'}}
+      responses:
+        '200': {description: Conversation memory eviction result}
+  /api/v1/ai/report/online:
+    get:
+      operationId: getServerAgentOnlineReport
+      x-required-scope: ai:use
+      responses:
+        '200': {description: Model-generated online summary}
+  /api/v1/ai/usage:
+    get:
+      operationId: getServerAgentUsage
+      x-required-scope: ai:use
+      responses:
+        '200': {description: Process-local call count and configured model descriptor}
 components:
   securitySchemes:
     bearerCredential:
@@ -164,6 +203,25 @@ components:
       description: Safe unclassified server failure
       content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}}}
   schemas:
+    AgentChatRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        conversationId: {type: [string, 'null'], pattern: '^[A-Za-z0-9._:-]{1,64}$'}
+        message: {type: string, minLength: 1, maxLength: 2000}
+    AgentReply:
+      type: object
+      additionalProperties: false
+      required: [conversationId, reply, model, executedTools, auditRefs, inputTokens, outputTokens]
+      properties:
+        conversationId: {type: string}
+        reply: {type: string}
+        model: {type: string}
+        executedTools: {type: array, items: {type: string}}
+        auditRefs: {type: array, items: {type: string}}
+        inputTokens: {type: integer, minimum: 0}
+        outputTokens: {type: integer, minimum: 0}
     ServerIdentity:
       type: object
       required: [serverId, displayName, environment]
@@ -211,7 +269,7 @@ components:
       type: object
       required: [toolId, toolVersion, title, summary, provider, categories, tags, riskLevel, availability, permissionState]
       properties:
-        toolId: {enum: [server.health.read, player.online.list]}
+        toolId: {enum: [server.health.read, player.online.list, server.agent.investigate, server.agent.conversation.close]}
         toolVersion: {const: 1.0.0}
         title: {type: string}
         summary: {type: string}
@@ -248,7 +306,7 @@ components:
         requestId: {type: string, maxLength: 128}
         taskId: {type: [string, 'null'], maxLength: 128}
         stepId: {type: [string, 'null'], maxLength: 128}
-        toolId: {enum: [server.health.read, player.online.list]}
+        toolId: {enum: [server.health.read, player.online.list, server.agent.investigate, server.agent.conversation.close]}
         toolVersion: {const: 1.0.0}
         input: {type: object}
         dryRun: {const: false}
@@ -270,7 +328,7 @@ components:
         executionId: {type: string}
         requestId: {type: string}
         status: {const: succeeded}
-        output: {oneOf: [{$ref: '#/components/schemas/HealthOutput'}, {$ref: '#/components/schemas/OnlinePlayersOutput'}]}
+        output: {oneOf: [{$ref: '#/components/schemas/HealthOutput'}, {$ref: '#/components/schemas/OnlinePlayersOutput'}, {$ref: '#/components/schemas/AgentInvestigationOutput'}, {$ref: '#/components/schemas/AgentConversationCloseOutput'}]}
         content: {type: array, items: {type: object}}
         artifacts: {type: array, items: {type: object}}
         auditRef: {type: string}
@@ -307,6 +365,25 @@ components:
               mapId: {type: integer, minimum: 0}
         nextCursor: {type: [string, 'null']}
         observedAt: {type: string, format: date-time}
+    AgentInvestigationOutput:
+      type: object
+      required: [conversationId, reply, model, executedTools, auditRefs, inputTokens, outputTokens]
+      additionalProperties: false
+      properties:
+        conversationId: {type: string}
+        reply: {type: string}
+        model: {type: string}
+        executedTools: {type: array, items: {type: string}}
+        auditRefs: {type: array, items: {type: string}}
+        inputTokens: {type: integer, minimum: 0}
+        outputTokens: {type: integer, minimum: 0}
+    AgentConversationCloseOutput:
+      type: object
+      required: [conversationId, evicted]
+      additionalProperties: false
+      properties:
+        conversationId: {type: string}
+        evicted: {type: boolean}
     ErrorEnvelope:
       type: object
       required: [contractVersion, requestId, executionId, error]

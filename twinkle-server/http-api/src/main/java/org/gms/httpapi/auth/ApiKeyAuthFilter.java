@@ -28,6 +28,8 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
 
     public static final String PRINCIPAL_ATTRIBUTE = "twinkle.api.principal";
     public static final String REQUEST_ID_ATTRIBUTE = "twinkle.api.request-id";
+    public static final String SUBJECT_ID_ATTRIBUTE = "twinkle.api.subject-id";
+    public static final String CREDENTIAL_ID_ATTRIBUTE = "twinkle.api.credential-id";
 
     private final ApiKeyService apiKeyService;
     private final ApiAuditService auditService;
@@ -82,6 +84,8 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
 
         ApiPrincipal principal = authenticated.get();
         request.setAttribute(PRINCIPAL_ATTRIBUTE, principal);
+        request.setAttribute(SUBJECT_ID_ATTRIBUTE, principal.subjectId());
+        request.setAttribute(CREDENTIAL_ID_ATTRIBUTE, principal.credentialId());
         if (!principal.permits(policy.requiredScope())) {
             auditService.record(requestId, principal, request.getMethodName(), request.getPath(),
                     policy.requiredScope(), "forbidden", HttpStatus.FORBIDDEN.getCode(),

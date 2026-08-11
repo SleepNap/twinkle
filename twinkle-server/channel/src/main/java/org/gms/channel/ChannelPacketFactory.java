@@ -58,6 +58,17 @@ public final class ChannelPacketFactory {
         return p;
     }
 
+    /** v83 地图聊天回包：角色 ID + GM 标志 + 文本 + 客户端显示标志。 */
+    public static OutPacket chatText(long characterId, boolean gm, String message, int show) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.CHATTEXT.getValue());
+        p.writeInt((int) characterId);
+        p.writeBool(gm);
+        p.writeString(message);
+        p.writeByte(show);
+        return p;
+    }
+
     /**
      * 登录进图核心包（SendOpcode.SET_FIELD + addCharacterInfo）。
      * 空背包/技能/任务等段按 v83 空列表写法占位。

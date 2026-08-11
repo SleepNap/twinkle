@@ -34,6 +34,12 @@ public class FlexCharacterRepository implements CharacterRepository {
     }
 
     @Override
+    public Optional<Character> findByName(String name) {
+        return Optional.ofNullable(mapper.selectOneByQuery(
+                QueryWrapper.create().where(Character::getName).eq(name)));
+    }
+
+    @Override
     public boolean existsByName(String name) {
         return mapper.selectCountByQuery(
                 QueryWrapper.create().where(Character::getName).eq(name)) > 0;

@@ -53,6 +53,23 @@ twinkle:
   # 默认关省内存/CPU（2C2G 红线 15/9.2）；只在管理进程装配（single/standalone/coordinator 角色）。
   ai:
     enabled: ${TWINKLE_AI_ENABLED:false}
+    # local-rule 仅用于无外网开发/测试；生产值班 GM 使用 openai-compatible 或 deepseek。
+    model:
+      provider: ${TWINKLE_AI_MODEL_PROVIDER:local-rule}
+      # DeepSeek 示例：https://api.deepseek.com/v1；Ollama：http://127.0.0.1:11434/v1
+      base-url: ${TWINKLE_LLM_BASE_URL:}
+      api-key: ${TWINKLE_LLM_API_KEY:}
+      name: ${TWINKLE_LLM_MODEL:}
+      temperature: ${TWINKLE_LLM_TEMPERATURE:0.1}
+      max-tokens: ${TWINKLE_LLM_MAX_TOKENS:1200}
+      timeout-seconds: ${TWINKLE_LLM_TIMEOUT_SECONDS:45}
+    player:
+      worker-threads: ${TWINKLE_AI_PLAYER_WORKER_THREADS:1}
+      cooldown-seconds: ${TWINKLE_AI_PLAYER_COOLDOWN_SECONDS:15}
+    memory:
+      # 每会话只保留短窗口，并限制内存会话总数，避免可选 Agent 破坏 2C2G 红线。
+      max-messages: ${TWINKLE_AI_MAX_MESSAGES:20}
+      max-conversations: ${TWINKLE_AI_MAX_CONVERSATIONS:100}
 
   # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
   http:

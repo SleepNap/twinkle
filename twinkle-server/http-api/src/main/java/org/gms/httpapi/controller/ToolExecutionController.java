@@ -10,6 +10,8 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import lombok.extern.log4j.Log4j2;
 import org.gms.httpapi.auth.ApiKeyAuthFilter;
 import org.gms.httpapi.auth.ApiPrincipal;
@@ -23,6 +25,7 @@ import java.util.Map;
 @Controller("/api/v1/tool-executions")
 @Produces(MediaType.APPLICATION_JSON)
 @Log4j2
+@ExecuteOn(TaskExecutors.BLOCKING)
 public final class ToolExecutionController {
 
     private final ToolExecutionService executionService;

@@ -27,9 +27,7 @@ import java.util.UUID;
  * {@link AiMessage#AiMessage(List)}（工具调用请求），由 AiServices 驱动真实的多工具调用
  * 循环；工具结果回来后生成最终报告文本。
  *
- * <p><b>为何自研</b>：M3 单进程 2C2G 红线 + 无外部 LLM key。Agent/工具/流式/结构化输出
- * 全走真实 LangChain4j API；接入真实 LLM 时只需把本类替换为 OpenAI/Ollama 的 ChatModel
- * 实现（装配层换 bean，工具与编排零改动）。
+ * <p>本实现仅供无外网开发和确定性测试；生产通过模型工厂使用真实 LLM。
  */
 @Log4j2
 public final class LocalRuleChatModel implements ChatModel, StreamingChatModel {
@@ -67,7 +65,8 @@ public final class LocalRuleChatModel implements ChatModel, StreamingChatModel {
                     .name(toolName)
                     .arguments(arguments)
                     .build();
-            log.info("本地模型路由到工具: {} 参数={}", toolName, arguments);
+            // 参数可能含角色名/账号名，日志只记录工具标识。
+            log.info("本地模型路由到工具: {}", toolName);
             return ChatResponse.builder().aiMessage(new AiMessage(List.of(req))).build();
         }
 
@@ -115,6 +114,10 @@ public final class LocalRuleChatModel implements ChatModel, StreamingChatModel {
             ChatMessage m = messages.get(i);
             if (m instanceof dev.langchain4j.data.message.ToolExecutionResultMessage r) {
                 return r.text();
+            }
+            // 会话记忆里可能保留旧工具结果；只接受最近一条用户消息之后的结果。
+            if (m instanceof UserMessage) {
+                return null;
             }
         }
         return null;

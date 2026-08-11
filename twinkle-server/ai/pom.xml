@@ -20,6 +20,11 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
         </dependency>
+        <!-- OpenAI-compatible 模型适配：DeepSeek / Qwen / Ollama / LM Studio 共用。 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+        </dependency>
         <!-- Micronaut HTTP（AI 客户端流式接口：/api/v1/ai/*，controller 全局扫描注册） -->
         <dependency>
             <groupId>io.micronaut</groupId>

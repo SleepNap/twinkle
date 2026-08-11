@@ -8,7 +8,11 @@ import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.observability.Metrics;
+import org.gms.service.agent.ServerAgentService;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -37,6 +41,8 @@ public final class ToolExecutionService {
     private final ApiRateLimiter rateLimiter;
     private final Metrics metrics;
     private final ServerIdentity serverIdentity;
+    private final ServerAgentService serverAgent;
+    private final Object[] executionLocks = new Object[64];
     private final Map<String, StoredExecution> byExecutionId = new ConcurrentHashMap<>();
     private final Map<String, String> executionIdByDedupeKey = new ConcurrentHashMap<>();
 
@@ -44,7 +50,7 @@ public final class ToolExecutionService {
                                 OnlinePlayerPageService onlineTool,
                                 ToolExecutionAuditRepository auditRepository,
                                 ApiRateLimiter rateLimiter, Metrics metrics,
-                                ServerIdentity serverIdentity) {
+                                ServerIdentity serverIdentity, ServerAgentService serverAgent) {
         this.catalogService = catalogService;
         this.healthTool = healthTool;
         this.onlineTool = onlineTool;
@@ -52,13 +58,18 @@ public final class ToolExecutionService {
         this.rateLimiter = rateLimiter;
         this.metrics = metrics;
         this.serverIdentity = serverIdentity;
+        this.serverAgent = serverAgent;
+        for (int index = 0; index < executionLocks.length; index++) {
+            executionLocks[index] = new Object();
+        }
     }
 
-    public synchronized ExecutionResult execute(ApiPrincipal principal, Map<String, Object> body,
-                                                String fallbackRequestId) {
+    public ExecutionResult execute(ApiPrincipal principal, Map<String, Object> body,
+                                   String fallbackRequestId) {
         pruneExpiredExecutions();
         ExecutionCall call = parse(body, fallbackRequestId);
         String dedupeKey = principal.subjectId() + "\n" + call.requestId() + "\n" + call.toolId();
+        synchronized (executionLocks[Math.floorMod(dedupeKey.hashCode(), executionLocks.length)]) {
         Optional<Map<String, Object>> visibleDetail = catalogService.detail(principal, call.toolId());
         if (visibleDetail.isEmpty()) {
             metrics.increment("twinkle.tool.rejected", "code", "resource_not_found");
@@ -71,6 +82,12 @@ public final class ToolExecutionService {
                 .orElseThrow(() -> new ToolProtocolException(io.micronaut.http.HttpStatus.BAD_REQUEST,
                         "invalid_input", "不支持的 Tool 版本", false, null, call.requestId(),
                         Map.of("supportedVersion", ToolCatalogService.TOOL_VERSION)));
+        if (!spec.available() || ((ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())
+                || ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) && !serverAgent.available())) {
+            throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "tool_unavailable", "服务端 Agent 当前未启用", true, null,
+                    call.requestId(), Map.of());
+        }
         if (ToolCatalogService.ONLINE_TOOL.equals(call.toolId())
                 && (call.intentSummary() == null || call.intentSummary().isBlank())) {
             throw invalidInput("敏感读取必须提供 clientContext.intentSummary",
@@ -101,24 +118,41 @@ public final class ToolExecutionService {
         String auditRef = publicId("audit");
         Instant startedAt = Instant.now();
         final Map<String, Object> output;
-        if (ToolCatalogService.HEALTH_TOOL.equals(call.toolId())) {
-            if (!call.input().isEmpty()) {
-                throw invalidInput("server.health.read 的 input 必须为空对象",
-                        call.requestId(), executionId);
+        try {
+            if (ToolCatalogService.HEALTH_TOOL.equals(call.toolId())) {
+                if (!call.input().isEmpty()) {
+                    throw invalidInput("server.health.read 的 input 必须为空对象",
+                            call.requestId(), executionId);
+                }
+                output = healthTool.read(call.requestId(), executionId);
+            } else if (ToolCatalogService.ONLINE_TOOL.equals(call.toolId())) {
+                output = onlineTool.page(principal, call.input(), call.requestId(), executionId);
+            } else if (ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())) {
+                output = investigateWithAgent(principal, call);
+            } else if (ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) {
+                output = closeAgentConversation(principal, call);
+            } else {
+                throw new ToolProtocolException(io.micronaut.http.HttpStatus.NOT_FOUND,
+                        "resource_not_found", "Tool 不存在", false, executionId,
+                        call.requestId(), Map.of());
             }
-            output = healthTool.read(call.requestId(), executionId);
-        } else if (ToolCatalogService.ONLINE_TOOL.equals(call.toolId())) {
-            output = onlineTool.page(principal, call.input(), call.requestId(), executionId);
-        } else {
-            throw new ToolProtocolException(io.micronaut.http.HttpStatus.NOT_FOUND,
-                    "resource_not_found", "Tool 不存在", false, executionId,
+        } catch (ToolProtocolException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            Instant failedAt = Instant.now();
+            insertAudit(auditRef, executionId, call, principal, spec, startedAt, failedAt,
+                    "failed", e.getClass().getSimpleName());
+            metrics.increment("twinkle.tool.calls", "tool", call.toolId(), "result", "failed");
+            throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "tool_unavailable", "服务端 Agent 调查暂时失败", true, executionId,
                     call.requestId(), Map.of());
         }
 
         Instant completedAt = Instant.now();
         Map<String, Object> result = resultEnvelope(call.requestId(), executionId, output,
                 auditRef, completedAt);
-        insertAudit(auditRef, executionId, call, principal, spec, startedAt, completedAt);
+        insertAudit(auditRef, executionId, call, principal, spec, startedAt, completedAt,
+                "succeeded", null);
         byExecutionId.put(executionId, new StoredExecution(principal.subjectId(),
                 spec.requiredScope(), result, completedAt));
         executionIdByDedupeKey.put(dedupeKey, executionId);
@@ -126,6 +160,7 @@ public final class ToolExecutionService {
         metrics.record("twinkle.tool.latency", Duration.between(startedAt, completedAt),
                 "tool", call.toolId(), "result", "succeeded");
         return new ExecutionResult(call.requestId(), result);
+        }
     }
 
     public Optional<Map<String, Object>> find(ApiPrincipal principal, String executionId) {
@@ -187,7 +222,8 @@ public final class ToolExecutionService {
 
     private void insertAudit(String auditRef, String executionId, ExecutionCall call,
                              ApiPrincipal principal, ToolCatalogService.ToolSpec spec,
-                             Instant startedAt, Instant completedAt) {
+                             Instant startedAt, Instant completedAt, String resultStatus,
+                             String errorCode) {
         ToolExecutionAudit audit = new ToolExecutionAudit();
         audit.setAuditRef(auditRef);
         audit.setExecutionId(executionId);
@@ -204,7 +240,8 @@ public final class ToolExecutionService {
         audit.setAuthorizationResult("allow");
         audit.setPolicyVersion(principal.permissionVersion());
         audit.setParameterSummary(parameterSummary(call));
-        audit.setResultStatus("succeeded");
+        audit.setResultStatus(resultStatus);
+        audit.setErrorCode(errorCode);
         audit.setIntentSummary(call.intentSummary());
         audit.setStartedAt(startedAt.toString());
         audit.setCompletedAt(completedAt.toString());
@@ -215,8 +252,68 @@ public final class ToolExecutionService {
         if (ToolCatalogService.HEALTH_TOOL.equals(call.toolId())) {
             return "none";
         }
-        Object pageSize = call.input().getOrDefault("pageSize", 100);
-        return "pageSize=" + pageSize + ",cursorPresent=" + (call.input().get("cursor") != null);
+        if (ToolCatalogService.ONLINE_TOOL.equals(call.toolId())) {
+            Object pageSize = call.input().getOrDefault("pageSize", 100);
+            return "pageSize=" + pageSize + ",cursorPresent=" + (call.input().get("cursor") != null);
+        }
+        if (ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())) {
+            String message = String.valueOf(call.input().getOrDefault("message", ""));
+            return "messageHash=" + shortHash(message) + ",messageLength=" + message.length()
+                    + ",conversationIdPresent=" + (call.input().get("conversationId") != null);
+        }
+        if (ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) {
+            return "conversationIdHash=" + shortHash(String.valueOf(call.input().get("conversationId")));
+        }
+        return "none";
+    }
+
+    private Map<String, Object> investigateWithAgent(ApiPrincipal principal, ExecutionCall call) {
+        rejectExtraFields(call.input(), Set.of("conversationId", "message"),
+                call.requestId(), null, "server.agent.investigate input");
+        String message = requiredString(call.input().get("message"), "message", 2000,
+                call.requestId(), null).trim();
+        String conversationId = optionalString(call.input().get("conversationId"),
+                "conversationId", 64, call.requestId(), null);
+        if (conversationId == null || conversationId.isBlank()) {
+            conversationId = "twish-" + UUID.randomUUID().toString().replace("-", "");
+        }
+        if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
+            throw invalidInput("conversationId 格式无效", call.requestId(), null);
+        }
+        ServerAgentService.InvestigationResult reply = serverAgent.investigate(
+                new ServerAgentService.InvestigationRequest(conversationId, message,
+                        call.requestId(), principal.subjectId(), principal.credentialId(),
+                        "twish-" + call.source()));
+        return Map.of(
+                "conversationId", reply.conversationId(),
+                "reply", reply.reply(),
+                "model", reply.model(),
+                "executedTools", reply.executedTools(),
+                "auditRefs", reply.auditRefs(),
+                "inputTokens", reply.inputTokens(),
+                "outputTokens", reply.outputTokens());
+    }
+
+    private Map<String, Object> closeAgentConversation(ApiPrincipal principal, ExecutionCall call) {
+        rejectExtraFields(call.input(), Set.of("conversationId"), call.requestId(), null,
+                "server.agent.conversation.close input");
+        String conversationId = requiredString(call.input().get("conversationId"),
+                "conversationId", 64, call.requestId(), null);
+        if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
+            throw invalidInput("conversationId 格式无效", call.requestId(), null);
+        }
+        return Map.of("conversationId", conversationId,
+                "evicted", serverAgent.closeConversation(conversationId, principal.subjectId()));
+    }
+
+    private static String shortHash(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest, 0, 12);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("JDK 缺少 SHA-256", e);
+        }
     }
 
     private static Map<String, Object> resultEnvelope(String requestId, String executionId,

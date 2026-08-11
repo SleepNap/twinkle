@@ -37,7 +37,7 @@ HTTP 重做（`/internal` + `/api`）+ LangChain4j AI + 按实体渐进重载。
 - [x] **AI 工具不得直踩游戏内存对象**，只经 application service 接口
 - [x] 计费 / 记忆 / 配置落 SQLite（复用 Dao 设计）
 
-> **2026-08-08 交付**：ai 模块全落地。**模型自研**（`LocalRuleChatModel` 实现 `ChatModel`+`StreamingChatModel`，本地规则路由代替外部 LLM API——M3 单进程 2C2G 红线 + 无 key）；Agent/工具调用循环/流式/结构化输出全走真实 LangChain4j API（AiServices + @Tool + TokenStream + POJO 解析），接入真实 LLM 只需换 ChatModel bean（工具/编排零改动）。工具 `GameStatTool` 经 core `AdminService` 取数（不依赖 http-api/domain-game，ArchUnit 规则 1 保持绿）。计费落 `ai_usage` 表（V4 迁移），`AiFacade` 每次对话记录。每日总结 `AiDailySummaryScheduler`（带 Metrics 埋点+生命周期，可观测）。客户端接口 `/api/v1/ai/chat|report/online|usage`（AiController，受 ApiRateLimitFilter 限流）。测试：`AiAgentTest`（工具循环/非工具直答/流式/工具请求）、`AiFacadeBillingTest`（计费+调度）、`HttpApiE2ETest`（AI 三端点 E2E）。
+> **2026-08-11 更新**：在原 M3 Agent 地基上接入 OpenAI-compatible / DeepSeek 真实模型，并落地游戏内 `@gm` AI 值班 GM。工具扩展为在线概览、角色存档、已落库背包、账号状态，全部只读并写权威审计；玩家入口仅能查本人。模型调用走独立小线程池，会话、并发、玩家频率均有界；默认仍关闭。完整配置与未完成边界见 `docs/server-agent.md`。
 
 ### 3. 按实体渐进重载（L3）
 

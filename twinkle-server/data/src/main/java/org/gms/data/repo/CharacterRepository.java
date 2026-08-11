@@ -24,6 +24,13 @@ public interface CharacterRepository {
     Optional<Character> findById(long id);
 
     /**
+     * 按角色名加载存档（AI 值班 GM 只读取证用）。不存在返回 empty。
+     */
+    public default Optional<Character> findByName(String name) {
+        return Optional.empty();
+    }
+
+    /**
      * 按角色名查重（建角前置，v83 CHECK_CHAR_NAME）。存在返回 true。
      */
     boolean existsByName(String name);
