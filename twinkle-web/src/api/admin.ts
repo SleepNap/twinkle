@@ -115,6 +115,52 @@ export interface AuditPage<T> {
   records: T[]
 }
 
+export interface BackgroundTaskRun {
+  taskId: string
+  taskType: string
+  displayName: string
+  source: string
+  scheduleId: string
+  status: "running" | "succeeded" | "failed" | "cancelled"
+  trigger: "schedule" | "manual" | "retry" | string
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+  durationMs: number | null
+  attempt: number
+  maxAttempts: number
+  cancellable: boolean
+  retryable: boolean
+  requestId: string | null
+  subjectId: string | null
+  errorCode: string | null
+  errorSummary: string | null
+}
+
+export interface TaskSchedule {
+  scheduleId: string
+  taskType: string
+  displayName: string
+  source: string
+  schedule: string
+  enabled: boolean
+  retryable: boolean
+  nextRunAt: string | null
+  lastRunAt: string | null
+  lastStatus: BackgroundTaskRun["status"] | null
+  runCount: number
+  errorCount: number
+}
+
+export interface TasksResponse {
+  limit: number
+  tasks: BackgroundTaskRun[]
+}
+
+export interface SchedulesResponse {
+  schedules: TaskSchedule[]
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -202,6 +248,18 @@ export const adminApi = {
     request<AuditPage<ApiRequestAudit>>(`/audits/api-requests?limit=${limit}`, { signal }),
   toolExecutionAudits: (limit = 100, signal?: AbortSignal) =>
     request<AuditPage<ToolExecutionAudit>>(`/audits/tool-executions?limit=${limit}`, { signal }),
+  tasks: (limit = 100, signal?: AbortSignal) =>
+    request<TasksResponse>(`/tasks?limit=${limit}`, { signal }),
+  schedules: (signal?: AbortSignal) => request<SchedulesResponse>("/schedules", { signal }),
+  runSchedule: (scheduleId: string) =>
+    request<BackgroundTaskRun>(`/schedules/${encodeURIComponent(scheduleId)}/run`, { method: "POST" }),
+  setScheduleEnabled: (scheduleId: string, enabled: boolean) =>
+    request<TaskSchedule>(`/schedules/${encodeURIComponent(scheduleId)}/enabled`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+  retryTask: (taskId: string) =>
+    request<BackgroundTaskRun>(`/tasks/${encodeURIComponent(taskId)}/retry`, { method: "POST" }),
 }
 
 export const adminQueryKeys = {
@@ -213,4 +271,6 @@ export const adminQueryKeys = {
   restartPhase: ["admin", "restart", "phase"] as const,
   apiRequestAudits: ["admin", "audits", "api-requests"] as const,
   toolExecutionAudits: ["admin", "audits", "tool-executions"] as const,
+  tasks: ["admin", "tasks"] as const,
+  schedules: ["admin", "schedules"] as const,
 }

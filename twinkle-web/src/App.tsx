@@ -11,6 +11,7 @@ const ConfigPage = lazy(() => import("@/pages/config-page").then((module) => ({ 
 const OperationsPage = lazy(() => import("@/pages/operations-page").then((module) => ({ default: module.OperationsPage })))
 const ApiKeysPage = lazy(() => import("@/pages/api-keys-page").then((module) => ({ default: module.ApiKeysPage })))
 const AuditsPage = lazy(() => import("@/pages/audits-page").then((module) => ({ default: module.AuditsPage })))
+const TasksPage = lazy(() => import("@/pages/tasks-page").then((module) => ({ default: module.TasksPage })))
 const NotFoundPage = lazy(() => import("@/pages/not-found-page").then((module) => ({ default: module.NotFoundPage })))
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="operations" element={<OperationsPage />} />
         <Route path="api-keys" element={<ApiKeysPage />} />
         <Route path="audits" element={<AuditsPage />} />
+        <Route path="tasks" element={<TasksPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

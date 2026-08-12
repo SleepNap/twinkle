@@ -1,4 +1,4 @@
-import { Activity, FileSearch, Globe2, KeyRound, Radio, Server, Settings2, UserRoundSearch, Users, Wrench } from "lucide-react"
+import { Activity, FileSearch, Globe2, KeyRound, ListTodo, Radio, Server, Settings2, UserRoundSearch, Users, Wrench } from "lucide-react"
 import { NavLink, Outlet } from "react-router-dom"
 import { Suspense } from "react"
 
@@ -19,6 +19,7 @@ const navigation = [
   { to: "/operations", label: "nav.operations", icon: Wrench },
   { to: "/api-keys", label: "nav.apiKeys", icon: KeyRound },
   { to: "/audits", label: "nav.audits", icon: FileSearch },
+  { to: "/tasks", label: "nav.tasks", icon: ListTodo },
 ]
 
 export function AppShell() {
@@ -34,14 +35,14 @@ export function AppShell() {
             </span>
             Twinkle
           </NavLink>
-          <Badge variant="secondary" className="ml-2 font-normal">
+          <Badge variant="secondary" className="ml-2 hidden font-normal sm:inline-flex">
             {t("app.console")}
           </Badge>
           <Badge variant={token ? "secondary" : "outline"} className="ml-auto hidden font-normal sm:flex">
             {token ? t("api.connected") : t("api.disconnected")}
           </Badge>
-          <label className="ml-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Globe2 className="size-3.5" />
+          <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-3">
+            <Globe2 className="hidden size-3.5 sm:block" />
             <span className="sr-only">{t("language.label")}</span>
             <select
               value={locale}

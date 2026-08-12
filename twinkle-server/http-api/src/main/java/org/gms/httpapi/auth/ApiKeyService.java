@@ -126,6 +126,23 @@ public final class ApiKeyService {
         return true;
     }
 
+    /** Replaces the credential scope set and rotates permissionVersion immediately. */
+    public Optional<KeySummary> updateScopes(ApiPrincipal issuer, String keyPrefix,
+                                             Set<String> requestedScopes) {
+        Optional<ApiKeyRecord> found = manageableRecord(issuer, keyPrefix)
+                .filter(record -> isBlank(record.getRevokedAt()));
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        Set<String> scopes = normalizeScopes(requestedScopes);
+        requireIssuerMayGrant(issuer, scopes);
+        ApiKeyRecord record = found.get();
+        record.setScopes(String.join(",", scopes));
+        record.setPermissionVersion(newPublicId("perm"));
+        repository.update(record);
+        return Optional.of(summary(record));
+    }
+
     /** 生成等权新 Credential 后立即吊销旧 Credential；新秘密仍只返回一次。 */
     public Optional<IssuedKey> rotate(ApiPrincipal issuer, String keyPrefix) {
         Optional<ApiKeyRecord> found = manageableRecord(issuer, keyPrefix)
@@ -149,12 +166,16 @@ public final class ApiKeyService {
         return repository.findAll().stream()
                 .filter(record -> issuer.scopes().contains("*")
                         || issuer.subjectId().equals(record.getSubjectId()))
-                .map(record -> new KeySummary(record.getId(), record.getCredentialId(),
-                        record.getKeyPrefix(), record.getDisplayName(), record.getSubjectId(),
-                        record.getOwnerAccountId(), parseScopes(record.getScopes()), record.getServerId(),
-                        record.getCreatedAt(), record.getExpiresAt(), record.getDisabledAt(),
-                        record.getRevokedAt(), record.getRotatedFromPrefix(), record.getLastUsedAt()))
+                .map(ApiKeyService::summary)
                 .toList();
+    }
+
+    private static KeySummary summary(ApiKeyRecord record) {
+        return new KeySummary(record.getId(), record.getCredentialId(),
+                record.getKeyPrefix(), record.getDisplayName(), record.getSubjectId(),
+                record.getOwnerAccountId(), parseScopes(record.getScopes()), record.getServerId(),
+                record.getCreatedAt(), record.getExpiresAt(), record.getDisabledAt(),
+                record.getRevokedAt(), record.getRotatedFromPrefix(), record.getLastUsedAt());
     }
 
     public ApiPrincipal bootstrapPrincipal() {

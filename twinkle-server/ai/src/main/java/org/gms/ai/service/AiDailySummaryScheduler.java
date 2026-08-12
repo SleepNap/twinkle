@@ -2,7 +2,9 @@ package org.gms.ai.service;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.observability.Metrics;
+import org.gms.task.BackgroundTaskRegistry;
 
+import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -20,17 +22,28 @@ import java.util.concurrent.atomic.AtomicLong;
 @Log4j2
 public final class AiDailySummaryScheduler implements AutoCloseable {
 
+    public static final String SCHEDULE_ID = "ai-daily-summary";
+
 
 
     private final AiFacade aiFacade;
     private final Metrics metrics;
+    private final BackgroundTaskRegistry taskRegistry;
     private final AtomicLong lastRunEpoch = new AtomicLong(0);
     private final AtomicLong errorCount = new AtomicLong(0);
     private ScheduledExecutorService scheduler;
 
     public AiDailySummaryScheduler(AiFacade aiFacade, Metrics metrics) {
+        this(aiFacade, metrics, new BackgroundTaskRegistry());
+    }
+
+    public AiDailySummaryScheduler(AiFacade aiFacade, Metrics metrics,
+                                   BackgroundTaskRegistry taskRegistry) {
         this.aiFacade = aiFacade;
         this.metrics = metrics;
+        this.taskRegistry = taskRegistry;
+        taskRegistry.registerSchedule(SCHEDULE_ID, "ai-report", "AI daily online summary",
+                "twinkle-ai", "fixed-delay PT24H", true, true, this::executeSummary);
     }
 
     /** 启动每日调度（bootstrap 装配时调用）。固定延迟 24 小时，首次 1 分钟验证。 */
@@ -44,12 +57,24 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
             return t;
         });
         // 首次 60s 后跑一次（启动验证），之后每 24h
-        scheduler.scheduleWithFixedDelay(this::runSummary, 60, TimeUnit.HOURS.toSeconds(24), TimeUnit.SECONDS);
+        taskRegistry.updateNextRun(SCHEDULE_ID, Instant.now().plusSeconds(60));
+        scheduler.scheduleWithFixedDelay(this::runScheduledSummary, 60,
+                TimeUnit.HOURS.toSeconds(24), TimeUnit.SECONDS);
         log.info("AI 每日总结调度已启动（首跑 60s 后，此后每 24h）");
     }
 
     /** 立即执行一次每日总结（手动触发，也供测试）。 */
     public void runSummary() {
+        taskRegistry.run(SCHEDULE_ID, "manual", null, null);
+    }
+
+    private void runScheduledSummary() {
+        taskRegistry.run(SCHEDULE_ID, "schedule", null, null);
+        taskRegistry.updateNextRun(SCHEDULE_ID,
+                Instant.now().plusSeconds(TimeUnit.HOURS.toSeconds(24)));
+    }
+
+    private void executeSummary() {
         try {
             String report = aiFacade.onlineReport().getSummary();
             lastRunEpoch.set(System.currentTimeMillis());
@@ -60,6 +85,7 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
             errorCount.incrementAndGet();
             metrics.increment("ai.daily_summary.errors");
             log.error("AI 每日总结执行异常", e);
+            throw e;
         }
     }
 
@@ -76,6 +102,7 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
         if (scheduler != null) {
             scheduler.shutdownNow();
             scheduler = null;
+            taskRegistry.updateNextRun(SCHEDULE_ID, null);
         }
     }
 }

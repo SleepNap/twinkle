@@ -88,7 +88,17 @@ curl -X POST http://127.0.0.1:8080/api/v1/auth/keys \
   -d '{"displayName":"twish-readonly","scopes":["server.health:read","player.online:read","player.inventory:read","ai:use"]}'
 ```
 
-API Key 绑定 Subject 与当前 `serverId`。非 bootstrap 签发者只能创建自身 scope 和有效期的子集，不能借 `keys:manage` 扩权或跨服签发。支持禁用、恢复、吊销和轮换；轮换后旧秘密立即失效。
+API Key 绑定 Subject 与当前 `serverId`。非 bootstrap 签发者只能创建自身 scope 和有效期的子集，不能借 `keys:manage` 扩权或跨服签发。支持禁用、恢复、吊销、轮换和 Scope 替换；轮换后旧秘密立即失效，Scope 更新后原秘密不变但新的 `permissionVersion` 立即生效。
+
+```http
+PUT /api/v1/auth/keys/{keyPrefix}/scopes
+Authorization: Bearer <credential with keys:manage>
+Content-Type: application/json
+
+{"scopes":["server.health:read","player.online:read","ai:use"]}
+```
+
+Scope 更新同样受签发者权限子集约束，不能借此扩权。收回 `ai:use` 后，该 Credential 的后续 AI 请求会在服务端鉴权阶段立即被拒绝。
 
 ## 调用与错误
 

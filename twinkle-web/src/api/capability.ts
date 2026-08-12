@@ -6,6 +6,7 @@ const CAPABILITY_API_BASE = "/api/v1"
 export const supportedScopes = [
   "server.health:read",
   "player.online:read",
+  "player.inventory:read",
   "game:read",
   "game:write",
   "ai:use",
@@ -141,6 +142,11 @@ export const capabilityApi = {
     capabilityRequest<void>(`/auth/keys/${encodeURIComponent(prefix)}/enable`, token, { method: "POST" }),
   rotateKey: (token: string, prefix: string) =>
     capabilityRequest<IssuedApiKey>(`/auth/keys/${encodeURIComponent(prefix)}/rotate`, token, { method: "POST" }),
+  updateKeyScopes: (token: string, prefix: string, scopes: string[]) =>
+    capabilityRequest<ApiKeySummary>(`/auth/keys/${encodeURIComponent(prefix)}/scopes`, token, {
+      method: "PUT",
+      body: JSON.stringify({ scopes }),
+    }),
   revokeKey: (token: string, prefix: string) =>
     capabilityRequest<void>(`/auth/keys/${encodeURIComponent(prefix)}`, token, { method: "DELETE" }),
   account: (token: string, name: string, signal?: AbortSignal) =>

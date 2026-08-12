@@ -88,6 +88,21 @@ public final class ApiKeyServiceTest {
         assertThat(service.authenticate(issued.token())).isPresent();
     }
 
+    @Test
+    public void scopeUpdateTakesEffectWithoutReplacingTheSecret() {
+        InMemoryApiKeyRepository repository = new InMemoryApiKeyRepository();
+        ApiKeyService service = service(repository);
+        ApiKeyService.IssuedKey issued = service.issue(service.bootstrapPrincipal(), "ai-operator", null,
+                Set.of(ApiScopes.SERVER_HEALTH_READ), null);
+
+        ApiKeyService.KeySummary updated = service.updateScopes(service.bootstrapPrincipal(),
+                issued.keyPrefix(), Set.of(ApiScopes.SERVER_HEALTH_READ, ApiScopes.AI_USE)).orElseThrow();
+
+        assertThat(updated.scopes()).containsExactlyInAnyOrder(ApiScopes.SERVER_HEALTH_READ, ApiScopes.AI_USE);
+        assertThat(service.authenticate(issued.token())).get()
+                .satisfies(principal -> assertThat(principal.permits(ApiScopes.AI_USE)).isTrue());
+    }
+
     private static ApiKeyService service(InMemoryApiKeyRepository repository) {
         return new ApiKeyService(repository, "",
                 new ServerIdentity("server-test", "测试服", "test", "1.0.0"),

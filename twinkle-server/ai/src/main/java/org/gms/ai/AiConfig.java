@@ -22,6 +22,7 @@ import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.observability.Metrics;
 import org.gms.role.AiEnabledCondition;
 import org.gms.service.admin.AdminService;
+import org.gms.task.BackgroundTaskRegistry;
 
 /**
  * ai 模块装配（AiServices 声明式 Agent + 真实/本地模型适配 + 只读工具）。
@@ -115,7 +116,8 @@ public class AiConfig {
 
     @Bean
     @Singleton
-    public AiDailySummaryScheduler aiDailySummaryScheduler(AiFacade aiFacade, Metrics metrics) {
-        return new AiDailySummaryScheduler(aiFacade, metrics);
+    public AiDailySummaryScheduler aiDailySummaryScheduler(AiFacade aiFacade, Metrics metrics,
+                                                           BackgroundTaskRegistry taskRegistry) {
+        return new AiDailySummaryScheduler(aiFacade, metrics, taskRegistry);
     }
 }

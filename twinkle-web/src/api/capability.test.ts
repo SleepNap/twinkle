@@ -50,6 +50,18 @@ describe("capabilityApi", () => {
     await expect(capabilityApi.disableKey("manager", "abcdef123456")).resolves.toBeUndefined()
   })
 
+  it("updates credential scopes without sending a new secret", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ keyPrefix: "abcdef123456", scopes: ["ai:use"] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await capabilityApi.updateKeyScopes("manager", "abcdef123456", ["ai:use"])
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/auth/keys/abcdef123456/scopes", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ scopes: ["ai:use"] }),
+    }))
+  })
+
   it("把鉴权错误码转换为可读信息", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(
       { code: "unauthenticated" },

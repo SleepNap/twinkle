@@ -10,6 +10,7 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
+import io.micronaut.http.annotation.Put;
 import org.gms.httpapi.auth.ApiKeyService;
 import org.gms.httpapi.auth.ApiKeyAuthFilter;
 import org.gms.httpapi.auth.ApiPrincipal;
@@ -75,6 +76,18 @@ public final class ApiKeyController {
                 .orElseGet(() -> HttpResponse.notFound(Map.of("error", "api_key_not_found")));
     }
 
+    @Put("/{keyPrefix}/scopes")
+    public HttpResponse<?> scopes(HttpRequest<?> request, @PathVariable String keyPrefix,
+                                  @Body UpdateScopesRequest body) {
+        try {
+            return apiKeyService.updateScopes(principal(request), keyPrefix, body.scopes())
+                    .<HttpResponse<?>>map(HttpResponse::ok)
+                    .orElseGet(() -> HttpResponse.notFound(Map.of("error", "api_key_not_found")));
+        } catch (IllegalArgumentException e) {
+            return HttpResponse.badRequest(Map.of("error", "invalid_key_request", "message", e.getMessage()));
+        }
+    }
+
     private static ApiPrincipal principal(HttpRequest<?> request) {
         return request.getAttribute(ApiKeyAuthFilter.PRINCIPAL_ATTRIBUTE, ApiPrincipal.class)
                 .orElseThrow(() -> new IllegalStateException("API principal missing"));
@@ -82,5 +95,8 @@ public final class ApiKeyController {
 
     public record IssueKeyRequest(String displayName, Long ownerAccountId, Set<String> scopes,
                                   String expiresAt) {
+    }
+
+    public record UpdateScopesRequest(Set<String> scopes) {
     }
 }

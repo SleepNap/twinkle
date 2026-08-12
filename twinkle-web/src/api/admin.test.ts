@@ -72,6 +72,17 @@ describe("adminApi", () => {
       status: 200,
     })
   })
+  it("updates a schedule using the task management contract", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ scheduleId: "daily", enabled: false }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.setScheduleEnabled("daily", false)
+
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/schedules/daily/enabled", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ enabled: false }),
+    }))
+  })
 })
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {

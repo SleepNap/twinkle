@@ -1,4 +1,4 @@
-import { Copy, KeyRound, Loader2, MoreHorizontal, Plus, RefreshCw, Unplug } from "lucide-react"
+import { Copy, KeyRound, Loader2, MoreHorizontal, Plus, RefreshCw, ShieldCheck, Unplug } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -61,6 +61,11 @@ interface KeyAction {
   key: ApiKeySummary
 }
 
+interface ScopeDraft {
+  key: ApiKeySummary
+  scopes: string[]
+}
+
 const emptyDraft: KeyDraft = {
   displayName: "",
   ownerAccountId: "",
@@ -76,6 +81,7 @@ export function ApiKeysPage() {
   const [draft, setDraft] = useState<KeyDraft | null>(null)
   const [issuedKey, setIssuedKey] = useState<IssuedApiKey | null>(null)
   const [action, setAction] = useState<KeyAction | null>(null)
+  const [scopeDraft, setScopeDraft] = useState<ScopeDraft | null>(null)
 
   const identityQuery = useQuery({
     queryKey: capabilityQueryKeys.identity,
@@ -126,6 +132,16 @@ export function ApiKeysPage() {
       void queryClient.invalidateQueries({ queryKey: capabilityQueryKeys.keys })
     },
     onError: (error) => toast.error(t("keys.actionFailed"), { description: error.message }),
+  })
+  const scopeMutation = useMutation({
+    mutationFn: (current: ScopeDraft) => capabilityApi.updateKeyScopes(token, current.key.keyPrefix, current.scopes),
+    onSuccess: () => {
+      setScopeDraft(null)
+      void queryClient.invalidateQueries({ queryKey: capabilityQueryKeys.keys })
+      void queryClient.invalidateQueries({ queryKey: capabilityQueryKeys.identity })
+      toast.success(t("keys.scopesUpdated"))
+    },
+    onError: (error) => toast.error(t("keys.scopeUpdateFailed"), { description: error.message }),
   })
 
   function submitDraft() {
@@ -264,6 +280,9 @@ export function ApiKeysPage() {
                                 <Button variant="ghost" size="icon-sm" aria-label={t("keys.actionsFor", { name: key.displayName })}><MoreHorizontal /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => setScopeDraft({ key, scopes: [...key.scopes] })}>
+                                  <ShieldCheck />{t("keys.editScopes")}
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => setAction({ kind: key.disabledAt ? "enable" : "disable", key })}>
                                   {key.disabledAt ? t("keys.enable") : t("keys.disable")}
                                 </DropdownMenuItem>
@@ -290,6 +309,12 @@ export function ApiKeysPage() {
 
       <IssueKeyDialog draft={draft} setDraft={setDraft} pending={issueMutation.isPending} onSubmit={submitDraft} onToggleScope={toggleScope} />
       <IssuedSecretDialog issuedKey={issuedKey} onClose={() => setIssuedKey(null)} />
+      <EditScopesDialog
+        draft={scopeDraft}
+        setDraft={setScopeDraft}
+        pending={scopeMutation.isPending}
+        onSubmit={() => scopeDraft && scopeMutation.mutate(scopeDraft)}
+      />
       <ConfirmationDialog
         open={action !== null}
         onOpenChange={(open) => !open && setAction(null)}
@@ -301,6 +326,55 @@ export function ApiKeysPage() {
         onConfirm={() => action && actionMutation.mutate(action)}
       />
     </div>
+  )
+}
+
+function EditScopesDialog({
+  draft,
+  setDraft,
+  pending,
+  onSubmit,
+}: {
+  draft: ScopeDraft | null
+  setDraft: React.Dispatch<React.SetStateAction<ScopeDraft | null>>
+  pending: boolean
+  onSubmit: () => void
+}) {
+  const { t } = useI18n()
+  const toggle = (scope: string, checked: boolean) => setDraft((current) => current && ({
+    ...current,
+    scopes: checked
+      ? [...new Set([...current.scopes, scope])]
+      : current.scopes.filter((item) => item !== scope),
+  }))
+  return (
+    <Dialog open={draft !== null} onOpenChange={(open) => !open && !pending && setDraft(null)}>
+      <DialogContent showCloseButton={false} className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("keys.editScopesTitle")}</DialogTitle>
+          <DialogDescription>{t("keys.editScopesDescription", { name: draft?.key.displayName ?? "" })}</DialogDescription>
+        </DialogHeader>
+        <fieldset className="grid gap-2 sm:grid-cols-2">
+          {supportedScopes.map((scope) => (
+            <Label key={scope} className="flex items-center gap-2 rounded-lg border p-2.5 font-normal">
+              <Checkbox checked={draft?.scopes.includes(scope)} onCheckedChange={(checked) => toggle(scope, checked === true)} />
+              <span className="font-mono text-xs">{scope}</span>
+            </Label>
+          ))}
+        </fieldset>
+        <Alert>
+          <ShieldCheck />
+          <AlertTitle>{t("keys.aiPermission")}</AlertTitle>
+          <AlertDescription>{t("keys.aiPermissionDescription")}</AlertDescription>
+        </Alert>
+        <DialogFooter>
+          {!pending && <DialogClose asChild><Button variant="outline">{t("common.cancel")}</Button></DialogClose>}
+          <Button onClick={onSubmit} disabled={pending || !draft || draft.scopes.length === 0}>
+            {pending && <Loader2 data-icon="inline-start" className="animate-spin" />}{t("keys.saveScopes")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
