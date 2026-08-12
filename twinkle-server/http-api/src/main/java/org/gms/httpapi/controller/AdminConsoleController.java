@@ -13,6 +13,7 @@ import org.gms.data.config.DbConfigFacade;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.httpapi.service.AdminApiService;
+import org.gms.i18n.I18nService;
 import org.gms.observability.HealthRegistry;
 import org.gms.service.admin.AdminService;
 import org.gms.service.intercoord.IntercoordService;
@@ -46,12 +47,13 @@ public final class AdminConsoleController {
     private final EntityReloadService reloadService;
     private final EntityReloadCoordinator reloadCoordinator;
     private final DbConfigFacade configFacade;
+    private final I18nService i18n;
 
     public AdminConsoleController(AdminApiService adminApiService, AdminService adminService,
                                   IntercoordService intercoordService, HealthRegistry healthRegistry,
                                   EntityReloadService reloadService,
                                   EntityReloadCoordinator reloadCoordinator,
-                                  DbConfigFacade configFacade) {
+                                  DbConfigFacade configFacade, I18nService i18n) {
         this.adminApiService = adminApiService;
         this.adminService = adminService;
         this.intercoordService = intercoordService;
@@ -59,6 +61,7 @@ public final class AdminConsoleController {
         this.reloadService = reloadService;
         this.reloadCoordinator = reloadCoordinator;
         this.configFacade = configFacade;
+        this.i18n = i18n;
     }
 
     // ---- 频道状态 / 在线玩家 / 健康 ----
@@ -126,7 +129,7 @@ public final class AdminConsoleController {
         String key = body.get("key");
         String value = body.get("value");
         if (key == null || key.isBlank() || value == null) {
-            return HttpResponse.badRequest(Map.of("error", "key 与 value 必填"));
+            return HttpResponse.badRequest(Map.of("error", i18n.message("admin.error.config_required")));
         }
         configFacade.upsert(key, value);
         return HttpResponse.ok(Map.of(
@@ -142,7 +145,7 @@ public final class AdminConsoleController {
     public HttpResponse<?> kick(@Body Map<String, Object> body) {
         Object raw = body.get("characterId");
         if (!(raw instanceof Number n)) {
-            return HttpResponse.badRequest(Map.of("error", "characterId 必填且为数字"));
+            return HttpResponse.badRequest(Map.of("error", i18n.message("admin.error.character_id_required")));
         }
         long characterId = n.longValue();
         boolean kicked = adminService.kick(characterId);

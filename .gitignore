@@ -40,6 +40,7 @@ twinkle.db-shm
 node_modules/
 dist/
 dist-ssr/
+.vite/
 *.local
 *.log.*
 

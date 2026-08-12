@@ -11,6 +11,7 @@ import org.gms.data.config.DbConfigFacade;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.httpapi.service.AdminApiService;
+import org.gms.i18n.I18nService;
 import org.gms.observability.HealthRegistry;
 import org.gms.service.admin.AdminService;
 
@@ -32,16 +33,18 @@ public final class InternalAdminController {
     private final EntityReloadService reloadService;
     private final EntityReloadCoordinator reloadCoordinator;
     private final DbConfigFacade configFacade;
+    private final I18nService i18n;
 
     public InternalAdminController(AdminApiService adminApiService, HealthRegistry healthRegistry,
                                    EntityReloadService reloadService,
                                    EntityReloadCoordinator reloadCoordinator,
-                                   DbConfigFacade configFacade) {
+                                   DbConfigFacade configFacade, I18nService i18n) {
         this.adminApiService = adminApiService;
         this.healthRegistry = healthRegistry;
         this.reloadService = reloadService;
         this.reloadCoordinator = reloadCoordinator;
         this.configFacade = configFacade;
+        this.i18n = i18n;
     }
 
     /** 健康检查（liveness + readiness 聚合）。 */
@@ -85,7 +88,7 @@ public final class InternalAdminController {
         String key = body.get("key");
         String value = body.get("value");
         if (key == null || key.isBlank() || value == null) {
-            return HttpResponse.badRequest(Map.of("error", "key 与 value 必填"));
+            return HttpResponse.badRequest(Map.of("error", i18n.message("admin.error.config_required")));
         }
         configFacade.upsert(key, value); // 写 DB → 版本号 +1 → 广播 ConfigChangeEvent
         return HttpResponse.ok(Map.of(

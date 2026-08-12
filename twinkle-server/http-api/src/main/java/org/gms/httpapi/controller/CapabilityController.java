@@ -13,6 +13,7 @@ import org.gms.httpapi.auth.ApiKeyAuthFilter;
 import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.contract.ApiErrorResponses;
+import org.gms.i18n.I18nService;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,9 +26,11 @@ import java.util.Map;
 public final class CapabilityController {
 
     private final ToolCatalogService toolCatalogService;
+    private final I18nService i18n;
 
-    public CapabilityController(ToolCatalogService toolCatalogService) {
+    public CapabilityController(ToolCatalogService toolCatalogService, I18nService i18n) {
         this.toolCatalogService = toolCatalogService;
+        this.i18n = i18n;
     }
 
     @Get("/capabilities{?profile,query}")
@@ -45,7 +48,8 @@ public final class CapabilityController {
                     .header(HttpHeaders.ETAG, etag);
         } catch (IllegalArgumentException e) {
             return ApiErrorResponses.response(io.micronaut.http.HttpStatus.BAD_REQUEST,
-                    requestId(request), null, "invalid_input", e.getMessage(), false, Map.of());
+                    requestId(request), null, "invalid_input", i18n.message("api.error.invalid_input"),
+                    false, Map.of());
         }
     }
 
@@ -56,7 +60,7 @@ public final class CapabilityController {
                 .<HttpResponse<?>>map(HttpResponse::ok)
                 .orElseGet(() -> ApiErrorResponses.response(io.micronaut.http.HttpStatus.NOT_FOUND,
                         requestId(request), null, "resource_not_found",
-                        "Tool 不存在或对当前凭据不可见", false, Map.of()));
+                        i18n.message("api.error.tool_not_found"), false, Map.of()));
     }
 
     @Get("/openapi.yaml")
@@ -69,7 +73,7 @@ public final class CapabilityController {
             }
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new UncheckedIOException("读取 OpenAPI 契约失败", e);
+            throw new UncheckedIOException(i18n.message("api.error.openapi_read_failed"), e);
         }
     }
 

@@ -18,6 +18,7 @@ import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.contract.ApiErrorResponses;
 import org.gms.httpapi.execution.ToolExecutionService;
 import org.gms.httpapi.execution.ToolProtocolException;
+import org.gms.i18n.I18nService;
 
 import java.util.Map;
 
@@ -29,9 +30,11 @@ import java.util.Map;
 public final class ToolExecutionController {
 
     private final ToolExecutionService executionService;
+    private final I18nService i18n;
 
-    public ToolExecutionController(ToolExecutionService executionService) {
+    public ToolExecutionController(ToolExecutionService executionService, I18nService i18n) {
         this.executionService = executionService;
+        this.i18n = i18n;
     }
 
     @Post
@@ -48,9 +51,9 @@ public final class ToolExecutionController {
             return ApiErrorResponses.response(e.httpStatus(), effectiveRequestId, e.executionId(),
                     e.code(), e.getMessage(), e.retryable(), e.details());
         } catch (RuntimeException e) {
-            log.error("Tool 执行出现未分类异常: requestId={}", fallbackRequestId, e);
+            log.error(i18n.message("log.tool.unclassified_error"), fallbackRequestId, e);
             return ApiErrorResponses.response(HttpStatus.INTERNAL_SERVER_ERROR, fallbackRequestId,
-                    null, "internal_error", "Tool 执行失败", false, Map.of());
+                    null, "internal_error", i18n.message("api.error.tool_execution_failed"), false, Map.of());
         }
     }
 
@@ -60,7 +63,7 @@ public final class ToolExecutionController {
                 .<HttpResponse<?>>map(HttpResponse::ok)
                 .orElseGet(() -> ApiErrorResponses.response(HttpStatus.NOT_FOUND,
                         requestId(request), null, "resource_not_found",
-                        "执行记录不存在或不可见", false, Map.of()));
+                        i18n.message("api.error.execution_not_found"), false, Map.of()));
     }
 
     private static ApiPrincipal principal(HttpRequest<?> request) {

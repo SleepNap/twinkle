@@ -30,4 +30,11 @@ public final class FlexToolExecutionAuditRepository implements ToolExecutionAudi
     public long count() {
         return mapper.selectCountByQuery(QueryWrapper.create());
     }
+
+    @Override
+    public java.util.List<ToolExecutionAudit> findRecent(int limit) {
+        return mapper.selectListByQuery(QueryWrapper.create()
+                .orderBy(ToolExecutionAudit::getId, false)
+                .limit(limit));
+    }
 }

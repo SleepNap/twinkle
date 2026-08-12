@@ -46,6 +46,7 @@ class HttpApiE2ETest {
         try (ApplicationContext ctx = ApplicationContext.run(Map.of(
                 "twinkle.db.url", "jdbc:sqlite:" + dbPath,
                 "twinkle.profile", "single",
+                "twinkle.service.language", "zh-CN",
                 "micronaut.server.port", "0",
                 "twinkle.net.login.port", "0",
                 "twinkle.net.channel.port", "0",
@@ -64,10 +65,13 @@ class HttpApiE2ETest {
 
             // ---- /internal/v1/health ----
             HttpResponse<String> health = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/internal/v1/health")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/internal/v1/health"))
+                            .header("Accept-Language", "en-US")
+                            .GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(health.statusCode()).isEqualTo(200);
             assertThat(health.body()).contains("healthy");
+            assertThat(health.headers().firstValue("Content-Language")).contains("zh-CN");
 
             // ---- /internal/v1/reload/in-flight（架构 5.3 可观测：在途实体）----
             HttpResponse<String> inFlightResp = client.send(

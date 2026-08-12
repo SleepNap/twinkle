@@ -46,7 +46,8 @@
 | 数据迁移 | **自研迁移器**（M0 决策，替换 Flyway） | 每数据源独立版本表；Flyway 社区版自 V10 撤 SQLite（商业版才有），架构默认 SQLite，故三库统一自研（见 6.2） |
 | 日志 | log4j2 | 保留 |
 | 限流 | Bucket4j | 第三方 API |
-| UI | **Web 控制台**：前端 **React 19 + Vite + TypeScript**，组件层 **shadcn/ui**（基于 Radix UI + Tailwind CSS），样式底层 **Tailwind CSS**；独立工程 `twinkle-web/`，浏览器端不受 2C2G 红线约束；设计系统 **Notion 风格**（见 `DESIGN-CANDIDATES.md`） | JavaFX 明确移除 |
+| 国际化 | **服务端固定语言 + Java ResourceBundle；Web 独立类型化语言目录** | `twinkle.service.language` 统一控制全部 Java 后台文案；WZ/脚本仍由显式目录决定；机器契约不翻译 |
+| UI | **Web 控制台**：前端 **React 19 + Vite + TypeScript**，组件层采用 **shadcn** `radix-nova` preset（Radix + Tailwind CSS v4 + Lucide）；以 shadcn 官方组件风格和语义令牌为视觉权威；独立工程 `twinkle-web/`，浏览器端不受 2C2G 红线约束 | JavaFX 明确移除 |
 | 缓存 / 对象 / MQ | **不默认引入** | 内存态权威，进程内实现即可；standalone 不常驻重服务 |
 
 ### 2.2 关键取舍记录
@@ -57,7 +58,8 @@
 - **SQLite 规模验证（搜索核证）**：WAL 下实测 70K reads/s + 3.6K writes/s，读吞吐 2 倍于 MySQL、p99 读延迟低 19 倍；极限是"持续 >10 并发写/秒"而非"人数"——本架构低频批量写天然避开。**三件套做对即稳**：WAL + 单写连接 + busy_timeout。
 - **AI 选定 LangChain4j**：流式 + 工具调用同时支持是硬需求。
 - **框架选定 Micronaut 4**：轻量 + 中间件全主流。Vert.x 因响应式风格与命令式游戏逻辑割裂被否。
-- **前端框架选定 React 19 + Vite + TypeScript + shadcn/ui**：运维后台以表格 / 状态标签为主场，shadcn/ui（基于 Radix UI + Tailwind CSS）提供可拷贝、可定制的无样式组件原语，天然契合「设计令牌驱动、组件库先行」的打法；Tailwind CSS 以原子类承载 Notion 风格令牌，浅 / 深双主题通过 CSS 变量令牌切换、状态持久化到 localStorage；Vite 提供极快冷启与按需构建，TypeScript 保证大型后台的类型安全。前端为独立工程 `twinkle-web/`，与 Java 服务端通过 `http-api` 模块（`/api/v1`）解耦，浏览器端不受 2C2G 红线约束。设计系统采用 **Notion 风格**（详见 `DESIGN-CANDIDATES.md`）。
+- **Java 后台语言由服务端配置统一决定**：`twinkle.service.language` 使用 BCP 47（首批 `zh-CN`、`en-US`），日志、异常、HTTP 消息和系统文案统一经 `I18nService` 解析；客户端请求与账号不得覆盖。Web 控制台有独立 UI locale。错误码、opcode、字段 ID、JSON key 等机器契约保持稳定。WZ/脚本不参与该机制，继续按显式路径加载。完整规范见 `docs/i18n.md`。
+- **前端框架选定 React 19 + Vite + TypeScript + shadcn**：运维后台统一使用 shadcn Registry 组件，固定 `radix-nova` preset、Radix、Lucide、CSS Variables 与 Tailwind CSS v4。视觉以 shadcn 官方组件、variant、密度和 neutral 浅深主题为准，不再模仿其他品牌设计系统；页面只在业务组合与布局层扩展，避免重复实现基础组件。前端为独立工程 `twinkle-web/`，与 Java 服务端通过 `http-api` 模块（`/api/v1`）解耦，浏览器端不受 2C2G 红线约束。详细纪律见 `twinkle-web/docs/design-system.md`。
 
 ---
 
@@ -424,12 +426,13 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 
 ### 6.4 WZ / 脚本数据源定位
 
-> **不采用**北斗的 WZ/脚本多语言目录机制（`wz-语言/`、`scripts-语言/`）——多份数据占硬盘、发布时都要分发，麻烦。WZ 与脚本**各一份**，配置直接指定位置，直接读；未指定或读不到 → 启动打印明确错误（fail fast），方便部署者意识到路径问题。
+> WZ 与脚本不受 `twinkle.service.language` 控制，也不自动拼接语言后缀。部署者通过两个显式路径选择实际数据；服务端不会猜测、合并或回退到其他目录。
 
 - **WZ 位置**：`twinkle.wz.path` 配置直接指定 WZ 数据目录（如 `./wz/`）。wz-provider 从该目录读取，不做语言目录，单份数据。
-- **脚本位置**：`twinkle.script.path` 配置直接指定脚本目录（如 `./scripts/`）。domain-script 从该目录读取，单份数据。
+- **脚本位置**：`twinkle.script.path` 配置直接指定脚本目录（如 `./scripts/`）。domain-script 只读取该目录。
 - **未指定 / 读不到**：启动时打印明确错误（日志红线 9），指出配置项、实际路径与缺失内容，进程以可诊断状态退出或告警——**不做静默回退**。
-- **客户端语言**：v83 客户端语言由客户端版本固定，服务端文本随部署的 WZ/脚本走；不按账号动态切换语言（`accounts.language` 列保留在表结构，暂不驱动数据源切换）。
+- **服务端语言互不干预**：`twinkle.service.language` 只影响 Java 后台自身的人类可读输出；不会改变 WZ/脚本目录。
+- **客户端编码**：v83 中服线协议字符串仍按 GBK 编解码；charset 与 Java 后台 i18n 是两套独立机制。
 
 ---
 

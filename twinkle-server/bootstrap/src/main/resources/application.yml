@@ -4,6 +4,11 @@
 twinkle:
   profile: ${TWINKLE_PROFILE:single}
 
+  # ============== 服务端全局语言（参考北斗的 service.language） ==============
+  # Java 后台日志、异常、HTTP 消息和系统文案统一跟随；WZ、脚本使用各自显式路径，不受此项控制。
+  service:
+    language: ${TWINKLE_SERVICE_LANGUAGE:zh-CN}
+
   # ============== 数据库（架构 6.2：按需三档） ==============
   # 默认：SQLite（低配 standalone，路径相对运行目录）
   # 大服 PostgreSQL：-Dtwinkle.db.url=jdbc:postgresql://host:5432/dbname

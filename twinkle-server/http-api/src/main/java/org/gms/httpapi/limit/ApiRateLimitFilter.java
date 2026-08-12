@@ -1,7 +1,6 @@
 package org.gms.httpapi.limit;
 
 import io.micronaut.http.HttpRequest;
-import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.annotation.Filter;
@@ -12,7 +11,7 @@ import io.micronaut.http.filter.ServerFilterPhase;
 import org.gms.httpapi.auth.ApiKeyAuthFilter;
 import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.contract.ApiErrorResponses;
-import org.gms.httpapi.limit.ApiRateLimiter;
+import org.gms.i18n.I18nService;
 import org.reactivestreams.Publisher;
 
 /**
@@ -27,9 +26,11 @@ import org.reactivestreams.Publisher;
 public final class ApiRateLimitFilter implements HttpServerFilter, Ordered {
 
     private final ApiRateLimiter rateLimiter;
+    private final I18nService i18n;
 
-    public ApiRateLimitFilter(ApiRateLimiter rateLimiter) {
+    public ApiRateLimitFilter(ApiRateLimiter rateLimiter, I18nService i18n) {
         this.rateLimiter = rateLimiter;
+        this.i18n = i18n;
     }
 
     @Override
@@ -45,7 +46,8 @@ public final class ApiRateLimitFilter implements HttpServerFilter, Ordered {
                     .orElse("unknown");
             return io.micronaut.core.async.publisher.Publishers.just(
                     ApiErrorResponses.response(HttpStatus.TOO_MANY_REQUESTS, requestId, null,
-                            "rate_limited", "请求频率过高", true, java.util.Map.of()));
+                            "rate_limited", i18n.message("api.error.rate_limited"),
+                            true, java.util.Map.of()));
         }
         return chain.proceed(request);
     }

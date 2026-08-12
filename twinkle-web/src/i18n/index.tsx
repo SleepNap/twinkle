@@ -1,0 +1,300 @@
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+
+const messages = {
+  "zh-CN": {
+    "app.console": "控制台", "app.navigation": "控制台导航",
+    "app.dataHint": "数据来自本机管理接口，并按页面频率自动刷新。", "language.label": "语言",
+    "nav.overview": "概览", "nav.channels": "频道", "nav.players": "在线玩家", "nav.accounts": "账号角色",
+    "nav.config": "配置中心", "nav.operations": "运维操作", "nav.apiKeys": "API Key", "nav.audits": "审计日志",
+    "common.refresh": "刷新", "common.retry": "重试", "common.cancel": "取消",
+    "common.processing": "处理中", "common.operation": "操作", "common.close": "关闭", "query.failed": "数据加载失败",
+    "api.connected": "API 已连接", "api.disconnected": "API 未连接",
+    "overview.title": "运行概览", "overview.description": "查看服务健康、频道和在线玩家的实时状态。",
+    "overview.metrics": "关键指标", "overview.health": "服务健康", "overview.healthy": "正常",
+    "overview.unhealthy": "异常", "overview.healthChecks": "{count} 项健康检查",
+    "overview.waiting": "等待管理接口响应", "overview.channelCount": "频道数",
+    "overview.onlinePlayers": "在线玩家", "overview.refresh10": "每 10 秒自动刷新",
+    "overview.refresh5": "每 5 秒自动刷新", "overview.channelStatus": "频道状态",
+    "overview.channelStatusDescription": "展示当前注册频道及其在线人数。", "overview.viewAll": "查看全部",
+    "overview.channelUnavailable": "频道数据暂不可用。", "overview.noChannels": "暂无已注册频道。",
+    "table.channel": "频道", "table.address": "地址", "table.onlinePlayers": "在线玩家",
+    "channels.title": "频道", "channels.description": "当前已向管理服务注册的游戏频道。",
+    "channels.id": "频道 ID", "channels.status": "状态", "channels.host": "主机",
+    "channels.port": "端口", "channels.registered": "已注册", "channels.unavailable": "频道数据暂不可用。",
+    "channels.empty": "暂无频道", "channels.emptyDescription": "频道服务启动并完成注册后，会自动出现在这里。",
+    "players.title": "在线玩家", "players.description": "浏览当前在线角色，并按名称或角色 ID 筛选。",
+    "players.list": "玩家列表", "players.autoUpdate": "结果随在线状态自动更新。",
+    "players.onlineCount": "{count} 人在线", "players.searchPlaceholder": "搜索玩家名称或角色 ID",
+    "players.searchLabel": "搜索在线玩家", "players.unavailable": "在线玩家数据暂不可用。",
+    "players.player": "玩家", "players.characterId": "角色 ID", "players.level": "等级",
+    "players.job": "职业", "players.map": "地图", "players.noMatch": "没有匹配的玩家",
+    "players.noMatchDescription": "请尝试其他名称或角色 ID。", "players.empty": "当前没有在线玩家",
+    "players.emptyDescription": "玩家登录后会自动出现在这里。", "notFound.title": "页面不存在",
+    "players.kick": "踢下线", "players.kicked": "玩家已下线", "players.kickFailed": "踢下线失败",
+    "players.kickDescription": "角色 ID：{id}", "players.kickTitle": "确认让 {name} 下线？",
+    "players.kickConfirmDescription": "角色 ID {id} 将断开当前游戏会话。", "players.kickConfirm": "确认踢下线",
+    "players.thisPlayer": "该玩家",
+    "config.title": "配置中心", "config.description": "修改会写入数据库真值，并广播新的配置版本。",
+    "config.version": "版本 {version}", "config.add": "新增", "config.updated": "配置已更新",
+    "config.updatedDescription": "{key} · 版本 {version}", "config.updateFailed": "配置更新失败",
+    "config.unavailable": "配置数据暂不可用。", "config.key": "配置键", "config.value": "当前值",
+    "config.editLabel": "编辑 {key}", "config.empty": "暂无配置", "config.emptyDescription": "可以新增第一个动态配置项。",
+    "config.edit": "编辑配置", "config.create": "新增配置", "config.dialogDescription": "保存后配置版本会立即递增，订阅方将收到变更通知。",
+    "config.valueLabel": "配置值", "config.saving": "保存中", "config.save": "保存配置",
+    "operations.title": "运维操作", "operations.description": "执行脚本重载、逻辑换代和进程级重启。",
+    "operations.refresh": "刷新状态", "operations.warningTitle": "管理接口目前仅限内网或本机使用",
+    "operations.warningDescription": "所有写操作均要求二次确认；正式对外部署前仍需补充强鉴权。",
+    "operations.actions": "运维动作", "operations.scriptTitle": "脚本重载", "operations.scriptDescription": "重新加载发生变化的游戏脚本。",
+    "operations.reloadScripts": "重载脚本", "operations.reloadScriptsTitle": "确认重载脚本？",
+    "operations.reloadScriptsDescription": "服务会扫描脚本目录并替换发生变化的脚本。", "operations.confirmReload": "确认重载",
+    "operations.scriptsSuccess": "脚本重载完成", "operations.scriptsSuccessDescription": "已更新 {count} 个脚本。", "operations.scriptsFailed": "脚本重载失败",
+    "operations.logicTitle": "逻辑重载", "operations.logicDescription": "推进逻辑版本门并处理中途操作。",
+    "operations.reloadLogic": "重载逻辑", "operations.reloadLogicTitle": "确认重载服务逻辑？",
+    "operations.reloadLogicDescription": "当前有 {count} 个在途实体；其长操作可能被显式中断和回滚。",
+    "operations.logicSuccess": "逻辑重载完成", "operations.logicSuccessDescription": "版本 {version}，安全切换 {safe}，中断 {interrupted}。", "operations.logicFailed": "逻辑重载失败",
+    "operations.restartTitle": "进程重启", "operations.restartDescription": "执行排空、增量刷新和进程重启。",
+    "operations.requestRestart": "请求重启", "operations.requestRestartTitle": "确认重启服务进程？",
+    "operations.requestRestartDescription": "这是高风险操作。服务将停止接收新操作、刷新脏数据并进入重启流程。",
+    "operations.confirmRestart": "确认重启", "operations.restartAccepted": "重启请求已接受",
+    "operations.restartAcceptedDescription": "当前阶段：{phase}", "operations.restartFailed": "重启请求失败",
+    "operations.phaseTitle": "重启阶段", "operations.phaseDescription": "每 2 秒读取一次状态机。", "operations.phaseUnavailable": "状态暂不可用",
+    "operations.inFlightTitle": "在途实体", "operations.inFlightDescription": "正在执行跨 tick 长操作、暂未回到安全点的实体。",
+    "operations.inFlightCount": "{count} 个", "operations.entityId": "实体 ID", "operations.noInFlight": "当前没有在途实体。",
+    "operations.inFlightUnavailable": "在途实体数据暂不可用。",
+    "phase.RUNNING": "运行中", "phase.DRAINING": "排空操作", "phase.FLUSH_DIRTY": "刷新脏数据",
+    "phase.RESTARTING": "重启中", "phase.RESTORED": "已恢复", "phase.FAILED": "重启失败",
+    "notFound.description": "这个控制台地址尚未实现或已经变更。", "notFound.back": "返回概览",
+    "api.unreachable": "无法连接管理接口，请确认后端已在 8080 端口启动。",
+    "api.httpError": "管理接口返回 {status} {statusText}", "api.invalidJson": "管理接口没有返回 JSON 数据。",
+    "api.configNotFound": "配置项不存在。", "api.characterNotOnline": "该角色当前不在线或会话已经断开。",
+    "api.capabilityUnreachable": "无法连接能力接口，请确认后端已启动。",
+    "api.capabilityHttpError": "能力接口返回 {status} {statusText}",
+    "api.unauthenticated": "管理密钥无效或已经过期。",
+    "api.permissionDenied": "当前密钥没有管理 API Key 的权限。",
+    "api.keyNotFound": "API Key 不存在或当前凭据无权管理。",
+    "api.invalidKeyRequest": "API Key 参数不合法。",
+    "api.accountNotFound": "账号不存在。",
+    "auth.credentialRequired": "请输入管理密钥。",
+    "auth.providerRequired": "useCredential 必须在 CredentialProvider 内使用",
+    "keys.title": "API Key", "keys.description": "签发和管理外部客户端访问 Twinkle 能力面的凭据。",
+    "keys.connectTitle": "连接能力管理接口", "keys.connectDescription": "输入 bootstrap key 或具有 keys:manage 权限的 API Key。",
+    "keys.managementKey": "管理密钥", "keys.sessionOnly": "密钥只保存在当前浏览器会话，关闭标签页会话后不会长期保留。",
+    "keys.connect": "验证并连接", "keys.connected": "能力接口已连接", "keys.connectFailed": "连接失败",
+    "keys.disconnect": "断开", "keys.disconnected": "管理密钥已从会话移除", "keys.verifying": "正在验证凭据",
+    "keys.scopeSummary": "当前凭据具有 {count} 个有效 Scope。", "keys.issue": "签发 Key", "keys.issued": "API Key 已签发",
+    "keys.issueFailed": "API Key 签发失败", "keys.actionCompleted": "API Key 操作已完成", "keys.actionFailed": "API Key 操作失败",
+    "keys.invalidExpiry": "过期时间无效。", "keys.name": "名称", "keys.prefix": "前缀", "keys.scopes": "Scopes",
+    "keys.status": "状态", "keys.lastUsed": "最后使用", "keys.actionsFor": "管理 {name}",
+    "keys.enable": "启用", "keys.disable": "禁用", "keys.rotate": "轮换", "keys.revoke": "吊销",
+    "keys.unavailable": "API Key 数据暂不可用。", "keys.empty": "尚未签发 API Key。",
+    "keys.confirm.disable": "确认禁用 API Key？", "keys.confirm.enable": "确认启用 API Key？",
+    "keys.confirm.rotate": "确认轮换 API Key？", "keys.confirm.revoke": "确认吊销 API Key？",
+    "keys.confirmDescription": "即将操作凭据“{name}”。轮换或吊销可能导致客户端立即失去访问权限。",
+    "keys.action.disable": "确认禁用", "keys.action.enable": "确认启用", "keys.action.rotate": "确认轮换", "keys.action.revoke": "确认吊销",
+    "keys.issueTitle": "签发 API Key", "keys.issueDescription": "新密钥的 Scope 不得超过当前签发凭据，明文只展示一次。",
+    "keys.displayName": "显示名称", "keys.ownerAccount": "账号 ID（可选）", "keys.expiresAt": "过期时间（可选）",
+    "keys.secretTitle": "立即保存新密钥", "keys.secretDescription": "服务端只保存不可逆摘要；关闭后无法再次查看这段明文。",
+    "keys.copy": "复制密钥", "keys.copied": "密钥已复制", "keys.copyFailed": "复制失败，请手动选中密钥。", "keys.secretSaved": "我已保存",
+    "keys.active": "有效", "keys.disabled": "已禁用", "keys.revoked": "已吊销", "keys.expired": "已过期",
+    "audits.title": "审计日志", "audits.description": "查看能力接口访问和 Tool 执行的安全审计摘要。",
+    "audits.metrics": "审计指标", "audits.apiTotal": "API 请求总数", "audits.deniedSample": "样本内拒绝请求",
+    "audits.toolTotal": "Tool 执行总数", "audits.failedSample": "最近样本失败 {count} 次",
+    "audits.apiTab": "API 请求", "audits.toolsTab": "Tool 执行", "audits.apiTitle": "API 请求审计",
+    "audits.toolsTitle": "Tool 执行审计", "audits.latest": "展示最近 {count} 条记录，每 15 秒刷新。",
+    "audits.safeSummary": "只展示安全摘要，不包含 Credential、请求正文或 Tool 原始输出。",
+    "audits.time": "时间", "audits.request": "请求", "audits.scope": "要求 Scope", "audits.outcome": "结果",
+    "audits.credential": "凭据 / 来源", "audits.duration": "耗时", "audits.tool": "Tool", "audits.subject": "主体",
+    "audits.authorization": "授权", "audits.result": "执行结果", "audits.task": "任务 / 执行 ID", "audits.empty": "暂无审计记录。", "audits.unavailable": "审计数据暂不可用。",
+    "accounts.title": "账号角色", "accounts.description": "按账号名检索账号及其已落库角色快照。",
+    "accounts.credentialTitle": "需要能力面凭据", "accounts.credentialDescription": "账号查询需要具有 game:read Scope 的 API Key。",
+    "accounts.connect": "连接 API", "accounts.searchTitle": "查找账号", "accounts.searchDescription": "当前后端支持按完整账号名精确查询。",
+    "accounts.searchPlaceholder": "输入账号名", "accounts.searchLabel": "搜索账号", "accounts.search": "查询",
+    "accounts.banned": "已封禁", "accounts.normal": "正常", "accounts.characterSlots": "角色槽位",
+    "accounts.gender": "性别值", "accounts.characterCount": "角色数量", "accounts.characters": "角色列表",
+    "accounts.charactersDescription": "数据库快照；在线角色尚未落盘的变化可能未包含。", "accounts.meso": "金币",
+    "accounts.noCharacters": "这个账号在当前世界没有角色。",
+  },
+  "en-US": {
+    "app.console": "Console", "app.navigation": "Console navigation",
+    "app.dataHint": "Data comes from the local admin API and refreshes automatically.", "language.label": "Language",
+    "nav.overview": "Overview", "nav.channels": "Channels", "nav.players": "Online players", "nav.accounts": "Accounts",
+    "nav.config": "Configuration", "nav.operations": "Operations", "nav.apiKeys": "API Keys", "nav.audits": "Audit logs",
+    "common.refresh": "Refresh", "common.retry": "Retry", "common.cancel": "Cancel",
+    "common.processing": "Processing", "common.operation": "Actions", "common.close": "Close", "query.failed": "Failed to load data",
+    "api.connected": "API connected", "api.disconnected": "API disconnected",
+    "overview.title": "Overview", "overview.description": "Monitor service health, channels, and online players in real time.",
+    "overview.metrics": "Key metrics", "overview.health": "Service health", "overview.healthy": "Healthy",
+    "overview.unhealthy": "Unhealthy", "overview.healthChecks": "{count} health checks",
+    "overview.waiting": "Waiting for the admin API", "overview.channelCount": "Channels",
+    "overview.onlinePlayers": "Online players", "overview.refresh10": "Refreshes every 10 seconds",
+    "overview.refresh5": "Refreshes every 5 seconds", "overview.channelStatus": "Channel status",
+    "overview.channelStatusDescription": "Current registered channels and their online population.", "overview.viewAll": "View all",
+    "overview.channelUnavailable": "Channel data is temporarily unavailable.", "overview.noChannels": "No registered channels.",
+    "table.channel": "Channel", "table.address": "Address", "table.onlinePlayers": "Online players",
+    "channels.title": "Channels", "channels.description": "Game channels currently registered with the management service.",
+    "channels.id": "Channel ID", "channels.status": "Status", "channels.host": "Host",
+    "channels.port": "Port", "channels.registered": "Registered", "channels.unavailable": "Channel data is temporarily unavailable.",
+    "channels.empty": "No channels", "channels.emptyDescription": "Channels appear here after they start and register successfully.",
+    "players.title": "Online players", "players.description": "Browse online characters and filter by name or character ID.",
+    "players.list": "Player list", "players.autoUpdate": "Results update automatically as presence changes.",
+    "players.onlineCount": "{count} online", "players.searchPlaceholder": "Search by player name or character ID",
+    "players.searchLabel": "Search online players", "players.unavailable": "Online player data is temporarily unavailable.",
+    "players.player": "Player", "players.characterId": "Character ID", "players.level": "Level",
+    "players.job": "Job", "players.map": "Map", "players.noMatch": "No matching players",
+    "players.noMatchDescription": "Try another name or character ID.", "players.empty": "No players are online",
+    "players.emptyDescription": "Players appear here after they log in.", "notFound.title": "Page not found",
+    "players.kick": "Disconnect", "players.kicked": "Player disconnected", "players.kickFailed": "Failed to disconnect player",
+    "players.kickDescription": "Character ID: {id}", "players.kickTitle": "Disconnect {name}?",
+    "players.kickConfirmDescription": "Character ID {id} will be disconnected from the current game session.", "players.kickConfirm": "Confirm disconnect",
+    "players.thisPlayer": "this player",
+    "config.title": "Configuration", "config.description": "Changes are stored as the database source of truth and broadcast with a new version.",
+    "config.version": "Version {version}", "config.add": "Add", "config.updated": "Configuration updated",
+    "config.updatedDescription": "{key} · version {version}", "config.updateFailed": "Failed to update configuration",
+    "config.unavailable": "Configuration data is temporarily unavailable.", "config.key": "Key", "config.value": "Current value",
+    "config.editLabel": "Edit {key}", "config.empty": "No configuration", "config.emptyDescription": "Add the first dynamic configuration entry.",
+    "config.edit": "Edit configuration", "config.create": "Add configuration", "config.dialogDescription": "Saving increments the configuration version immediately and notifies subscribers.",
+    "config.valueLabel": "Value", "config.saving": "Saving", "config.save": "Save configuration",
+    "operations.title": "Operations", "operations.description": "Reload scripts and logic, or restart the process.",
+    "operations.refresh": "Refresh status", "operations.warningTitle": "The admin API is currently restricted to the local or private network",
+    "operations.warningDescription": "Every write requires confirmation. Strong authentication is still required before public deployment.",
+    "operations.actions": "Operational actions", "operations.scriptTitle": "Script reload", "operations.scriptDescription": "Reload changed game scripts.",
+    "operations.reloadScripts": "Reload scripts", "operations.reloadScriptsTitle": "Reload scripts?",
+    "operations.reloadScriptsDescription": "The service will scan the script directory and replace changed scripts.", "operations.confirmReload": "Confirm reload",
+    "operations.scriptsSuccess": "Scripts reloaded", "operations.scriptsSuccessDescription": "Updated {count} scripts.", "operations.scriptsFailed": "Failed to reload scripts",
+    "operations.logicTitle": "Logic reload", "operations.logicDescription": "Advance the logic version gate and handle in-flight operations.",
+    "operations.reloadLogic": "Reload logic", "operations.reloadLogicTitle": "Reload service logic?",
+    "operations.reloadLogicDescription": "There are {count} in-flight entities; long operations may be interrupted and rolled back explicitly.",
+    "operations.logicSuccess": "Logic reloaded", "operations.logicSuccessDescription": "Version {version}; {safe} switched safely and {interrupted} interrupted.", "operations.logicFailed": "Failed to reload logic",
+    "operations.restartTitle": "Process restart", "operations.restartDescription": "Drain operations, flush incremental state, and restart the process.",
+    "operations.requestRestart": "Request restart", "operations.requestRestartTitle": "Restart the service process?",
+    "operations.requestRestartDescription": "This is a high-risk operation. The service will stop accepting new work, flush dirty data, and enter the restart flow.",
+    "operations.confirmRestart": "Confirm restart", "operations.restartAccepted": "Restart request accepted",
+    "operations.restartAcceptedDescription": "Current phase: {phase}", "operations.restartFailed": "Restart request failed",
+    "operations.phaseTitle": "Restart phase", "operations.phaseDescription": "Reads the state machine every 2 seconds.", "operations.phaseUnavailable": "Status unavailable",
+    "operations.inFlightTitle": "In-flight entities", "operations.inFlightDescription": "Entities executing multi-tick operations that have not reached a safe point.",
+    "operations.inFlightCount": "{count}", "operations.entityId": "Entity ID", "operations.noInFlight": "No entities are in flight.",
+    "operations.inFlightUnavailable": "In-flight entity data is temporarily unavailable.",
+    "phase.RUNNING": "Running", "phase.DRAINING": "Draining", "phase.FLUSH_DIRTY": "Flushing dirty state",
+    "phase.RESTARTING": "Restarting", "phase.RESTORED": "Restored", "phase.FAILED": "Restart failed",
+    "notFound.description": "This console route is unavailable or has changed.", "notFound.back": "Back to overview",
+    "api.unreachable": "Cannot reach the admin API. Confirm that the backend is running on port 8080.",
+    "api.httpError": "The admin API returned {status} {statusText}", "api.invalidJson": "The admin API did not return JSON data.",
+    "api.configNotFound": "The configuration entry does not exist.",
+    "api.characterNotOnline": "The character is offline or the session has ended.",
+    "api.capabilityUnreachable": "Cannot reach the capability API. Confirm that the backend is running.",
+    "api.capabilityHttpError": "The capability API returned {status} {statusText}",
+    "api.unauthenticated": "The management key is invalid or has expired.",
+    "api.permissionDenied": "This key cannot manage API keys.",
+    "api.keyNotFound": "The API key does not exist or is not manageable by the current credential.",
+    "api.invalidKeyRequest": "The API key parameters are invalid.",
+    "api.accountNotFound": "The account does not exist.",
+    "auth.credentialRequired": "Enter a management key.",
+    "auth.providerRequired": "useCredential must be used inside CredentialProvider",
+    "keys.title": "API Keys", "keys.description": "Issue and manage credentials for external clients accessing Twinkle capabilities.",
+    "keys.connectTitle": "Connect to capability management", "keys.connectDescription": "Enter the bootstrap key or an API key with keys:manage scope.",
+    "keys.managementKey": "Management key", "keys.sessionOnly": "The key is stored only for this browser session and is not retained long-term after the session closes.",
+    "keys.connect": "Verify and connect", "keys.connected": "Capability API connected", "keys.connectFailed": "Connection failed",
+    "keys.disconnect": "Disconnect", "keys.disconnected": "Management key removed from this session", "keys.verifying": "Verifying credential",
+    "keys.scopeSummary": "The current credential has {count} effective scopes.", "keys.issue": "Issue key", "keys.issued": "API key issued",
+    "keys.issueFailed": "Failed to issue API key", "keys.actionCompleted": "API key operation completed", "keys.actionFailed": "API key operation failed",
+    "keys.invalidExpiry": "The expiration time is invalid.", "keys.name": "Name", "keys.prefix": "Prefix", "keys.scopes": "Scopes",
+    "keys.status": "Status", "keys.lastUsed": "Last used", "keys.actionsFor": "Manage {name}",
+    "keys.enable": "Enable", "keys.disable": "Disable", "keys.rotate": "Rotate", "keys.revoke": "Revoke",
+    "keys.unavailable": "API key data is temporarily unavailable.", "keys.empty": "No API keys have been issued.",
+    "keys.confirm.disable": "Disable this API key?", "keys.confirm.enable": "Enable this API key?",
+    "keys.confirm.rotate": "Rotate this API key?", "keys.confirm.revoke": "Revoke this API key?",
+    "keys.confirmDescription": "This will operate on “{name}”. Rotation or revocation may immediately remove client access.",
+    "keys.action.disable": "Confirm disable", "keys.action.enable": "Confirm enable", "keys.action.rotate": "Confirm rotation", "keys.action.revoke": "Confirm revocation",
+    "keys.issueTitle": "Issue API key", "keys.issueDescription": "Scopes cannot exceed the issuer credential. The plaintext key is shown only once.",
+    "keys.displayName": "Display name", "keys.ownerAccount": "Account ID (optional)", "keys.expiresAt": "Expiration (optional)",
+    "keys.secretTitle": "Save the new key now", "keys.secretDescription": "The server stores only an irreversible digest. This plaintext cannot be viewed again after closing.",
+    "keys.copy": "Copy key", "keys.copied": "Key copied", "keys.copyFailed": "Copy failed. Select the key manually.", "keys.secretSaved": "I saved it",
+    "keys.active": "Active", "keys.disabled": "Disabled", "keys.revoked": "Revoked", "keys.expired": "Expired",
+    "audits.title": "Audit logs", "audits.description": "Review security summaries for capability API access and tool execution.",
+    "audits.metrics": "Audit metrics", "audits.apiTotal": "Total API requests", "audits.deniedSample": "Denied in sample",
+    "audits.toolTotal": "Total tool executions", "audits.failedSample": "{count} failures in the recent sample",
+    "audits.apiTab": "API requests", "audits.toolsTab": "Tool executions", "audits.apiTitle": "API request audit",
+    "audits.toolsTitle": "Tool execution audit", "audits.latest": "Showing the latest {count} records, refreshed every 15 seconds.",
+    "audits.safeSummary": "Only safe summaries are shown; credentials, request bodies, and raw tool output are excluded.",
+    "audits.time": "Time", "audits.request": "Request", "audits.scope": "Required scope", "audits.outcome": "Outcome",
+    "audits.credential": "Credential / source", "audits.duration": "Duration", "audits.tool": "Tool", "audits.subject": "Subject",
+    "audits.authorization": "Authorization", "audits.result": "Result", "audits.task": "Task / execution ID", "audits.empty": "No audit records.", "audits.unavailable": "Audit data is temporarily unavailable.",
+    "accounts.title": "Accounts", "accounts.description": "Look up an account and its persisted character snapshots by account name.",
+    "accounts.credentialTitle": "Capability credential required", "accounts.credentialDescription": "Account lookup requires an API key with game:read scope.",
+    "accounts.connect": "Connect API", "accounts.searchTitle": "Find account", "accounts.searchDescription": "The current backend supports exact lookup by full account name.",
+    "accounts.searchPlaceholder": "Enter account name", "accounts.searchLabel": "Search accounts", "accounts.search": "Search",
+    "accounts.banned": "Banned", "accounts.normal": "Normal", "accounts.characterSlots": "Character slots",
+    "accounts.gender": "Gender value", "accounts.characterCount": "Characters", "accounts.characters": "Characters",
+    "accounts.charactersDescription": "Database snapshots; unpersisted changes for online characters may not be included.", "accounts.meso": "Meso",
+    "accounts.noCharacters": "This account has no characters in the current world.",
+  },
+} as const
+
+export type AppLocale = keyof typeof messages
+export type MessageKey = keyof (typeof messages)["zh-CN"]
+export const supportedLocales: readonly AppLocale[] = ["zh-CN", "en-US"]
+const STORAGE_KEY = "twinkle.locale"
+
+function isSupported(value: string | null | undefined): value is AppLocale {
+  return supportedLocales.includes(value as AppLocale)
+}
+
+function negotiate(values: readonly string[]): AppLocale {
+  for (const value of values) {
+    if (isSupported(value)) return value
+    const language = value.split("-")[0]?.toLowerCase()
+    const match = supportedLocales.find((locale) => locale.toLowerCase().startsWith(`${language}-`))
+    if (match) return match
+  }
+  return "zh-CN"
+}
+
+function initialLocale(): AppLocale {
+  if (typeof window === "undefined") return "zh-CN"
+  const stored = window.localStorage.getItem(STORAGE_KEY)
+  return isSupported(stored) ? stored : negotiate(window.navigator.languages)
+}
+
+let activeLocale: AppLocale = initialLocale()
+
+export function translate(key: MessageKey, values: Record<string, string | number> = {}, locale = activeLocale) {
+  const template = messages[locale][key] ?? messages["zh-CN"][key] ?? key
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? `{${name}}`))
+}
+
+interface I18nContextValue {
+  locale: AppLocale
+  setLocale: (locale: AppLocale) => void
+  t: (key: MessageKey, values?: Record<string, string | number>) => string
+  formatNumber: (value: number) => string
+}
+
+const I18nContext = createContext<I18nContextValue | null>(null)
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<AppLocale>(activeLocale)
+
+  function setLocale(next: AppLocale) {
+    activeLocale = next
+    window.localStorage.setItem(STORAGE_KEY, next)
+    setLocaleState(next)
+  }
+
+  useEffect(() => {
+    activeLocale = locale
+    document.documentElement.lang = locale
+  }, [locale])
+
+  const value = useMemo<I18nContextValue>(() => ({
+    locale, setLocale, t: (key, values) => translate(key, values, locale),
+    formatNumber: (number) => new Intl.NumberFormat(locale).format(number),
+  }), [locale])
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+}
+
+export function useI18n() {
+  const value = useContext(I18nContext)
+  if (!value) throw new Error("useI18n must be used inside I18nProvider")
+  return value
+}

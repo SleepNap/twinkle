@@ -15,6 +15,7 @@ import org.reactivestreams.Publisher;
 import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.contract.ApiErrorResponses;
 import org.gms.httpapi.limit.ApiRateLimiter;
+import org.gms.i18n.I18nService;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -35,13 +36,15 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
     private final ApiAuditService auditService;
     private final ApiAccessPolicy accessPolicy;
     private final ApiRateLimiter rateLimiter;
+    private final I18nService i18n;
 
     public ApiKeyAuthFilter(ApiKeyService apiKeyService, ApiAuditService auditService,
-                            ApiAccessPolicy accessPolicy, ApiRateLimiter rateLimiter) {
+                            ApiAccessPolicy accessPolicy, ApiRateLimiter rateLimiter, I18nService i18n) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.accessPolicy = accessPolicy;
         this.rateLimiter = rateLimiter;
+        this.i18n = i18n;
     }
 
     @Override
@@ -64,7 +67,8 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
                     policy.requiredScope(), "rate_limited", HttpStatus.TOO_MANY_REQUESTS.getCode(),
                     remoteAddress(request), elapsedMs(started));
             return Publishers.just(ApiErrorResponses.response(HttpStatus.TOO_MANY_REQUESTS,
-                            requestId, null, "rate_limited", "来源请求频率过高", true, Map.of())
+                            requestId, null, "rate_limited", message("api.error.preauth_rate_limited"),
+                            true, Map.of())
                     .header(ApiContract.REQUEST_ID_HEADER, requestId)
                     .header(ApiContract.CONTRACT_HEADER, ApiContract.VERSION));
         }
@@ -74,7 +78,7 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
                     policy.requiredScope(), "unauthenticated", HttpStatus.UNAUTHORIZED.getCode(),
                     remoteAddress(request), elapsedMs(started));
             MutableHttpResponse<?> response = ApiErrorResponses.response(HttpStatus.UNAUTHORIZED,
-                    requestId, null, "unauthenticated", "Credential 缺失、无效、过期或已吊销",
+                    requestId, null, "unauthenticated", message("api.error.unauthenticated"),
                     false, Map.of())
                     .header(HttpHeaders.WWW_AUTHENTICATE, "Bearer")
                     .header(ApiContract.REQUEST_ID_HEADER, requestId)
@@ -91,7 +95,7 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
                     policy.requiredScope(), "forbidden", HttpStatus.FORBIDDEN.getCode(),
                     remoteAddress(request), elapsedMs(started));
             MutableHttpResponse<?> response = ApiErrorResponses.response(HttpStatus.FORBIDDEN,
-                    requestId, null, "permission_denied", "当前 Credential 无权访问该能力",
+                    requestId, null, "permission_denied", message("api.error.permission_denied"),
                     false, Map.of("requiredScopes", List.of(policy.requiredScope())))
                     .header(ApiContract.REQUEST_ID_HEADER, requestId)
                     .header(ApiContract.CONTRACT_HEADER, ApiContract.VERSION);
@@ -142,5 +146,9 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
 
     private static long elapsedMs(long started) {
         return (System.nanoTime() - started) / 1_000_000L;
+    }
+
+    private String message(String key) {
+        return i18n.message(key);
     }
 }

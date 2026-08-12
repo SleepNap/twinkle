@@ -1,0 +1,229 @@
+import { Code2, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
+import { toast } from "sonner"
+
+import { adminApi, adminQueryKeys, type RestartPhaseResponse } from "@/api/admin"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
+import { PageHeader } from "@/components/page-header"
+import { QueryError } from "@/components/query-state"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { useI18n, type MessageKey } from "@/i18n"
+
+const phaseLabelKeys: Record<RestartPhaseResponse["phase"], MessageKey> = {
+  RUNNING: "phase.RUNNING", DRAINING: "phase.DRAINING", FLUSH_DIRTY: "phase.FLUSH_DIRTY",
+  RESTARTING: "phase.RESTARTING", RESTORED: "phase.RESTORED", FAILED: "phase.FAILED",
+}
+
+export function OperationsPage() {
+  const { t } = useI18n()
+  const queryClient = useQueryClient()
+  const [dialog, setDialog] = useState<"scripts" | "logic" | "restart" | null>(null)
+  const inFlight = useQuery({
+    queryKey: adminQueryKeys.inFlight,
+    queryFn: ({ signal }) => adminApi.inFlight(signal),
+    refetchInterval: 5_000,
+  })
+  const restartPhase = useQuery({
+    queryKey: adminQueryKeys.restartPhase,
+    queryFn: ({ signal }) => adminApi.restartPhase(signal),
+    refetchInterval: 2_000,
+  })
+  const scriptsMutation = useMutation({
+    mutationFn: adminApi.reloadScripts,
+    onSuccess: ({ changed }) => {
+      toast.success(t("operations.scriptsSuccess"), {
+        description: t("operations.scriptsSuccessDescription", { count: changed }),
+      })
+      setDialog(null)
+    },
+    onError: (error) => toast.error(t("operations.scriptsFailed"), { description: error.message }),
+  })
+  const logicMutation = useMutation({
+    mutationFn: adminApi.reloadLogic,
+    onSuccess: (result) => {
+      toast.success(t("operations.logicSuccess"), {
+        description: t("operations.logicSuccessDescription", {
+          version: result.newVersion, safe: result.safeSwitched, interrupted: result.interrupted,
+        }),
+      })
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.inFlight })
+      setDialog(null)
+    },
+    onError: (error) => toast.error(t("operations.logicFailed"), { description: error.message }),
+  })
+  const restartMutation = useMutation({
+    mutationFn: adminApi.restart,
+    onSuccess: ({ phase }) => {
+      toast.success(t("operations.restartAccepted"), {
+        description: t("operations.restartAcceptedDescription", { phase: t(phaseLabelKeys[phase]) }),
+      })
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.restartPhase })
+      setDialog(null)
+    },
+    onError: (error) => toast.error(t("operations.restartFailed"), { description: error.message }),
+  })
+
+  const firstError = inFlight.error ?? restartPhase.error
+  const isRefreshing = inFlight.isFetching || restartPhase.isFetching
+
+  function refreshAll() {
+    void inFlight.refetch()
+    void restartPhase.refetch()
+  }
+
+  return (
+    <div className="grid gap-6">
+      <PageHeader
+        title={t("operations.title")}
+        description={t("operations.description")}
+        action={
+          <Button variant="outline" size="sm" onClick={refreshAll} disabled={isRefreshing}>
+            <RefreshCw data-icon="inline-start" className={isRefreshing ? "animate-spin" : undefined} />
+            {t("operations.refresh")}
+          </Button>
+        }
+      />
+
+      <Alert>
+        <TriangleAlert />
+        <AlertTitle>{t("operations.warningTitle")}</AlertTitle>
+        <AlertDescription>{t("operations.warningDescription")}</AlertDescription>
+      </Alert>
+
+      {firstError && <QueryError error={firstError} retry={refreshAll} />}
+
+      <section className="grid gap-3 lg:grid-cols-3" aria-label={t("operations.actions")}>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.scriptTitle")}</CardTitle>
+            <CardDescription>{t("operations.scriptDescription")}</CardDescription>
+            <CardAction><ScrollText className="size-4 text-muted-foreground" /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <ConfirmationDialog
+              open={dialog === "scripts"}
+              onOpenChange={(open) => setDialog(open ? "scripts" : null)}
+              trigger={<Button variant="outline" className="w-full">{t("operations.reloadScripts")}</Button>}
+              title={t("operations.reloadScriptsTitle")}
+              description={t("operations.reloadScriptsDescription")}
+              confirmLabel={t("operations.confirmReload")}
+              pending={scriptsMutation.isPending}
+              onConfirm={() => scriptsMutation.mutate()}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.logicTitle")}</CardTitle>
+            <CardDescription>{t("operations.logicDescription")}</CardDescription>
+            <CardAction><Code2 className="size-4 text-muted-foreground" /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <ConfirmationDialog
+              open={dialog === "logic"}
+              onOpenChange={(open) => setDialog(open ? "logic" : null)}
+              trigger={<Button variant="outline" className="w-full">{t("operations.reloadLogic")}</Button>}
+              title={t("operations.reloadLogicTitle")}
+              description={t("operations.reloadLogicDescription", { count: inFlight.data?.inFlightCount ?? 0 })}
+              confirmLabel={t("operations.confirmReload")}
+              pending={logicMutation.isPending}
+              onConfirm={() => logicMutation.mutate()}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.restartTitle")}</CardTitle>
+            <CardDescription>{t("operations.restartDescription")}</CardDescription>
+            <CardAction><RotateCcw className="size-4 text-destructive" /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <ConfirmationDialog
+              open={dialog === "restart"}
+              onOpenChange={(open) => setDialog(open ? "restart" : null)}
+              trigger={<Button variant="destructive" className="w-full">{t("operations.requestRestart")}</Button>}
+              title={t("operations.requestRestartTitle")}
+              description={t("operations.requestRestartDescription")}
+              confirmLabel={t("operations.confirmRestart")}
+              destructive
+              pending={restartMutation.isPending}
+              onConfirm={() => restartMutation.mutate()}
+            />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-3 lg:grid-cols-[1fr_2fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.phaseTitle")}</CardTitle>
+            <CardDescription>{t("operations.phaseDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {restartPhase.isPending ? (
+              <Skeleton className="h-7 w-24" />
+            ) : restartPhase.data ? (
+              <Badge variant={restartPhase.data.phase === "FAILED" ? "destructive" : "secondary"}>
+                {t(phaseLabelKeys[restartPhase.data.phase])}
+              </Badge>
+            ) : (
+              <span className="text-sm text-muted-foreground">{t("operations.phaseUnavailable")}</span>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.inFlightTitle")}</CardTitle>
+            <CardDescription>{t("operations.inFlightDescription")}</CardDescription>
+            <CardAction>
+              <Badge variant="outline">{t("operations.inFlightCount", { count: inFlight.data?.inFlightCount ?? 0 })}</Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {inFlight.isPending ? (
+              <Skeleton className="h-24 w-full" />
+            ) : inFlight.error && !inFlight.data ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">{t("operations.inFlightUnavailable")}</p>
+            ) : inFlight.data && inFlight.data.entities.length > 0 ? (
+              <Table>
+                <TableHeader><TableRow><TableHead>{t("operations.entityId")}</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {inFlight.data.entities.map((entityId) => (
+                    <TableRow key={entityId}>
+                      <TableCell className="font-mono text-xs">{entityId}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="py-6 text-center text-sm text-muted-foreground">{t("operations.noInFlight")}</p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  )
+}
