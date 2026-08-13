@@ -211,8 +211,8 @@ public final class ApiKeyService {
         record.setPermissionVersion(permissionVersion);
         repository.insert(record);
         return new IssuedKey(record.getId(), credentialId, prefix, token, displayName,
-                issuer.subjectId(), scopes, serverIdentity.serverId(), now, expiresAt,
-                rotatedFromPrefix);
+                issuer.subjectId(), ownerAccountId, scopes, serverIdentity.serverId(), now,
+                expiresAt, rotatedFromPrefix);
     }
 
     private Optional<ApiKeyRecord> manageableRecord(ApiPrincipal issuer, String keyPrefix) {
@@ -358,9 +358,9 @@ public final class ApiKeyService {
     }
 
     public record IssuedKey(Long id, String credentialId, String keyPrefix, String token,
-                            String displayName, String subjectId, Set<String> scopes,
-                            String serverId, String createdAt, String expiresAt,
-                            String rotatedFromPrefix) {
+                            String displayName, String subjectId, Long ownerAccountId,
+                            Set<String> scopes, String serverId, String createdAt,
+                            String expiresAt, String rotatedFromPrefix) {
     }
 
     public record KeySummary(Long id, String credentialId, String keyPrefix, String displayName,

@@ -7,6 +7,10 @@ import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.ApiKeyRepository;
+import org.gms.data.repo.ModelRateRepository;
+import org.gms.data.repo.PointAccountRepository;
+import org.gms.data.repo.PointTransactionRepository;
+import org.gms.data.repo.SubscriptionPlanRepository;
 import org.gms.data.repo.ApiRequestAuditRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.CharacterRepository;
@@ -15,6 +19,7 @@ import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.httpapi.auth.ApiAccessPolicy;
 import org.gms.httpapi.auth.ApiAuditService;
 import org.gms.httpapi.auth.ApiKeyService;
+import org.gms.httpapi.billing.BillingService;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
 import org.gms.httpapi.service.AdminApiService;
 import org.gms.httpapi.identity.ServerIdentity;
@@ -92,6 +97,18 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
+    public BillingService billingService(PointAccountRepository pointAccountRepository,
+                                         ModelRateRepository modelRateRepository,
+                                         SubscriptionPlanRepository planRepository,
+                                         PointTransactionRepository transactionRepository,
+                                         @Property(name = "twinkle.billing.websearch.cost", defaultValue = "1")
+                                         int webSearchCost) {
+        return new BillingService(pointAccountRepository, modelRateRepository, planRepository,
+                transactionRepository, webSearchCost);
+    }
+
+    @Bean
+    @Singleton
     public ApiAuditService apiAuditService(ApiRequestAuditRepository repository) {
         return new ApiAuditService(repository);
     }
@@ -133,8 +150,10 @@ public class HttpApiConfig {
             OnlinePlayerPageService onlineTool, PlayerInventoryTool inventoryTool,
             ToolExecutionAuditRepository auditRepository,
             ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity,
-            ServerAgentService serverAgentService) {
+            ServerAgentService serverAgentService, BillingService billingService,
+            ApiKeyRepository apiKeyRepository) {
         return new ToolExecutionService(catalogService, healthTool, onlineTool, inventoryTool,
-                auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService);
+                auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService,
+                billingService, apiKeyRepository);
     }
 }

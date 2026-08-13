@@ -4,6 +4,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import org.gms.data.entity.Account;
 import org.gms.data.mapper.AccountMapper;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -27,7 +28,19 @@ public class FlexAccountRepository implements AccountRepository {
     }
 
     @Override
+    public Optional<Account> findById(Long id) {
+        return Optional.ofNullable(mapper.selectOneById(id));
+    }
+
+    @Override
     public void update(Account account) {
         mapper.update(account);
+    }
+
+    @Override
+    public List<Account> findByNameLike(String query, int limit) {
+        return mapper.selectListByQuery(QueryWrapper.create()
+                .where(Account::getName).like(query)
+                .limit(limit));
     }
 }

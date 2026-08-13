@@ -89,6 +89,16 @@ class AiFacadeBillingTest {
         public void update(Account account) {
             // 测试桩：无需落库
         }
+
+        @Override
+        public Optional<Account> findById(Long id) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<Account> findByNameLike(String query, int limit) {
+            return List.of();
+        }
     }
 
     private static final class EmptyCharacters implements CharacterRepository {

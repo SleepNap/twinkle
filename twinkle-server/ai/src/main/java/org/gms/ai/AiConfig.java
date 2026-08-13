@@ -10,6 +10,7 @@ import org.gms.ai.model.AiModelFactory;
 import org.gms.ai.model.tool.AgentToolAudit;
 import org.gms.ai.model.tool.GameStatTool;
 import org.gms.ai.model.tool.ToolRouter;
+import org.gms.ai.model.tool.WebSearchTool;
 import org.gms.ai.service.AiAssistant;
 import org.gms.ai.service.AiDailySummaryScheduler;
 import org.gms.ai.service.AiFacade;
@@ -78,22 +79,36 @@ public class AiConfig {
                 inventoryRepository, metrics, audit);
     }
 
+    @Bean
+    @Singleton
+    public WebSearchTool webSearchTool(AgentToolAudit audit, Metrics metrics,
+                                       @Property(name = "twinkle.ai.websearch.provider", defaultValue = "off")
+                                       String provider,
+                                       @Property(name = "twinkle.ai.websearch.api-key", defaultValue = "")
+                                       String apiKey) {
+        return new WebSearchTool(provider, apiKey, audit, metrics);
+    }
+
     /**
      * AiServices 声明式 Agent：注入本地规则模型 + 工具，生成 {@link AiAssistant} 代理。
      * 流式：同一模型实现 StreamingChatModel，Agent 流式与工具调用原生合一。
      */
     @Bean
     @Singleton
-    public AiAssistant aiAssistant(AiModelBundle model, GameStatTool tool,
+    public AiAssistant aiAssistant(AiModelBundle model, GameStatTool tool, WebSearchTool webSearchTool,
                                    @Property(name = "twinkle.ai.memory.max-messages", defaultValue = "20")
                                    int maxMessages) {
-        return dev.langchain4j.service.AiServices.builder(AiAssistant.class)
-                .chatModel(model.chatModel())
-                .streamingChatModel(model.streamingChatModel())
-                .chatMemoryProvider(ignored -> dev.langchain4j.memory.chat.MessageWindowChatMemory
-                        .withMaxMessages(Math.max(4, maxMessages)))
-                .tools(tool)
-                .build();
+        dev.langchain4j.service.AiServices<AiAssistant> builder =
+                dev.langchain4j.service.AiServices.builder(AiAssistant.class)
+                        .chatModel(model.chatModel())
+                        .streamingChatModel(model.streamingChatModel())
+                        .chatMemoryProvider(ignored -> dev.langchain4j.memory.chat.MessageWindowChatMemory
+                                .withMaxMessages(Math.max(4, maxMessages)))
+                        .tools(tool);
+        if (webSearchTool.enabled()) {
+            builder.tools(webSearchTool);
+        }
+        return builder.build();
     }
 
     @Bean

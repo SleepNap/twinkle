@@ -2,6 +2,7 @@ package org.gms.data.repo;
 
 import org.gms.data.entity.Account;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -17,7 +18,17 @@ public interface AccountRepository {
     Optional<Account> findByName(String name);
 
     /**
+     * 按主键查询。不存在返回 {@link Optional#empty()}。
+     */
+    Optional<Account> findById(Long id);
+
+    /**
      * 更新账号（登录前置流程落库用：接受服务条款 tos、设置性别 gender 等）。
      */
     void update(Account account);
+
+    /**
+     * 按账号名模糊搜索（供签发 key 时批量选择账号）。
+     */
+    List<Account> findByNameLike(String query, int limit);
 }

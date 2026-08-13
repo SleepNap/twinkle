@@ -32,6 +32,16 @@ class LoginServiceTest {
         public void update(Account account) {
             byName.put(account.getName(), account);
         }
+
+        @Override
+        public Optional<Account> findById(Long id) {
+            return byName.values().stream().filter(account -> id.equals(account.getId())).findFirst();
+        }
+
+        @Override
+        public List<Account> findByNameLike(String query, int limit) {
+            return List.of();
+        }
     }
 
     private static final class StubCharacterRepository implements CharacterRepository {

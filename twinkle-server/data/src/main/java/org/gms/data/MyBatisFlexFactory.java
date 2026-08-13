@@ -23,6 +23,10 @@ import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
 import org.gms.data.mapper.SkillMapper;
 import org.gms.data.mapper.ToolExecutionAuditMapper;
+import org.gms.data.mapper.ModelRateMapper;
+import org.gms.data.mapper.PointAccountMapper;
+import org.gms.data.mapper.PointTransactionMapper;
+import org.gms.data.mapper.SubscriptionPlanMapper;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.data.repo.ApiRequestAuditRepository;
@@ -46,6 +50,14 @@ import org.gms.data.repo.FlexSkillRepository;
 import org.gms.data.repo.SkillRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.FlexToolExecutionAuditRepository;
+import org.gms.data.repo.ModelRateRepository;
+import org.gms.data.repo.PointAccountRepository;
+import org.gms.data.repo.PointTransactionRepository;
+import org.gms.data.repo.SubscriptionPlanRepository;
+import org.gms.data.repo.FlexModelRateRepository;
+import org.gms.data.repo.FlexPointAccountRepository;
+import org.gms.data.repo.FlexPointTransactionRepository;
+import org.gms.data.repo.FlexSubscriptionPlanRepository;
 import org.gms.event.OutboxRepository;
 
 import javax.sql.DataSource;
@@ -93,8 +105,12 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(ApiKeyMapper.class);
         bootstrap.addMapper(ApiRequestAuditMapper.class);
         bootstrap.addMapper(ToolExecutionAuditMapper.class);
+        bootstrap.addMapper(PointAccountMapper.class);
+        bootstrap.addMapper(ModelRateMapper.class);
+        bootstrap.addMapper(SubscriptionPlanMapper.class);
+        bootstrap.addMapper(PointTransactionMapper.class);
         bootstrap.start();
-        log.info("MyBatis-Flex 装配完成：十四个 Mapper 已注册（含技能、Credential、HTTP 审计与 Tool 审计）");
+        log.info("MyBatis-Flex 装配完成：十八个 Mapper 已注册（含技能、Credential、HTTP 审计、Tool 审计与积分计费）");
         return bootstrap;
     }
 
@@ -184,6 +200,30 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public PointAccountMapper pointAccountMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(PointAccountMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public ModelRateMapper modelRateMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(ModelRateMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public SubscriptionPlanMapper subscriptionPlanMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(SubscriptionPlanMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public PointTransactionMapper pointTransactionMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(PointTransactionMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -264,5 +304,29 @@ public class MyBatisFlexFactory {
     @Singleton
     public ToolExecutionAuditRepository toolExecutionAuditRepository(ToolExecutionAuditMapper mapper) {
         return new FlexToolExecutionAuditRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public PointAccountRepository pointAccountRepository(PointAccountMapper mapper) {
+        return new FlexPointAccountRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public ModelRateRepository modelRateRepository(ModelRateMapper mapper) {
+        return new FlexModelRateRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public SubscriptionPlanRepository subscriptionPlanRepository(SubscriptionPlanMapper mapper) {
+        return new FlexSubscriptionPlanRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public PointTransactionRepository pointTransactionRepository(PointTransactionMapper mapper) {
+        return new FlexPointTransactionRepository(mapper);
     }
 }

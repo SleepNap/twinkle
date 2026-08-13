@@ -69,6 +69,16 @@ class AiAgentTest {
         @Override
         public void update(Account account) {
         }
+
+        @Override
+        public Optional<Account> findById(Long id) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<Account> findByNameLike(String query, int limit) {
+            return List.of();
+        }
     }
 
     private static final class FakeCharacterRepo implements CharacterRepository {

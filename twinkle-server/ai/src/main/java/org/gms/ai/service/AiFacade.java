@@ -83,7 +83,8 @@ public final class AiFacade implements ServerAgentService {
                 TokenUsage usage = result.tokenUsage();
                 AgentReply agentReply = new AgentReply(safeConversationId, reply, model.descriptor(),
                         executedTools, auditRefs, tokenCount(usage, true), tokenCount(usage, false));
-                record("agent:" + model.descriptor(), safeMessage, reply, start);
+                record("agent:" + model.descriptor(), safeMessage, reply, start,
+                        model.descriptor(), agentReply.inputTokens(), agentReply.outputTokens());
                 touchConversation(memoryId);
                 return agentReply;
             }
@@ -120,7 +121,8 @@ public final class AiFacade implements ServerAgentService {
     public OnlineReport onlineReport() {
         long start = System.nanoTime();
         OnlineReport report = assistant.onlineReport("在线统计");
-        record("online_report", "在线统计", String.valueOf(report.getOnlineCount()), start);
+        record("online_report", "在线统计", String.valueOf(report.getOnlineCount()), start,
+                model.descriptor(), 0, 0);
         return report;
     }
 
@@ -163,7 +165,8 @@ public final class AiFacade implements ServerAgentService {
         }
     }
 
-    private void record(String toolName, String request, String reply, long startNanos) {
+    private void record(String toolName, String request, String reply, long startNanos,
+                        String modelDescriptor, int inputTokens, int outputTokens) {
         callCount.incrementAndGet();
         AiUsageEntity usage = new AiUsageEntity();
         usage.setToolName(toolName.length() > 100 ? toolName.substring(0, 100) : toolName);
@@ -171,6 +174,9 @@ public final class AiFacade implements ServerAgentService {
         usage.setRequestText("sha256=" + shortHash(request) + ";length=" + request.length());
         usage.setResponseLength(reply == null ? 0 : reply.length());
         usage.setElapsedMs((int) ((System.nanoTime() - startNanos) / 1_000_000));
+        usage.setModel(modelDescriptor);
+        usage.setInputTokens(inputTokens);
+        usage.setOutputTokens(outputTokens);
         try {
             usageRepository.insert(usage);
         } catch (RuntimeException e) {

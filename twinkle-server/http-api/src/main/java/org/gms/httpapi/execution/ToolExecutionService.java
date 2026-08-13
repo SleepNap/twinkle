@@ -1,8 +1,13 @@
 package org.gms.httpapi.execution;
 
+import lombok.extern.log4j.Log4j2;
+import org.gms.data.entity.ApiKeyRecord;
 import org.gms.data.entity.ToolExecutionAudit;
+import org.gms.data.repo.ApiKeyRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.httpapi.auth.ApiPrincipal;
+import org.gms.httpapi.billing.BillingException;
+import org.gms.httpapi.billing.BillingService;
 import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.identity.ServerIdentity;
@@ -24,6 +29,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** v0.1 统一 Tool 调用、同步结果缓存、短期去重和权威审计。 */
+@Log4j2
 public final class ToolExecutionService {
 
     private static final Set<String> ENVELOPE_FIELDS = Set.of(
@@ -43,6 +49,8 @@ public final class ToolExecutionService {
     private final Metrics metrics;
     private final ServerIdentity serverIdentity;
     private final ServerAgentService serverAgent;
+    private final BillingService billingService;
+    private final ApiKeyRepository apiKeyRepository;
     private final Object[] executionLocks = new Object[64];
     private final Map<String, StoredExecution> byExecutionId = new ConcurrentHashMap<>();
     private final Map<String, String> executionIdByDedupeKey = new ConcurrentHashMap<>();
@@ -52,7 +60,8 @@ public final class ToolExecutionService {
                                 PlayerInventoryTool inventoryTool,
                                 ToolExecutionAuditRepository auditRepository,
                                 ApiRateLimiter rateLimiter, Metrics metrics,
-                                ServerIdentity serverIdentity, ServerAgentService serverAgent) {
+                                ServerIdentity serverIdentity, ServerAgentService serverAgent,
+                                BillingService billingService, ApiKeyRepository apiKeyRepository) {
         this.catalogService = catalogService;
         this.healthTool = healthTool;
         this.onlineTool = onlineTool;
@@ -62,6 +71,8 @@ public final class ToolExecutionService {
         this.metrics = metrics;
         this.serverIdentity = serverIdentity;
         this.serverAgent = serverAgent;
+        this.billingService = billingService;
+        this.apiKeyRepository = apiKeyRepository;
         for (int index = 0; index < executionLocks.length; index++) {
             executionLocks[index] = new Object();
         }
@@ -289,10 +300,27 @@ public final class ToolExecutionService {
         if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
             throw invalidInput("conversationId 格式无效", call.requestId(), null);
         }
+        Long accountId = resolveBillingAccount(principal);
+        if (accountId != null) {
+            try {
+                billingService.precheck(accountId);
+            } catch (BillingException e) {
+                throw billingError(e, call.requestId());
+            }
+        }
         ServerAgentService.InvestigationResult reply = serverAgent.investigate(
                 new ServerAgentService.InvestigationRequest(conversationId, message,
                         call.requestId(), principal.subjectId(), principal.credentialId(),
                         "twish-" + call.source()));
+        if (accountId != null) {
+            try {
+                billingService.charge(accountId, reply.model(), reply.inputTokens(),
+                        reply.outputTokens(), webSearchCount(reply.executedTools()));
+            } catch (RuntimeException e) {
+                log.warn("积分扣费失败（不影响已返回结果）: accountId={}, model={}",
+                        accountId, reply.model(), e);
+            }
+        }
         return Map.of(
                 "conversationId", reply.conversationId(),
                 "reply", reply.reply(),
@@ -313,6 +341,30 @@ public final class ToolExecutionService {
         }
         return Map.of("conversationId", conversationId,
                 "evicted", serverAgent.closeConversation(conversationId, principal.subjectId()));
+    }
+
+    private Long resolveBillingAccount(ApiPrincipal principal) {
+        if (principal.scopes().contains("*")) {
+            return null;
+        }
+        ApiKeyRecord record = apiKeyRepository.findByPrefix(principal.keyPrefix())
+                .orElseThrow(() -> new BillingException("billing_account_required", "API Key 不存在"));
+        if (record.getOwnerAccountId() == null) {
+            throw new BillingException("billing_account_required", "API Key 未关联账号，无法计费");
+        }
+        return record.getOwnerAccountId();
+    }
+
+    private static int webSearchCount(List<String> executedTools) {
+        if (executedTools == null) {
+            return 0;
+        }
+        return (int) executedTools.stream().filter("web_search"::equals).count();
+    }
+
+    private static ToolProtocolException billingError(BillingException e, String requestId) {
+        return new ToolProtocolException(io.micronaut.http.HttpStatus.TOO_MANY_REQUESTS,
+                e.code(), e.getMessage(), true, null, requestId, Map.of());
     }
 
     private static String shortHash(String value) {
