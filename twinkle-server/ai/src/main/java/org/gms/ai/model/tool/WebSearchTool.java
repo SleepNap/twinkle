@@ -3,6 +3,7 @@ package org.gms.ai.model.tool;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.invocation.InvocationParameters;
+import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
 
 import java.net.URI;
@@ -115,7 +116,7 @@ public final class WebSearchTool {
 
     private static String validatedQuery(String query) {
         if (query == null || query.isBlank() || query.length() > 500) {
-            throw new IllegalArgumentException("搜索查询词必须为 1-500 个字符");
+            throw new IllegalArgumentException(I18n.message("error.ai.websearch_query_length"));
         }
         return query.trim();
     }

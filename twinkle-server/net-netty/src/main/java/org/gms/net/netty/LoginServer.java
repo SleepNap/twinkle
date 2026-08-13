@@ -7,6 +7,7 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.HandlerRegistry;
 
 /**
@@ -50,7 +51,7 @@ public final class LoginServer implements AutoCloseable {
                 .channel(NioServerSocketChannel.class)
                 .childHandler(new V83ServerInitializer(registry, null, heartbeatConfig));
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        log.info("登录服启动，监听端口: {}", port);
+        log.info(I18n.message("log.login.server_started"), port);
     }
 
     public int boundPort() {
@@ -68,6 +69,6 @@ public final class LoginServer implements AutoCloseable {
         if (workerGroup != null) {
             workerGroup.shutdownGracefully().syncUninterruptibly();
         }
-        log.info("登录服已停止");
+        log.info(I18n.message("log.login.server_stopped"));
     }
 }

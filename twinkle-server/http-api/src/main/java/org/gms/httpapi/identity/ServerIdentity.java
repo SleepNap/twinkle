@@ -1,5 +1,7 @@
 package org.gms.httpapi.identity;
 
+import org.gms.i18n.I18n;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -14,11 +16,11 @@ public record ServerIdentity(String serverId, String displayName, String environ
         displayName = requireValue("displayName", displayName, 128);
         environment = requireValue("environment", environment, 32);
         if (!ENVIRONMENTS.contains(environment)) {
-            throw new IllegalArgumentException("environment 必须是 development/test/staging/production");
+            throw new IllegalArgumentException(I18n.message("error.identity.invalid_environment"));
         }
         version = version == null || version.isBlank() ? null : version.trim();
         if (version != null && version.length() > 64) {
-            throw new IllegalArgumentException("version 最长 64 字符");
+            throw new IllegalArgumentException(I18n.message("error.identity.version_too_long"));
         }
     }
 
@@ -33,7 +35,7 @@ public record ServerIdentity(String serverId, String displayName, String environ
 
     private static String requireValue(String name, String value, int maxLength) {
         if (value == null || value.isBlank() || value.trim().length() > maxLength) {
-            throw new IllegalArgumentException(name + " 必须为 1-" + maxLength + " 个字符");
+            throw new IllegalArgumentException(I18n.message("error.identity.field_length", name, maxLength));
         }
         return value.trim();
     }

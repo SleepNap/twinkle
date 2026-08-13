@@ -1,5 +1,7 @@
 package org.gms.net.packet.v83;
 
+import org.gms.i18n.I18n;
+
 /**
  * v83 物品发包投影，隔离协议层与游戏对象/数据库实体。
  *
@@ -26,13 +28,13 @@ public record V83ItemSnapshot(
     public V83ItemSnapshot {
         owner = owner == null ? "" : owner;
         if (itemType != 1 && itemType != 2) {
-            throw new IllegalArgumentException("暂不支持的 v83 物品类型: " + itemType);
+            throw new IllegalArgumentException(I18n.message("error.item.unsupported_type", itemType));
         }
         if (itemType == 1 && equipStats == null) {
             equipStats = V83EquipStats.empty();
         }
         if (petStats != null && (itemType != 2 || cashId <= 0)) {
-            throw new IllegalArgumentException("宠物投影必须是带唯一 petId 的类型 2 物品");
+            throw new IllegalArgumentException(I18n.message("error.item.pet_projection_invalid"));
         }
     }
 

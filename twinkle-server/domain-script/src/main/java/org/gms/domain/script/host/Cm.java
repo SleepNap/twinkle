@@ -1,5 +1,7 @@
 package org.gms.domain.script.host;
 
+import org.gms.i18n.I18n;
+
 /**
  * 宿主对象契约 cm（character manager，架构 M0 第 9 项）。
  *
@@ -210,6 +212,6 @@ public interface Cm {
     }
 
     private static UnsupportedOperationException unsupported(String name) {
-        return new UnsupportedOperationException("cm." + name + " 未由当前宿主实现");
+        return new UnsupportedOperationException(I18n.message("error.script.host_not_implemented", name));
     }
 }

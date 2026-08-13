@@ -4,6 +4,7 @@ import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.auth.ApiScopes;
 import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.i18n.I18n;
 import org.gms.service.agent.ServerAgentService;
 import org.gms.service.agent.UnavailableServerAgentService;
 
@@ -106,7 +107,7 @@ public final class ToolCatalogService {
         }
         String normalized = query.trim().toLowerCase(Locale.ROOT);
         if (normalized.length() > 100) {
-            throw new IllegalArgumentException("query 最长 100 字符");
+            throw new IllegalArgumentException(I18n.message("error.catalog.query_too_long"));
         }
         return normalized;
     }

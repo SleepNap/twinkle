@@ -1,5 +1,6 @@
 package org.gms.wz;
 
+import org.gms.i18n.I18n;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -36,7 +37,7 @@ public final class WzXmlParser {
             Element root = doc.getDocumentElement(); // <imgdir name="xxx.img">
             return parseImgDir(root);
         } catch (Exception e) {
-            throw new IllegalArgumentException("WZ XML 解析失败: " + file, e);
+            throw new IllegalArgumentException(I18n.message("error.wz.xml_parse_failed", file), e);
         }
     }
 

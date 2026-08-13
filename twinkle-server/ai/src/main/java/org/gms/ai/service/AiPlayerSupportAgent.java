@@ -1,6 +1,7 @@
 package org.gms.ai.service;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.service.agent.PlayerSupportAgent;
 
 import java.util.Objects;
@@ -53,6 +54,6 @@ public final class AiPlayerSupportAgent implements PlayerSupportAgent, AutoClose
     @Override
     public void close() {
         executor.shutdownNow();
-        log.info("玩家值班 GM 执行器已关闭");
+        log.info(I18n.message("log.ai.player_executor_closed"));
     }
 }

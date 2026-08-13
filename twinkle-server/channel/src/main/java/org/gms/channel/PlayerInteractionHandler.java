@@ -7,6 +7,7 @@ import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.trade.Trade;
 import org.gms.domain.game.trade.TradeSide;
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
@@ -78,12 +79,12 @@ public final class PlayerInteractionHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到互动包");
+            session.close(I18n.message("error.interaction.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到互动包");
+            session.close(I18n.message("error.interaction.not_in_map"));
             return;
         }
         int action = packet.readByte();
@@ -96,7 +97,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
             case ACTION_SET_ITEMS -> setItems(session, chr, packet);
             case ACTION_SET_MESO -> setMeso(session, chr, packet);
             case ACTION_CONFIRM -> confirm(session, chr);
-            default -> log.debug("未处理的互动动作: {}", action);
+            default -> log.debug(I18n.message("log.interaction.unhandled_action"), action);
         }
     }
 

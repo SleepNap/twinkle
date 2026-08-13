@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、审计日志和任务监控页面；配置热改、踢下线、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。统一 `BackgroundTaskRegistry` 已提供有界执行历史、调度启停、立即运行与失败重试，`AiDailySummaryScheduler` 为首个真实接入任务。完整范围见 `docs/in-progress/console-roadmap.md`，后续继续补齐强鉴权、AI 预算/模型策略、任务持久化与集群聚合和部署。
 
-**全局 i18n 基座已建立**（2026-08-12）：`twinkle.service.language` 是 Java 后台唯一语言配置，HTTP 用 `Content-Language` 声明实际语言；Web 控制台首批支持 `zh-CN`/`en-US` 并独立持久化界面选择。WZ/脚本不受服务端语言控制，只读 `twinkle.wz.path` / `twinkle.script.path` 显式目录。认证、限流、管理和 Tool 的 HTTP 边界已接入；存量 Java 日志/内部异常仍需逐模块迁移，禁止新增人类可读硬编码。规范见 `docs/archived/i18n.md`。
+**全局 i18n 全量完成**（2026-08-12 基座，2026-08-13 迁移完成）：`twinkle.service.language` 是 Java 后台唯一语言配置，HTTP 用 `Content-Language` 声明实际语言；Web 控制台首批支持 `zh-CN`/`en-US` 并独立持久化界面选择。存量 Java 日志/异常/游戏内玩家提示中文硬编码已全部迁入 i18n key（约 300 处，跨 12 模块），`en-US` 配置下后台文案全英文。统一入口：`I18nService`（`@Singleton`，可注入）+ 静态门面 `org.gms.i18n.I18n`（无法 DI 的代码用，bootstrap `I18nInitializer` 启动注入）。key 前缀：`log.*`（日志，`{}` 占位）/ `error.*`（异常，`{0}`）/ `game.*`（游戏内提示，`{0}`）。编码规则：协议层固定 GBK（`InPacket.DEFAULT_CHARSET`，GBK 兼容 ASCII），语言只改文案内容不改编码，HTTP 固定 UTF-8。WZ/脚本不受服务端语言控制，只读 `twinkle.wz.path` / `twinkle.script.path` 显式目录。规范见 `docs/archived/i18n.md`。
 
 **`ARCHITECTURE.md` 是唯一权威规范**——设计决策、模块划分、运行拓扑均以该文档为准，改动前必须先读。所有文档、注释使用中文。
 

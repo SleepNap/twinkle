@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 可靠事件总线（架构 4.5 可靠性三件套：持久化队列 + 幂等去重 + 单一属主序号 = 恰好一次）。
@@ -61,7 +62,7 @@ public final class ReliableEventBus {
         // 启动重投：取出未 ACKED 的 in-flight 消息（进程崩了重发，架构 4.5）。
         // 注意：ACKED = 接收方已确认应用，重投只重投未确认的。
         for (OutboxRepository.OutboxRow row : outbox.findPending()) {
-            log.info("可靠总线启动重投: messageId={} stream={} seq={}", row.messageId(), row.streamId(), row.seq());
+            log.info(I18n.message("log.bus.start_redeliver"), row.messageId(), row.streamId(), row.seq());
             deliver(row);
         }
     }
@@ -95,19 +96,19 @@ public final class ReliableEventBus {
         String stream = row.streamId();
         // 幂等去重：同 messageId 已投递过则不重复投（发送侧重投保护；接收侧另有 ReliableReceiver 去重）
         if (processedMessageIds.putIfAbsent(row.messageId(), Boolean.TRUE) != null) {
-            log.info("可靠总线幂等去重（发送侧）: messageId={} 已投递", row.messageId());
+            log.info(I18n.message("log.bus.send_dedup"), row.messageId());
             return;
         }
         long last = deliveredSeq.getOrDefault(stream, 0L);
         if (row.seq() <= last) {
-            log.info("可靠总线重复序号丢弃: messageId={} seq={}（last={}）", row.messageId(), row.seq(), last);
+            log.info(I18n.message("log.bus.dup_seq_drop"), row.messageId(), row.seq(), last);
             return;
         }
         deliveredSeq.put(stream, row.seq());
         // 反序列化 + 投递（发送侧真实投递；接收侧按 bus_stream 判序去重）
         Object payload = codec.decode(row.payload(), row.payloadType());
         if (payload == null) {
-            log.error("可靠总线负载反序列化失败: messageId={} type={}", row.messageId(), row.payloadType());
+            log.error(I18n.message("log.bus.decode_failed"), row.messageId(), row.payloadType());
             return;
         }
         try {
@@ -121,7 +122,7 @@ public final class ReliableEventBus {
             // 投递成功 → DELIVERED（等接收方 ack 落定 ACKED）
             outbox.markDelivered(row.id());
         } catch (RuntimeException e) {
-            log.error("可靠总线投递失败: messageId={}", row.messageId(), e);
+            log.error(I18n.message("log.bus.deliver_failed"), row.messageId(), e);
         }
     }
 

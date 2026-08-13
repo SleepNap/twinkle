@@ -3,6 +3,7 @@ package org.gms.net.netty.internal;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信帧编码器（架构 4.5：进程间自定义二进制帧线格式）。
@@ -23,7 +24,7 @@ public final class InternalFrameEncoder extends MessageToByteEncoder<InternalFra
     protected void encode(ChannelHandlerContext ctx, InternalFrame msg, ByteBuf out) {
         byte[] payload = msg.payload();
         if (payload.length > MAX_PAYLOAD) {
-            throw new IllegalArgumentException("内部帧负载超限: " + payload.length + " > " + MAX_PAYLOAD);
+            throw new IllegalArgumentException(I18n.message("error.internal.frame_payload_too_large", payload.length, MAX_PAYLOAD));
         }
         out.writeShort(MAGIC);
         out.writeByte(msg.type().ordinal());

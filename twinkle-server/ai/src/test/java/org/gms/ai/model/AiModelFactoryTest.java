@@ -1,6 +1,9 @@
 package org.gms.ai.model;
 
 import org.gms.ai.model.tool.ToolRouter;
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -8,6 +11,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 真实模型装配只做构造级验证，不访问外部网络或读取真实密钥。 */
 class AiModelFactoryTest {
+
+    @BeforeEach
+    void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     @Test
     void localRuleRemainsAvailableForOfflineTests() {

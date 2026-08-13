@@ -1,6 +1,7 @@
 package org.gms.bootstrap.plugin;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.LogicSystemRegistry;
@@ -76,9 +77,9 @@ public final class TwinklePluginHost implements PluginHost {
                     packetRegistry.register(opcode, handler, version);
                 }
                 handles.add(() -> packetRegistry.unregister(opcode));
-                log.info("插件贡献点注册: [{}] packet-handler {}（v{}）", descriptor.id(), opcode, version);
+                log.info(I18n.message("log.plugin.contribution_packet"), descriptor.id(), opcode, version);
             } catch (RuntimeException e) {
-                log.error("插件包处理器注册失败: [{}] opcode={}", descriptor.id(), c.opcode(), e);
+                log.error(I18n.message("log.plugin.packet_register_failed"), descriptor.id(), c.opcode(), e);
             }
         }
 
@@ -88,9 +89,9 @@ public final class TwinklePluginHost implements PluginHost {
                 TickHandler handler = instantiate(c.className(), TickHandler.class, loader, descriptor.id());
                 tickScheduler.register(handler);
                 handles.add(() -> tickScheduler.unregister(handler));
-                log.info("插件贡献点注册: [{}] tick-handler {}（v{}）", descriptor.id(), c.className(), c.version());
+                log.info(I18n.message("log.plugin.contribution_tick"), descriptor.id(), c.className(), c.version());
             } catch (RuntimeException e) {
-                log.error("插件 tick 任务注册失败: [{}] {}", descriptor.id(), c.className(), e);
+                log.error(I18n.message("log.plugin.tick_register_failed"), descriptor.id(), c.className(), e);
             }
         }
 
@@ -103,13 +104,13 @@ public final class TwinklePluginHost implements PluginHost {
                     try {
                         listener.getClass().getMethod("onEvent", eventClass).invoke(listener, eventClass.cast(event));
                     } catch (ReflectiveOperationException e) {
-                        log.error("插件事件监听执行异常: [{}] {}", descriptor.id(), c.className(), e);
+                        log.error(I18n.message("log.plugin.event_exec_failed"), descriptor.id(), c.className(), e);
                     }
                 };
                 handles.add(subscribe(context, c.target(), eventClass, consumer));
-                log.info("插件贡献点注册: [{}] event-listener {}@{}（v{}）", descriptor.id(), c.className(), c.target(), c.version());
+                log.info(I18n.message("log.plugin.contribution_event"), descriptor.id(), c.className(), c.target(), c.version());
             } catch (ClassNotFoundException | RuntimeException e) {
-                log.error("插件事件监听注册失败: [{}] {}", descriptor.id(), c.className(), e);
+                log.error(I18n.message("log.plugin.event_register_failed"), descriptor.id(), c.className(), e);
             }
         }
 
@@ -124,18 +125,18 @@ public final class TwinklePluginHost implements PluginHost {
                     logicSystemRegistry.register(c.key(), system, version);
                 }
                 handles.add(() -> logicSystemRegistry.unregister(c.key()));
-                log.info("插件贡献点注册: [{}] logic-system {}（v{}）", descriptor.id(), c.key(), version);
+                log.info(I18n.message("log.plugin.contribution_logic"), descriptor.id(), c.key(), version);
             } catch (RuntimeException e) {
-                log.error("插件逻辑系统注册失败: [{}] key={}", descriptor.id(), c.key(), e);
+                log.error(I18n.message("log.plugin.logic_register_failed"), descriptor.id(), c.key(), e);
             }
         }
 
         // ---- 未接线类型（M4 决策）：AI Tool / HTTP 路由 ----
         if (!descriptor.aiTools().isEmpty()) {
-            log.warn("插件 [{}] 声明 {} 个 AI 工具贡献点，M4 未接线（M5 随管理进程插件宿主一并做）", descriptor.id(), descriptor.aiTools().size());
+            log.warn(I18n.message("log.plugin.ai_unwired"), descriptor.id(), descriptor.aiTools().size());
         }
         if (!descriptor.httpEndpoints().isEmpty()) {
-            log.warn("插件 [{}] 声明 {} 个 HTTP 路由贡献点，M4 未接线（M5 评估轻量注册表）", descriptor.id(), descriptor.httpEndpoints().size());
+            log.warn(I18n.message("log.plugin.http_unwired"), descriptor.id(), descriptor.httpEndpoints().size());
         }
         return List.copyOf(handles);
     }
@@ -150,7 +151,7 @@ public final class TwinklePluginHost implements PluginHost {
         try {
             type = ContributionType.fromCode(contributionType);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("命令式注册不支持的贡献点类型: " + contributionType, e);
+            throw new IllegalArgumentException(I18n.message("error.plugin.unsupported_contribution_type", contributionType), e);
         }
         int v = maxVersion(version);
         if (type == ContributionType.TICK_HANDLER) {
@@ -158,7 +159,7 @@ public final class TwinklePluginHost implements PluginHost {
             tickScheduler.register(th);
             return () -> tickScheduler.unregister(th);
         }
-        throw new IllegalArgumentException("命令式注册暂只支持 tick-handler（包处理器需经 manifest 声明 opcode）: " + contributionType);
+        throw new IllegalArgumentException(I18n.message("error.plugin.command_only_tick", contributionType));
     }
 
     /** 命令式事件订阅路由（插件 {@code contributions().subscribe(...)}，直接落 EventBus）。 */
@@ -168,7 +169,7 @@ public final class TwinklePluginHost implements PluginHost {
             try {
                 sub.close();
             } catch (Exception e) {
-                log.warn("插件事件退订异常: target={}", target, e);
+                log.warn(I18n.message("log.plugin.unsubscribe_failed"), target, e);
             }
         };
     }
@@ -191,7 +192,7 @@ public final class TwinklePluginHost implements PluginHost {
             Class<?> clazz = Class.forName(className, true, loader);
             return (T) clazz.getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException | ClassCastException e) {
-            throw new IllegalArgumentException("插件贡献类实例化失败: [%s] %s（期望 %s）".formatted(pluginId, className, type.getName()), e);
+            throw new IllegalArgumentException(I18n.message("error.plugin.contribution_instantiate_failed", pluginId, className, type.getName()), e);
         }
     }
 }

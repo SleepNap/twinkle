@@ -8,6 +8,7 @@ import io.micronaut.context.annotation.Property;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
 import org.gms.dialect.DbDialectRegistry;
+import org.gms.i18n.I18n;
 
 import javax.sql.DataSource;
 import java.io.IOException;
@@ -46,7 +47,7 @@ public class DataSourceFactory {
             @Property(name = "twinkle.db.user", defaultValue = "") String user,
             @Property(name = "twinkle.db.password", defaultValue = "") String password,
             DbDialectRegistry dialectRegistry) {
-        log.info("初始化数据源: {}", maskCredentials(url));
+        log.info(I18n.message("log.data.init"), maskCredentials(url));
         if (url.startsWith("jdbc:sqlite:") && !url.contains(":memory:")) {
             ensureSqliteDir(url);
         }
@@ -73,7 +74,7 @@ public class DataSourceFactory {
         try {
             Files.createDirectories(dir);
         } catch (IOException e) {
-            throw new IllegalStateException("无法创建 SQLite 数据目录: " + dir, e);
+            throw new IllegalStateException(I18n.message("error.data.sqlite_dir_create_failed", dir), e);
         }
     }
 
@@ -88,7 +89,7 @@ public class DataSourceFactory {
             stmt.execute("PRAGMA synchronous=NORMAL");
             stmt.execute("PRAGMA foreign_keys=ON");
         } catch (SQLException e) {
-            log.warn("SQLite PRAGMA 应用失败（部分数据库可能不支持）", e);
+            log.warn(I18n.message("log.data.sqlite_pragma_failed"), e);
         }
     }
 

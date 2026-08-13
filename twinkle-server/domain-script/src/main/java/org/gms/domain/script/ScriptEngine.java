@@ -1,6 +1,7 @@
 package org.gms.domain.script;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
@@ -66,7 +67,7 @@ public final class ScriptEngine {
         try {
             context.close();
         } catch (Exception e) {
-            log.warn("关闭 GraalVM 上下文异常", e);
+            log.warn(I18n.message("log.script.context_close_failed"), e);
         }
     }
 }

@@ -7,6 +7,7 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.net.netty.V83ServerInitializer;
 import org.gms.net.netty.DisconnectListener;
 import org.gms.net.netty.HeartbeatConfig;
@@ -58,7 +59,7 @@ public final class ChannelServer implements AutoCloseable {
                 .channel(NioServerSocketChannel.class)
                 .childHandler(new V83ServerInitializer(registry, disconnectListener, heartbeatConfig));
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        log.info("频道服启动，监听端口: {}", port);
+        log.info(I18n.message("log.channel.server.started"), port);
     }
 
     public int boundPort() {
@@ -76,6 +77,6 @@ public final class ChannelServer implements AutoCloseable {
         if (workerGroup != null) {
             workerGroup.shutdownGracefully().syncUninterruptibly();
         }
-        log.info("频道服已停止");
+        log.info(I18n.message("log.channel.server.stopped"));
     }
 }

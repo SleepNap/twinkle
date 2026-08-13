@@ -1,6 +1,7 @@
 package org.gms.plugin.runtime;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.plugin.PluginDescriptor;
 
 import java.io.IOException;
@@ -51,14 +52,13 @@ public final class ManifestPluginDescriptorParser {
         try (var zf = new java.util.zip.ZipFile(jarPath.toFile())) {
             java.util.zip.ZipEntry entry = zf.getEntry(MANIFEST_PATH);
             if (entry == null) {
-                throw new PluginDescriptorException("插件缺少 manifest: " + jarPath
-                        + "（jar 内需含 " + MANIFEST_PATH + "）", null);
+                throw new PluginDescriptorException(I18n.message("error.plugin.manifest_missing", jarPath, MANIFEST_PATH), null);
             }
             try (var in = zf.getInputStream(entry)) {
                 props.load(in);
             }
         } catch (IOException e) {
-            throw new PluginDescriptorException("读取插件 jar 失败: " + jarPath, e);
+            throw new PluginDescriptorException(I18n.message("error.plugin.jar_read_failed", jarPath), e);
         }
         return toDescriptor(jarPath, props);
     }
@@ -74,13 +74,13 @@ public final class ManifestPluginDescriptorParser {
         try {
             scope = org.gms.plugin.PluginScope.valueOf(scopeStr.toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new PluginDescriptorException("插件 scope 非法: " + scopeStr + "（期望 channel/realm/platform）: " + jarPath, e);
+            throw new PluginDescriptorException(I18n.message("error.plugin.invalid_scope", scopeStr, jarPath), e);
         }
         int sdkVersion;
         try {
             sdkVersion = Integer.parseInt(sdkStr);
         } catch (NumberFormatException e) {
-            throw new PluginDescriptorException("插件 sdk-version 非整数: " + sdkStr + "（jar=" + jarPath + "）", e);
+            throw new PluginDescriptorException(I18n.message("error.plugin.sdk_not_int", sdkStr, jarPath), e);
         }
         String mainClass = props.getProperty("plugin.main-class", "").trim();
 
@@ -104,7 +104,7 @@ public final class ManifestPluginDescriptorParser {
             try {
                 type = org.gms.plugin.ContributionType.fromCode(typeVal);
             } catch (IllegalArgumentException e) {
-                throw new PluginDescriptorException("插件贡献点类型非法: " + typeVal + "（jar=" + jarPath + "）", e);
+                throw new PluginDescriptorException(I18n.message("error.plugin.invalid_contribution_type", typeVal, jarPath), e);
             }
             // SCRIPT_NAMESPACE 只需 namespace（脚本来自 jar scripts/ 资源），其余类型需 class
             String cls = type == org.gms.plugin.ContributionType.SCRIPT_NAMESPACE
@@ -141,7 +141,7 @@ public final class ManifestPluginDescriptorParser {
                 java.util.List.copyOf(eventListeners), java.util.List.copyOf(scriptNamespaces),
                 java.util.List.copyOf(logicSystems), java.util.List.copyOf(aiTools),
                 java.util.List.copyOf(httpEndpoints));
-        log.info("解析插件 manifest: {} v{}（scope={}，贡献点 {} 类）", id, version, scope,
+        log.info(I18n.message("log.plugin.manifest_parsed"), id, version, scope,
                 packetHandlers.size() + tickHandlers.size() + eventListeners.size()
                         + scriptNamespaces.size() + logicSystems.size() + aiTools.size() + httpEndpoints.size());
         return descriptor;
@@ -150,7 +150,7 @@ public final class ManifestPluginDescriptorParser {
     private static String required(Properties props, String key) {
         String v = props.getProperty(key);
         if (v == null || v.isBlank()) {
-            throw new PluginDescriptorException("插件 manifest 缺少必填字段: " + key, null);
+            throw new PluginDescriptorException(I18n.message("error.plugin.missing_field", key), null);
         }
         return v.trim();
     }
@@ -163,7 +163,7 @@ public final class ManifestPluginDescriptorParser {
         try {
             return Integer.parseInt(v.trim());
         } catch (NumberFormatException e) {
-            throw new PluginDescriptorException("字段非整数: " + key + "=" + v, e);
+            throw new PluginDescriptorException(I18n.message("error.plugin.field_not_int", key, v), e);
         }
     }
 }

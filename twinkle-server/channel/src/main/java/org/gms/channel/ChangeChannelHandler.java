@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.domain.game.Character;
 import org.gms.event.ReliableEventBus;
+import org.gms.i18n.I18n;
 import org.gms.message.ChangeChannelRequest;
 import org.gms.message.MessageTargets;
 import org.gms.net.packet.InPacket;
@@ -51,12 +52,12 @@ public final class ChangeChannelHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到换频道");
+            session.close(I18n.message("error.channel.change.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到换频道");
+            session.close(I18n.message("error.channel.change.not_in_map"));
             return;
         }
 
@@ -82,7 +83,7 @@ public final class ChangeChannelHandler implements PacketHandler {
         // 单一属主序号流：每玩家的 CC 请求流内单调，进程崩了重投未 ACKED。
         ChangeChannelRequest req = new ChangeChannelRequest(chr.getId(), channelId, targetId,
                 ChangeChannelRequest.Reason.PLAYER_CHANGE);
-        log.info("玩家 {} 换频道 {} → {}（reason={}）", chr.getName(), channelId, targetId, req.reason());
+        log.info(I18n.message("log.channel.change.request"), chr.getName(), channelId, targetId, req.reason());
         reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req);
 
         // 迁移执行（M4 单进程内：定位表更新 + 地图清理 + 会话注销（compare-and-remove））
@@ -92,6 +93,6 @@ public final class ChangeChannelHandler implements PacketHandler {
         }
         sessions.unregister(chr.getId(), session);
         // 玩家重连目标频道端口 → PlayerLoggedinHandler 重新进图（v83 loading 界面）
-        log.info("玩家 {} 换频道完成，等待重连频道 {}（{} 端口）", chr.getName(), targetId, targetId);
+        log.info(I18n.message("log.channel.change.complete"), chr.getName(), targetId, targetId);
     }
 }

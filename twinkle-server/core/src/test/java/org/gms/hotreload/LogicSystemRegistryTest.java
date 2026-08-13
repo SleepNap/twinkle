@@ -1,5 +1,7 @@
 package org.gms.hotreload;
 
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +17,7 @@ class LogicSystemRegistryTest {
 
     @BeforeEach
     void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
         registry = new LogicSystemRegistry();
     }
 

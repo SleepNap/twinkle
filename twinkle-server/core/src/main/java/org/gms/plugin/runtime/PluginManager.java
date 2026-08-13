@@ -1,6 +1,7 @@
 package org.gms.plugin.runtime;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.versioned.VersionGate;
 import org.gms.plugin.ContributionHandle;
@@ -83,7 +84,7 @@ public final class PluginManager implements Closeable {
                 descriptors.add(parser.parse(jar));
             } catch (ManifestPluginDescriptorParser.PluginDescriptorException e) {
                 // 单个插件解析失败：记录日志，不拖垮整批（可人工修复后 reload）
-                log.error("插件解析失败，拒载: {}", jar, e);
+                log.error(I18n.message("log.plugin.parse_failed"), jar, e);
             }
         }
         return descriptors;
@@ -97,10 +98,10 @@ public final class PluginManager implements Closeable {
     public LoadedPlugin load(PluginDescriptor descriptor) throws PluginLoadException {
         Path jar = findJar(descriptor.id());
         if (jar == null) {
-            throw new PluginLoadException("插件 jar 未找到: " + descriptor.id() + "（目录=" + pluginsDir + "）", null);
+            throw new PluginLoadException(I18n.message("error.plugin.jar_not_found", descriptor.id(), pluginsDir), null);
         }
         if (loaded.containsKey(descriptor.id())) {
-            throw new PluginLoadException("插件已加载: " + descriptor.id() + "（请用 reload）", null);
+            throw new PluginLoadException(I18n.message("error.plugin.already_loaded", descriptor.id()), null);
         }
 
         validateSdk(descriptor);
@@ -109,7 +110,7 @@ public final class PluginManager implements Closeable {
         try {
             loader = new PluginClassLoader(descriptor.id(), new java.net.URL[]{jar.toUri().toURL()}, hostClassLoader);
         } catch (MalformedURLException e) {
-            throw new PluginLoadException("插件 jar URL 非法: " + jar, e);
+            throw new PluginLoadException(I18n.message("error.plugin.invalid_jar_url", jar), e);
         }
 
         Plugin instance = null;
@@ -131,7 +132,7 @@ public final class PluginManager implements Closeable {
 
             LoadedPlugin loadedPlugin = new LoadedPlugin(descriptor, loader, instance, contributions);
             loaded.put(descriptor.id(), loadedPlugin);
-            log.info("插件已加载: {} v{}（scope={}，贡献点 {} 项）", descriptor.id(), descriptor.version(),
+            log.info(I18n.message("log.plugin.loaded"), descriptor.id(), descriptor.version(),
                     descriptor.scope(), contributions.size());
             return loadedPlugin;
         } catch (PluginLoadException e) {
@@ -139,7 +140,7 @@ public final class PluginManager implements Closeable {
             throw e;
         } catch (Exception e) {
             loader.dispose();
-            throw new PluginLoadException("插件加载失败: " + descriptor.id(), e);
+            throw new PluginLoadException(I18n.message("error.plugin.load_failed", descriptor.id()), e);
         }
     }
 
@@ -156,7 +157,7 @@ public final class PluginManager implements Closeable {
             try {
                 plugin.instance().stop(contextFor(plugin));
             } catch (Exception e) {
-                log.error("插件 stop 异常: {}", pluginId, e);
+                log.error(I18n.message("log.plugin.stop_failed"), pluginId, e);
             }
         }
         // 2) 声明式 + 命令式贡献点统一回滚
@@ -164,12 +165,12 @@ public final class PluginManager implements Closeable {
             try {
                 handle.close();
             } catch (Exception e) {
-                log.error("插件贡献点回滚异常: {}", pluginId, e);
+                log.error(I18n.message("log.plugin.rollback_failed"), pluginId, e);
             }
         }
         // 3) 释放 classloader（关闭 jar 句柄）
         plugin.classLoader().dispose();
-        log.info("插件已卸载: {}", pluginId);
+        log.info(I18n.message("log.plugin.unloaded"), pluginId);
     }
 
     public List<LoadedPlugin> loadedPlugins() {
@@ -195,7 +196,7 @@ public final class PluginManager implements Closeable {
             // reloadAllInFlight 内部已换代版本门（coordinator.advanceVersion → gate.onReload）
             // + 中断在途长操作；这里不重复 onReload，避免版本跳两号
             var result = entityReloadService.reloadAllInFlight(id -> true);
-            log.info("插件重载：版本门换代 → v{}（安全切换 {}，中断 {}）",
+            log.info(I18n.message("log.plugin.reloaded"),
                     result.newVersion(), result.safeSwitched(), result.interrupted());
         }
         return load(descriptor);
@@ -216,8 +217,8 @@ public final class PluginManager implements Closeable {
     private void validateSdk(PluginDescriptor descriptor) {
         int sdk = descriptor.sdkVersion();
         if (sdk < SdkVersion.MIN_COMPATIBLE || sdk > SdkVersion.CURRENT) {
-            throw new PluginLoadException("插件 SDK 版本不兼容: " + descriptor.id()
-                    + " 声明 sdk-version=" + sdk + "，宿主支持 [" + SdkVersion.MIN_COMPATIBLE + ", " + SdkVersion.CURRENT + "]", null);
+            throw new PluginLoadException(I18n.message("error.plugin.sdk_incompatible", descriptor.id(),
+                    sdk, SdkVersion.MIN_COMPATIBLE, SdkVersion.CURRENT), null);
         }
     }
 
@@ -227,7 +228,7 @@ public final class PluginManager implements Closeable {
             Class<?> clazz = Class.forName(mainClass, true, loader);
             return (Plugin) clazz.getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException | ClassCastException e) {
-            throw new PluginLoadException("插件主类实例化失败: " + mainClass, e);
+            throw new PluginLoadException(I18n.message("error.plugin.main_instantiate_failed", mainClass), e);
         }
     }
 

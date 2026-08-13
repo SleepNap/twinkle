@@ -1,6 +1,7 @@
 package org.gms.hotreload.versioned;
 
 import java.util.concurrent.atomic.AtomicLong;
+import org.gms.i18n.I18n;
 
 /**
  * 版本门默认实现：{@link AtomicLong} 维护当前逻辑版本。
@@ -38,7 +39,7 @@ public final class DefaultVersionGate implements VersionGate {
         }
         // 未来版本：只能来自版本号被回退/写入口用错版本，属编程错误，显式暴露而非静默放行。
         throw new IllegalStateException(
-                "写操作版本 " + writeVersion + " 高于当前逻辑版本 " + now + "，版本号异常（回退或写错）");
+                I18n.message("error.version_gate.future_version", writeVersion, now));
     }
 
     @Override

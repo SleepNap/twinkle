@@ -2,6 +2,7 @@ package org.gms.httpapi.execution;
 
 import io.micronaut.http.HttpStatus;
 import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
 
 import java.time.Instant;
@@ -27,23 +28,23 @@ public final class PlayerInventoryTool {
     public Map<String, Object> read(Map<String, Object> input, String requestId, String executionId) {
         for (String field : input.keySet()) {
             if (!INPUT_FIELDS.contains(field)) {
-                throw invalid("input 包含未知字段: " + field, requestId, executionId);
+                throw invalid(I18n.message("error.inventory.unknown_field", field), requestId, executionId);
             }
         }
         Object rawCharacterId = input.get("characterId");
         if (!(rawCharacterId instanceof String value) || !value.matches("[1-9][0-9]{0,18}")) {
-            throw invalid("characterId 必须是正整数字符串", requestId, executionId);
+            throw invalid(I18n.message("error.inventory.character_id_positive"), requestId, executionId);
         }
         final long characterId;
         try {
             characterId = Long.parseLong(value);
         } catch (NumberFormatException e) {
-            throw invalid("characterId 超出范围", requestId, executionId);
+            throw invalid(I18n.message("error.inventory.character_id_out_of_range"), requestId, executionId);
         }
         AdminService.PlayerInventory snapshot = adminService.inventorySnapshot(characterId);
         if (snapshot == null) {
             throw new ToolProtocolException(HttpStatus.NOT_FOUND, "resource_not_found",
-                    "角色不在线或不属于当前频道", false, executionId, requestId,
+                    I18n.message("error.inventory.character_offline"), false, executionId, requestId,
                     Map.of("characterId", value));
         }
         List<Map<String, Object>> items = new ArrayList<>();

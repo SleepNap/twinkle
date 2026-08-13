@@ -1,6 +1,7 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -27,9 +28,9 @@ public final class SetHpMpAlertHandler implements PacketHandler {
         if (packet.available() >= 2) {
             packet.readByte(); // hp 阈值挡位（0~19，登录阶段忽略）
             packet.readByte(); // mp 阈值挡位（0~19，登录阶段忽略）
-            log.debug("登录阶段收到 HP/MP 警报设置，忽略（无角色实体）");
+            log.debug(I18n.message("log.hpmp_alert.ignored_no_character"));
         } else {
-            log.debug("SET_HPMPALERT 包字节不足，忽略");
+            log.debug(I18n.message("log.hpmp_alert.ignored_short_packet"));
         }
     }
 }

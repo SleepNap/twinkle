@@ -1,5 +1,6 @@
 package org.gms.net.packet;
 
+import org.gms.i18n.I18n;
 import org.gms.net.encryption.AesCipher;
 import org.gms.net.encryption.CustomCipher;
 
@@ -48,7 +49,7 @@ public final class PacketCodec {
      */
     public static InPacket decodePacket(AesCipher receiveCipher, int header, byte[] body) {
         if (!receiveCipher.isValidHeader(header)) {
-            throw new IllegalStateException("包 header 校验失败，可能是错序/篡改包");
+            throw new IllegalStateException(I18n.message("error.packet.header_check_failed"));
         }
         byte[] plain = body.clone();
         receiveCipher.crypt(plain);

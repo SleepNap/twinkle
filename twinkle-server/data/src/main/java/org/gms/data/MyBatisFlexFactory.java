@@ -59,6 +59,7 @@ import org.gms.data.repo.FlexPointAccountRepository;
 import org.gms.data.repo.FlexPointTransactionRepository;
 import org.gms.data.repo.FlexSubscriptionPlanRepository;
 import org.gms.event.OutboxRepository;
+import org.gms.i18n.I18n;
 
 import javax.sql.DataSource;
 
@@ -110,7 +111,7 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(SubscriptionPlanMapper.class);
         bootstrap.addMapper(PointTransactionMapper.class);
         bootstrap.start();
-        log.info("MyBatis-Flex 装配完成：十八个 Mapper 已注册（含技能、Credential、HTTP 审计、Tool 审计与积分计费）");
+        log.info(I18n.message("log.data.mybatis_flex_ready"));
         return bootstrap;
     }
 

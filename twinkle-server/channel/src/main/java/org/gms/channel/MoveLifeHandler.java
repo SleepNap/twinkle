@@ -6,6 +6,7 @@ import org.gms.domain.game.lease.ControllerLeaseService;
 import org.gms.domain.game.lease.LeaseOwner;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.mob.MapleMonster;
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.RecvOpcode;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
@@ -42,12 +43,12 @@ public final class MoveLifeHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到怪物移动包");
+            session.close(I18n.message("error.monster.move.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到怪物移动包");
+            session.close(I18n.message("error.monster.move.not_in_map"));
             return;
         }
         MapleMap map = chr.getMapObject();
@@ -80,7 +81,7 @@ public final class MoveLifeHandler implements PacketHandler {
 
         // 已验证续租（fail-closed）：归属校验不过 → 丢弃整包
         if (!leaseService.renew(map.getMapId(), oid, owner)) {
-            log.debug("MOVE_LIFE 续租被拒（非控制者/旧代际），角色 {} 丢弃怪物 {} 的移动包",
+            log.debug(I18n.message("log.monster.move.renew_rejected"),
                     chr.getId(), oid);
             return;
         }

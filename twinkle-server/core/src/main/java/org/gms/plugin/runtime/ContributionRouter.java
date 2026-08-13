@@ -1,5 +1,6 @@
 package org.gms.plugin.runtime;
 
+import org.gms.i18n.I18n;
 import org.gms.plugin.ContributionHandle;
 
 import java.util.function.Consumer;
@@ -29,6 +30,6 @@ public interface ContributionRouter {
      * @return 退订句柄（卸载时 close）
      */
     default <T> ContributionHandle subscribe(String target, Class<T> eventType, Consumer<T> consumer) {
-        throw new UnsupportedOperationException("命令式事件订阅未接线（请用 manifest 声明式 event-listener）");
+        throw new UnsupportedOperationException(I18n.message("error.plugin.subscribe_unwired"));
     }
 }

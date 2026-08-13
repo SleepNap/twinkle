@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.Account;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -30,17 +31,17 @@ public final class CheckCharNameHandler implements PacketHandler {
     public void handle(PacketSession session, InPacket packet) {
         // 建角发生在角色列表界面（CHARLIST 阶段）；登录态兜底用 AUTHED 兼容
         if (session.stage() != SessionStage.CHARLIST && session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到查名请求");
+            session.close(I18n.message("error.check_char_name.outside_stage"));
             return;
         }
         Account account = session.getAttr("account");
         if (account == null) {
-            session.close("未登录收到查名请求");
+            session.close(I18n.message("error.check_char_name.not_logged_in"));
             return;
         }
         String name = packet.readString();
         boolean available = loginService.isNameAvailable(name);
-        log.info("查名: 账号={}, 名字={}, 可用={}", account.getName(), name, available);
+        log.info(I18n.message("log.check_char_name.checked"), account.getName(), name, available);
         session.send(LoginPacketFactory.charNameResponse(name, !available));
     }
 }

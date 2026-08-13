@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 脚本仓库（架构 6.4：{@code twinkle.script.path} 直接指定脚本目录，单份数据，读不到启动报错）。
@@ -48,12 +49,11 @@ public final class ScriptRepository {
     public ScriptRepository(Path root) {
         this.root = Objects.requireNonNull(root, "root");
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("脚本目录不存在或不是目录: " + root
-                    + "（架构 6.4：twinkle.script.path 未指定或路径无效）");
+            throw new IllegalArgumentException(I18n.message("error.script.directory_invalid", root));
         }
         this.dirSnapshot = scan();
         this.snapshot = mergedSnapshot(dirSnapshot);
-        log.info("脚本仓库初始化: {} 条目（根={}）", snapshot.size(), root);
+        log.info(I18n.message("log.script.repository_initialized"), snapshot.size(), root);
     }
 
     /** 扫描目录树，构建新快照（递归所有 *.js，不修改内部状态）。 */
@@ -64,7 +64,7 @@ public final class ScriptRepository {
                     .filter(p -> p.getFileName().toString().endsWith(".js"))
                     .toList();
         } catch (IOException e) {
-            throw new IllegalStateException("扫描脚本目录失败: " + root, e);
+            throw new IllegalStateException(I18n.message("error.script.scan_failed", root), e);
         }
         Map<String, ScriptSource> map = new LinkedHashMap<>();
         for (Path p : jsFiles) {
@@ -72,7 +72,7 @@ public final class ScriptRepository {
             try {
                 src = ScriptSource.read(p);
             } catch (IOException e) {
-                throw new IllegalStateException("读取脚本失败: " + p, e);
+                throw new IllegalStateException(I18n.message("error.script.read_failed", p), e);
             }
             map.put(keyOf(p), src);
         }
@@ -102,7 +102,7 @@ public final class ScriptRepository {
         this.dirSnapshot = fresh;
         this.snapshot = mergedSnapshot(fresh);
         if (changed > 0) {
-            log.info("脚本重载: {} 条目变化（新增/修改/删除），总计 {} 条", changed, this.snapshot.size());
+            log.info(I18n.message("log.script.reloaded"), changed, this.snapshot.size());
         }
         return changed;
     }
@@ -122,7 +122,7 @@ public final class ScriptRepository {
         newMounted.put(namespace, Map.copyOf(sources));
         this.mounted = Map.copyOf(newMounted);
         this.snapshot = mergedSnapshot(this.dirSnapshot);
-        log.info("脚本命名空间挂载: {}（{} 条）", namespace, sources.size());
+        log.info(I18n.message("log.script.namespace_mounted"), namespace, sources.size());
     }
 
     /**
@@ -135,7 +135,7 @@ public final class ScriptRepository {
         }
         this.mounted = Map.copyOf(newMounted);
         this.snapshot = mergedSnapshot(this.dirSnapshot);
-        log.info("脚本命名空间卸载: {}", namespace);
+        log.info(I18n.message("log.script.namespace_unmounted"), namespace);
     }
 
     /** 目录快照 + 全部挂载命名空间脚本合并为最终快照。 */

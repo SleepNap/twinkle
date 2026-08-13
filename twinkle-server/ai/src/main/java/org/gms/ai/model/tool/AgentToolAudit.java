@@ -3,6 +3,7 @@ package org.gms.ai.model.tool;
 import dev.langchain4j.invocation.InvocationParameters;
 import org.gms.data.entity.ToolExecutionAudit;
 import org.gms.data.repo.ToolExecutionAuditRepository;
+import org.gms.i18n.I18n;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -59,7 +60,7 @@ public final class AgentToolAudit {
                     .digest(normalized.getBytes(StandardCharsets.UTF_8));
             return label + "Hash=" + HexFormat.of().formatHex(digest, 0, 8);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("JDK 缺少 SHA-256", e);
+            throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "SHA-256"), e);
         }
     }
 
@@ -91,7 +92,7 @@ public final class AgentToolAudit {
         try {
             repository.insert(audit);
         } catch (RuntimeException e) {
-            throw new IllegalStateException("AI 取证审计落库失败", e);
+            throw new IllegalStateException(I18n.message("error.ai.audit_write_failed"), e);
         }
     }
 

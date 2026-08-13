@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 可靠消息接收方（架构 4.5 恰好一次的接收侧：bus_stream 持久化去重 + ack 闭环）。
@@ -59,13 +60,13 @@ public final class ReliableReceiver {
             long last = deliveredSeq.computeIfAbsent(stream, k -> outbox.lastDeliveredSeq(stream));
             if (seq <= last) {
                 // 已应用过（重复投递/重投）——幂等去重，直接 ack 落定
-                log.info("可靠接收方重复投递丢弃: messageId={} seq={}（last={}）", messageId, seq, last);
+                log.info(I18n.message("log.bus.recv_dedup"), messageId, seq, last);
                 outbox.markAcked(messageId);
                 return;
             }
             if (seq != last + 1) {
                 // 越序：暂存等待前序
-                log.info("可靠接收方越序暂存: messageId={} seq={}（last={}）", messageId, seq, last);
+                log.info(I18n.message("log.bus.recv_buffer"), messageId, seq, last);
                 buffered.computeIfAbsent(stream, k -> new ConcurrentHashMap<>())
                         .put(seq, new BufferedMessage(messageId, message));
                 return;
@@ -82,13 +83,13 @@ public final class ReliableReceiver {
         try {
             applier.accept(message);
         } catch (RuntimeException e) {
-            log.error("可靠接收方应用失败: messageId={} seq={}", messageId, seq, e);
+            log.error(I18n.message("log.bus.recv_apply_failed"), messageId, seq, e);
             return;
         }
         deliveredSeq.put(stream, seq);
         outbox.advanceLastDeliveredSeq(stream, seq);
         outbox.markAcked(messageId);
-        log.debug("可靠接收方应用完成: stream={} seq={} messageId={}", stream, seq, messageId);
+        log.debug(I18n.message("log.bus.recv_applied"), stream, seq, messageId);
     }
 
     @SuppressWarnings("unchecked")

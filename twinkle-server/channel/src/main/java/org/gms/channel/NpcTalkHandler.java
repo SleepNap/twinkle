@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.script.ConversationScript;
 import org.gms.domain.script.ScriptManager;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -41,12 +42,12 @@ public final class NpcTalkHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到 NPC 对话");
+            session.close(I18n.message("error.npc.talk.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到 NPC 对话");
+            session.close(I18n.message("error.npc.talk.not_in_map"));
             return;
         }
         if (session.getAttr("npcConversation") != null) {
@@ -57,7 +58,7 @@ public final class NpcTalkHandler implements PacketHandler {
                 itemSystem, questSystem, () -> closeConversation(session));
         ConversationScript script = scriptManager.openConversation("nps/" + npcId, Map.of("cm", host));
         if (script == null) {
-            log.warn("NPC 对话脚本不存在: nps/{}", npcId);
+            log.warn(I18n.message("log.npc.script_missing"), npcId);
             return;
         }
         session.setAttr("npcConversation", script);
@@ -66,7 +67,7 @@ public final class NpcTalkHandler implements PacketHandler {
         try {
             script.invoke("start");
         } catch (RuntimeException e) {
-            log.error("NPC 对话 start() 失败: npcId={}", npcId, e);
+            log.error(I18n.message("log.npc.start_failed"), npcId, e);
             closeConversation(session);
             return;
         }

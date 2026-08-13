@@ -1,5 +1,7 @@
 package org.gms.net.packet;
 
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
 import org.gms.net.opcodes.RecvOpcode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ class HandlerRegistryTest {
 
     @BeforeEach
     void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
         registry = new HandlerRegistry();
     }
 

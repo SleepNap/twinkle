@@ -7,6 +7,7 @@ import org.gms.data.entity.QuestProgressEntity;
 import org.gms.data.entity.QuestStatusEntity;
 import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
+import org.gms.i18n.I18n;
 
 import java.util.List;
 import java.util.HashMap;
@@ -63,7 +64,7 @@ public class FlexQuestRepository implements QuestRepository {
         for (QuestProgressSnapshot snapshot : progress) {
             Long statusId = statusIds.get(snapshot.questId());
             if (statusId == null) {
-                throw new IllegalArgumentException("任务进度缺少对应状态: questId=" + snapshot.questId());
+                throw new IllegalArgumentException(I18n.message("error.quest.progress_missing_status", snapshot.questId()));
             }
             QuestProgressEntity entity = new QuestProgressEntity();
             entity.setCharacterId(Math.toIntExact(characterId));

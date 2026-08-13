@@ -2,6 +2,7 @@ package org.gms.net.netty.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.event.PayloadCodec;
 
 /**
@@ -26,7 +27,7 @@ public final class JsonPayloadCodec implements PayloadCodec {
         try {
             return MAPPER.writeValueAsString(payload);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IllegalArgumentException("可靠总线负载 JSON 序列化失败: " + payload.getClass().getName(), e);
+            throw new IllegalArgumentException(I18n.message("error.bus.payload_serialize_failed", payload.getClass().getName()), e);
         }
     }
 
@@ -36,10 +37,10 @@ public final class JsonPayloadCodec implements PayloadCodec {
             Class<?> type = Class.forName(payloadType);
             return MAPPER.readValue(payload, type);
         } catch (ClassNotFoundException e) {
-            log.error("可靠总线负载类型不存在: {}", payloadType);
+            log.error(I18n.message("log.bus.payload_type_not_found"), payloadType);
             return null;
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            log.error("可靠总线负载 JSON 反序列化失败: type={}", payloadType, e);
+            log.error(I18n.message("log.bus.payload_deserialize_failed"), payloadType, e);
             return null;
         }
     }

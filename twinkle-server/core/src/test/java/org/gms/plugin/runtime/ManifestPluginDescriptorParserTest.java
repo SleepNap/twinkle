@@ -1,5 +1,8 @@
 package org.gms.plugin.runtime;
 
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.gms.plugin.ContributionType;
@@ -15,6 +18,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Manifest 插件描述解析验证（架构 7.3 声明式注册：manifest 驱动）。
  */
 class ManifestPluginDescriptorParserTest {
+
+    @BeforeEach
+    void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     private static final String MANIFEST = """
             plugin.id=com.acme.boss

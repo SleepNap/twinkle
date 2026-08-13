@@ -1,6 +1,7 @@
 package org.gms.channel.persist;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
 import org.gms.observability.Sli;
 import org.gms.tick.TickHandler;
@@ -32,7 +33,7 @@ public final class CharacterFlushTickHandler implements TickHandler {
         if (tickCount % EVERY_TICKS == 0) {
             int dirty = saveQueue.flushAll();
             if (dirty > 0) {
-                log.debug("增量 FLUSH: {} 个脏角色入队", dirty);
+                log.debug(I18n.message("log.save.flush_dirty"), dirty);
             }
             metrics.gauge(Sli.WRITE_QUEUE_DEPTH, saveQueue.pendingCount());
         }

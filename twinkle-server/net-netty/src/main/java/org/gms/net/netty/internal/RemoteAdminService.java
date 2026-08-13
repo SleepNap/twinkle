@@ -2,6 +2,7 @@ package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.RestartCoordinator;
+import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
 
 import java.util.List;
@@ -101,7 +102,7 @@ public final class RemoteAdminService implements AdminService {
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {
         InternalConnection conn = link.connection();
         if (conn == null) {
-            log.warn("AdminService RPC 时 coordinator 未连接: method={}", method);
+            log.warn(I18n.message("log.admin.coordinator_unconnected"), method);
             return null;
         }
         try {
@@ -118,7 +119,7 @@ public final class RemoteAdminService implements AdminService {
             InternalFrame reply = fut.get(timeoutMillis, TimeUnit.MILLISECONDS);
             return JsonCodec.decode(reply.payloadText(), InternalProtocol.RpcResponse.class.getName());
         } catch (Exception e) {
-            log.warn("AdminService RPC 失败: method={}", method);
+            log.warn(I18n.message("log.admin.rpc_failed"), method);
             return null;
         }
     }

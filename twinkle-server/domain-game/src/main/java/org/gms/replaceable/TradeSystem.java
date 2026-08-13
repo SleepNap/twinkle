@@ -6,6 +6,7 @@ import org.gms.domain.game.trade.Trade;
 import org.gms.domain.game.trade.TradeSide;
 import org.gms.hotreload.versioned.VersionDecision;
 import org.gms.hotreload.versioned.VersionGate;
+import org.gms.i18n.I18n;
 
 /**
  * 交易系统（可替换层，架构第三节状态/逻辑分离 + 红线 8/11/12）。
@@ -211,16 +212,16 @@ public final class TradeSystem {
         TradeSide first = trade.getFirst();
         TradeSide second = trade.getSecond();
         if (!itemSystem.takeTradeItems(first.getTrader(), first.offeredItems())) {
-            throw new IllegalStateException("交易预检后移出发起方物品失败");
+            throw new IllegalStateException(I18n.message("error.trade.remove_initiator_items_failed"));
         }
         if (!itemSystem.takeTradeItems(second.getTrader(), second.offeredItems())) {
-            throw new IllegalStateException("交易预检后移出接受方物品失败");
+            throw new IllegalStateException(I18n.message("error.trade.remove_acceptor_items_failed"));
         }
         if (!itemSystem.giveTradeItems(second.getTrader(), first.offeredItems())) {
-            throw new IllegalStateException("交易预检后接受方接收物品失败");
+            throw new IllegalStateException(I18n.message("error.trade.acceptor_receive_failed"));
         }
         if (!itemSystem.giveTradeItems(first.getTrader(), second.offeredItems())) {
-            throw new IllegalStateException("交易预检后发起方接收物品失败");
+            throw new IllegalStateException(I18n.message("error.trade.initiator_receive_failed"));
         }
     }
 }

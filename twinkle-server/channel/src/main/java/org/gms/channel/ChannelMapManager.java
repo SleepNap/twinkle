@@ -1,6 +1,7 @@
 package org.gms.channel;
 
 import org.gms.domain.game.map.MapleMap;
+import org.gms.i18n.I18n;
 import org.gms.wz.MapLoader;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,7 +25,7 @@ public final class ChannelMapManager {
     /** 取地图（不存在报错——架构 6.4：读不到即报错）。 */
     public MapleMap getMap(int mapId) {
         return maps.computeIfAbsent(mapId,
-                id -> loader.load(id).orElseThrow(() -> new IllegalArgumentException("地图不存在: " + id)));
+                id -> loader.load(id).orElseThrow(() -> new IllegalArgumentException(I18n.message("error.map.not_found", id))));
     }
 
     /** 全部已加载地图（租约巡检/无主怪重新分配用，不可变视图）。 */

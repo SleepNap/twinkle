@@ -1,6 +1,7 @@
 package org.gms.domain.game.lease;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.tick.TickHandler;
 
 import java.util.Map;
@@ -247,7 +248,7 @@ public final class DefaultControllerLeaseService implements ControllerLeaseServi
                         lease.expiryAtNanos += grace;
                     }
                 }
-                log.info("检测到 tick 暂停（{}ms），对 {} 个活跃 owner 加宽限 {}ms",
+                log.info(I18n.message("log.lease.tick_paused_grace"),
                         gap / 1_000_000L, owners.size(), grace / 1_000_000L);
             }
         }

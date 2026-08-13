@@ -2,6 +2,7 @@ package org.gms.wz;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.item.ItemData;
+import org.gms.i18n.I18n;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -50,10 +51,10 @@ public final class ItemLoader {
                 stream.filter(p -> p.getFileName().toString().endsWith(".img.xml"))
                         .forEach(p -> parseFile(p, items));
             } catch (IOException e) {
-                throw new IllegalStateException("遍历 Item.wz/" + category + " 失败: " + dir, e);
+                throw new IllegalStateException(I18n.message("error.wz.item_walk_failed", category, dir), e);
             }
         }
-        log.info("Item.wz 解析完成：{} 个物品（根={}）", items.size(), wzRoot);
+        log.info(I18n.message("log.wz.item_loaded"), items.size(), wzRoot);
         return items;
     }
 

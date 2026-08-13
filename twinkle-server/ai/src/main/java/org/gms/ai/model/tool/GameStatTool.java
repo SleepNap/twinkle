@@ -9,6 +9,7 @@ import org.gms.data.entity.InventoryItemEntity;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.InventoryItemRepository;
+import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
 import org.gms.service.admin.AdminService;
 
@@ -161,14 +162,14 @@ public final class GameStatTool {
         long characterId = playerCharacterId(parameters);
         Optional<Character> ownCharacter = characterRepository.findById(characterId);
         if (ownCharacter.isEmpty() || !ownCharacter.get().getName().equalsIgnoreCase(requestedName)) {
-            throw new SecurityException("玩家聊天入口只能查询本人角色");
+            throw new SecurityException(I18n.message("error.ai.player_chat_self_only"));
         }
         return ownCharacter;
     }
 
     private static void requireManagementSource(InvocationParameters parameters) {
         if (isPlayerChat(parameters)) {
-            throw new SecurityException("玩家聊天入口无权查询账号状态");
+            throw new SecurityException(I18n.message("error.ai.player_chat_account_denied"));
         }
     }
 
@@ -181,14 +182,14 @@ public final class GameStatTool {
         Object subject = parameters.get("subjectId");
         String value = subject == null ? "" : subject.toString();
         if (!value.matches("player:[0-9]+")) {
-            throw new SecurityException("玩家身份上下文无效");
+            throw new SecurityException(I18n.message("error.ai.player_context_invalid"));
         }
         return Long.parseLong(value.substring("player:".length()));
     }
 
     private static String validatedName(String name) {
         if (name == null || !name.trim().matches("[A-Za-z0-9_\\-\\u4e00-\\u9fff]{1,32}")) {
-            throw new IllegalArgumentException("角色名/账号名格式非法");
+            throw new IllegalArgumentException(I18n.message("error.ai.name_format_invalid"));
         }
         return name.trim();
     }

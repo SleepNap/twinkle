@@ -2,6 +2,7 @@ package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.RestartCoordinator;
+import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
 
 import java.util.Optional;
@@ -44,10 +45,10 @@ public final class AdminRpcDispatcher {
                     RestartCoordinator.Phase phase = admin.restartPhase();
                     yield InternalProtocol.RpcResponse.ok(JsonCodec.encode(phase == null ? RestartCoordinator.Phase.RUNNING : phase));
                 }
-                default -> InternalProtocol.RpcResponse.fail("未知 AdminService RPC 方法: " + method);
+                default -> InternalProtocol.RpcResponse.fail(I18n.message("error.rpc.unknown_admin_method", method));
             };
         } catch (Exception e) {
-            log.error("AdminService RPC 分发失败: method={}", method, e);
+            log.error(I18n.message("log.rpc.admin_dispatch_failed"), method, e);
             return InternalProtocol.RpcResponse.fail(e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }

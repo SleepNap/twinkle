@@ -14,6 +14,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信客户端（架构 4.5：channel → coordinator 主动 TCP 长连接）。
@@ -86,9 +87,9 @@ public final class InternalClient implements AutoCloseable {
                 holder[0] = InternalConnection.attach(ch, () -> onDisconnect(holder[0]));
                 this.connection = holder[0];
                 reconnectScheduled.set(false);
-                log.info("内部通信已连接 coordinator: {}", coordinatorAddress);
+                log.info(I18n.message("log.internal.client_connected"), coordinatorAddress);
                 connectionHandler.accept(holder[0]);
-            } else {                log.warn("内部通信连接 coordinator 失败: {}（{}），{}ms 后重试",
+            } else {                log.warn(I18n.message("log.internal.client_connect_failed"),
                         coordinatorAddress, future.cause().getMessage(), reconnectDelayMillis);
                 scheduleReconnect();
             }
@@ -110,7 +111,7 @@ public final class InternalClient implements AutoCloseable {
             return;
         }
         if (reconnectScheduled.compareAndSet(false, true)) {
-            log.info("内部通信重连 coordinator（{}ms 后）", reconnectDelayMillis);
+            log.info(I18n.message("log.internal.client_reconnecting"), reconnectDelayMillis);
             workerGroup.schedule(this::doConnect, reconnectDelayMillis, TimeUnit.MILLISECONDS);
         }
     }
@@ -123,6 +124,6 @@ public final class InternalClient implements AutoCloseable {
             conn.close();
         }
         workerGroup.shutdownGracefully().syncUninterruptibly();
-        log.info("内部通信客户端已停止");
+        log.info(I18n.message("log.internal.client_stopped"));
     }
 }

@@ -10,6 +10,7 @@ import org.gms.data.repo.ModelRateRepository;
 import org.gms.data.repo.PointAccountRepository;
 import org.gms.data.repo.PointTransactionRepository;
 import org.gms.data.repo.SubscriptionPlanRepository;
+import org.gms.i18n.I18n;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -61,10 +62,10 @@ public final class BillingService {
         rollWindows(account, plan, Instant.now());
         if (plan != null) {
             if (windowExceeded(account, plan)) {
-                throw new BillingException("billing_limit_exceeded", "订阅计划限额已满");
+                throw new BillingException("billing_limit_exceeded", I18n.message("error.billing.plan_limit_exceeded"));
             }
         } else if (account.getBalance() <= 0) {
-            throw new BillingException("insufficient_points", "积分余额不足");
+            throw new BillingException("insufficient_points", I18n.message("error.billing.insufficient_points"));
         }
     }
 
@@ -109,7 +110,7 @@ public final class BillingService {
     /** 管理员调账（正数为加积分，负数为扣积分）。 */
     public void adjust(Long accountId, long amount, String reason) {
         if (amount == 0) {
-            throw new BillingException("invalid_input", "调账金额不能为 0");
+            throw new BillingException("invalid_input", I18n.message("error.billing.adjust_amount_zero"));
         }
         String safeReason = blankDefault(reason, "admin_adjust");
         if (amount > 0) {
@@ -125,7 +126,7 @@ public final class BillingService {
         long count = transactionRepository.countByAccountIdAndReasonSince(
                 accountId, "daily_signin", today);
         if (count >= DAILY_SIGNIN_LIMIT) {
-            throw new BillingException("daily_limit_exceeded", "今日已签到");
+            throw new BillingException("daily_limit_exceeded", I18n.message("error.billing.already_signed_in"));
         }
         credit(accountId, SIGNIN_POINTS, "daily_signin", "每日签到");
     }
@@ -133,19 +134,19 @@ public final class BillingService {
     /** 抽象充值（channel 为 nx / meso）；金币购买受每日限。 */
     public void purchase(Long accountId, long points, String channel) {
         if (points <= 0) {
-            throw new BillingException("invalid_input", "充值积分必须为正数");
+            throw new BillingException("invalid_input", I18n.message("error.billing.purchase_points_positive"));
         }
         String reason = switch (channel) {
             case "nx" -> "purchase_nx";
             case "meso" -> "purchase_meso";
-            default -> throw new BillingException("invalid_input", "不支持的充值渠道: " + channel);
+            default -> throw new BillingException("invalid_input", I18n.message("error.billing.unsupported_channel", channel));
         };
         if ("meso".equals(channel)) {
             String today = utcDayStart(Instant.now());
             long count = transactionRepository.countByAccountIdAndReasonSince(
                     accountId, reason, today);
             if (count >= DAILY_MESO_PURCHASE_LIMIT) {
-                throw new BillingException("daily_limit_exceeded", "今日金币购买次数已达上限");
+                throw new BillingException("daily_limit_exceeded", I18n.message("error.billing.meso_purchase_limit"));
             }
         }
         credit(accountId, points, reason, "充值");

@@ -1,7 +1,7 @@
 package org.gms.event;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 可靠总线负载编解码（架构 4.5：outbox 持久化队列的负载序列化）。
@@ -19,7 +19,11 @@ public interface PayloadCodec {
     Object decode(String payload, String payloadType);
 
     /** 默认 M4 实现：字符串标记（单进程投递真实对象，outbox 仅持久化记录）。 */
-    PayloadCodec MARKER = new PayloadCodec() {
+    PayloadCodec MARKER = new MarkerPayloadCodec();
+
+    /** {@link #MARKER} 实现：字符串标记（单进程投递真实对象，outbox 仅持久化记录）。 */
+    @Log4j2
+    public final class MarkerPayloadCodec implements PayloadCodec {
         @Override
         public String encode(Object payload) {
             return String.valueOf(payload);
@@ -30,9 +34,9 @@ public interface PayloadCodec {
             try {
                 return Class.forName(payloadType).getDeclaredConstructor().newInstance();
             } catch (ReflectiveOperationException e) {
-                LogManager.getLogger(PayloadCodec.class).error("可靠总线重投重建失败: type={}", payloadType, e);
+                log.error(I18n.message("log.bus.rebuild_failed"), payloadType, e);
                 return null;
             }
         }
-    };
+    }
 }

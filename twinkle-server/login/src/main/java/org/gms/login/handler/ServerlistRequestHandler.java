@@ -2,6 +2,7 @@ package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.login.LoginPacketFactory;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -25,10 +26,10 @@ public final class ServerlistRequestHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到服务器列表请求");
+            session.close(I18n.message("error.server_list.outside_stage"));
             return;
         }
-        log.info("发送服务器列表: {}", serverName);
+        log.info(I18n.message("log.server_list.sent"), serverName);
         session.send(LoginPacketFactory.serverList(0, serverName));
         session.send(LoginPacketFactory.endOfServerList());
     }

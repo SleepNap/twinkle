@@ -5,6 +5,7 @@ import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -30,7 +31,7 @@ public final class CharlistRequestHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到角色列表请求");
+            session.close(I18n.message("error.char_list.outside_stage"));
             return;
         }
         packet.skip(1);
@@ -47,7 +48,7 @@ public final class CharlistRequestHandler implements PacketHandler {
 
         session.setAttr("characters", characters);
         session.transition(SessionStage.CHARLIST);
-        log.info("发送角色列表: 账号={}, 角色数={}", account.getName(), characters.size());
+        log.info(I18n.message("log.char_list.sent"), account.getName(), characters.size());
         session.send(LoginPacketFactory.charList(characters, serverId, 0, equippedByChar));
     }
 }

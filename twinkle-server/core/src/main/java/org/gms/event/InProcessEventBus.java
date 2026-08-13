@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 进程内 EventBus 实现（函数调用 + 同步派发）。
@@ -100,7 +101,7 @@ public final class InProcessEventBus implements EventBus, ReliableDelivery {
             ((HandlerEntry<T>) entry).handler.accept(payload);
         } catch (RuntimeException e) {
             // 日志红线 9：log.error("描述", e)，禁用 printStackTrace
-            log.error("EventBus 订阅者异常: target={}, type={}", entry, payload.getClass().getName(), e);
+            log.error(I18n.message("log.bus.subscriber_error"), entry, payload.getClass().getName(), e);
         }
     }
 

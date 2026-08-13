@@ -1,6 +1,7 @@
 package org.gms.hotreload;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.hotreload.versioned.VersionGate;
 
 import java.util.ArrayList;
@@ -65,13 +66,13 @@ public final class EntityReloadService {
             if (ok) {
                 interrupted++;
             } else {
-                log.warn("实体 {} 在途操作无法中断，本次跳过（等待其自然结束）", entityId);
+                log.warn(I18n.message("log.reload.entity_skip"), entityId);
             }
         }
 
         // 阶段 3：换代版本门——旧逻辑迟到写从此被拒
         long newVersion = coordinator.advanceVersion(versionGate);
-        log.info("按实体渐进重载完成：安全切换 {}，中断 {}，新逻辑版本 {}",
+        log.info(I18n.message("log.reload.completed"),
                 safeSwitched, interrupted, newVersion);
         return new ReloadResult(safeSwitched, interrupted, newVersion);
     }

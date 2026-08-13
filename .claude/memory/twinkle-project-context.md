@@ -84,3 +84,9 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **前端**：菜单可折叠分组（监控/玩家数据/系统运维/安全凭据）+ 新增积分额度页 `/billing`；文档统一归档到 `docs/{planned,in-progress,archived}/`。
 - **坑**：Micronaut annotation processor 增量编译残留旧 `$MyBatisFlexFactory$XxxRepositoryN$Definition` 类 → NonUniqueBeanException，`mvn clean verify` 解决；改 `AccountRepository` 接口须同步测试桩（LoginServiceTest/AiFacadeBillingTest/AiAgentTest）。
 - **范围诚实标注**：点券/金币/签约为抽象调账（落流水+每日限，不连真实 nx_credit/meso）；plan/倍率前端仅展示+后端 upsert 端点，前端编辑交互留后续。
+
+**后端 log/exception 全量 i18n 迁移（2026-08-13）**：存量 Java 日志/异常/游戏内提示中文硬编码全部迁入 i18n key（约 300 处，跨 12 模块），`en-US` 配置下后台文案全英文。
+- **基础设施**：静态门面 `org.gms.i18n.I18n`（delegate 模式，bootstrap `I18nInitializer` @Context 启动注入）+ `I18nService`（@Singleton，ResourceBundle，UTF-8 properties）。无法 DI 的场景（游戏对象/静态工具/手动 new 的 handler）走静态门面，可注入的走构造器注入，二者同一实例。
+- **key 前缀约定**：`log.*`（日志模板，`{}` 占位，`I18n.message(key)` 无参返回模板，参数交 log4j）/ `error.*`（异常/校验，`{0}` 占位，有参插值）/ `game.*`（游戏内玩家提示，发 GBK，`{0}`）。日志 `{}` 与异常 `{0}` 不得混用。
+- **编码规则（务必记住）**：语言 `zh-CN`→中文 WZ/script→中文客户端（GBK 多字节）；语言 `en-US`→英文 WZ/script→英文客户端（ASCII）。协议编码器固定 GBK（`InPacket.DEFAULT_CHARSET`，GBK 是 ASCII 超集，英文用 GBK 编=ASCII 字节），`twinkle.service.language` 只改文案内容不改编码；HTTP 固定 UTF-8。开源后国外玩家换英文 WZ/script + en-US 即可玩。
+- **游戏内提示受控**：交易取消、踢人原因等经 GBK 协议发玩家的文案也走 i18n key（game.*），受 `twinkle.service.language` 控制（区别于 WZ/script 不受控）。

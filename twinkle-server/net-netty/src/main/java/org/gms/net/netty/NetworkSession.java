@@ -7,6 +7,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.net.encryption.CipherPair;
 import org.gms.net.opcodes.RecvOpcode;
 import org.gms.net.opcodes.SendOpcode;
@@ -114,7 +115,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
         this.channel = ctx.channel();
         writeHello(ctx);
         transition(SessionStage.LOGIN);
-        log.info("客户端连入: {}", ctx.channel().remoteAddress());
+        log.info(I18n.message("log.session.client_connected"), ctx.channel().remoteAddress());
     }
 
     /**
@@ -146,7 +147,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
             heartbeat.onInboundPacket(stage(), false);
             registry.find(opcode).ifPresentOrElse(
                     handler -> handler.handle(this, packet),
-                    () -> log.warn("未注册的收包 opcode: 0x{}", Integer.toHexString(opcode)));
+                    () -> log.warn(I18n.message("log.session.unregistered_opcode"), Integer.toHexString(opcode)));
         }
     }
 
@@ -170,7 +171,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        log.info("连接关闭: {}", ctx.channel().remoteAddress());
+        log.info(I18n.message("log.session.connection_closed"), ctx.channel().remoteAddress());
         DisconnectListener listener = disconnectListener;
         if (listener != null) {
             listener.onDisconnect(this);
@@ -180,7 +181,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         // 日志红线 9：log.error("描述", e)
-        log.error("连接异常，断开: {}", ctx.channel().remoteAddress(), cause);
+        log.error(I18n.message("log.session.connection_error"), ctx.channel().remoteAddress(), cause);
         ctx.close();
     }
 
@@ -194,7 +195,7 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     @Override
     public void close(String reason) {
-        log.info("主动断开连接，原因: {}", reason);
+        log.info(I18n.message("log.session.active_disconnect"), reason);
         Channel c = channel;
         if (c != null) {
             c.close();

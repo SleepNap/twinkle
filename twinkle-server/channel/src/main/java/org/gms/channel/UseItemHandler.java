@@ -5,6 +5,7 @@ import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.item.ItemData;
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
@@ -42,12 +43,12 @@ public final class UseItemHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到使用物品");
+            session.close(I18n.message("error.item_use.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到使用物品");
+            session.close(I18n.message("error.item_use.not_in_map"));
             return;
         }
         packet.skip(4);

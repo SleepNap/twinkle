@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 游戏逻辑系统注册表（贡献点版本化，仿 {@code HandlerRegistry} 范式，红线 13）。
@@ -42,7 +43,7 @@ public final class LogicSystemRegistry {
     public void register(String key, Object system, int version) {
         Registration put = slots.putIfAbsent(key, new Registration(system, version));
         if (put != null) {
-            throw new IllegalStateException("逻辑系统 key 已注册: " + key + "（请用 replace 替换）");
+            throw new IllegalStateException(I18n.message("error.logic_system.already_registered", key));
         }
     }
 
@@ -52,12 +53,12 @@ public final class LogicSystemRegistry {
     public void replace(String key, Object system, int version) {
         slots.compute(key, (k, existing) -> {
             if (existing != null && version <= existing.version()) {
-                throw new IllegalStateException("替换版本须高于现版本: key=" + key
-                        + ", 现有=" + existing.version() + ", 新=" + version);
+                throw new IllegalStateException(I18n.message("error.logic_system.version_not_higher",
+                        key, existing.version(), version));
             }
             return new Registration(system, version);
         });
-        log.info("逻辑系统已替换: key={} 版本={}", key, version);
+        log.info(I18n.message("log.logic_system.replaced"), key, version);
     }
 
     /**

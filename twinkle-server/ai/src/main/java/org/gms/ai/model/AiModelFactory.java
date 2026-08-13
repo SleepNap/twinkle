@@ -3,6 +3,7 @@ package org.gms.ai.model;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.gms.ai.model.tool.ToolRouter;
+import org.gms.i18n.I18n;
 
 import java.net.URI;
 import java.time.Duration;
@@ -30,7 +31,7 @@ public final class AiModelFactory {
             return new AiModelBundle(model, model, "local-rule", "deterministic", false);
         }
         if (!"openai-compatible".equals(normalizedProvider) && !"deepseek".equals(normalizedProvider)) {
-            throw new IllegalArgumentException("不支持的 AI 模型提供方: " + normalizedProvider);
+            throw new IllegalArgumentException(I18n.message("error.ai.unsupported_provider", normalizedProvider));
         }
 
         String effectiveBaseUrl = normalized(baseUrl,
@@ -73,23 +74,23 @@ public final class AiModelFactory {
 
     private static void validateExternalConfig(String baseUrl, String apiKey, String modelName) {
         if (baseUrl.isBlank()) {
-            throw new IllegalArgumentException("外部 AI 模型必须配置 twinkle.ai.model.base-url");
+            throw new IllegalArgumentException(I18n.message("error.ai.base_url_required"));
         }
         if (modelName.isBlank()) {
-            throw new IllegalArgumentException("外部 AI 模型必须配置 twinkle.ai.model.name");
+            throw new IllegalArgumentException(I18n.message("error.ai.model_name_required"));
         }
         URI uri;
         try {
             uri = URI.create(baseUrl);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("AI 模型 base URL 非法", e);
+            throw new IllegalArgumentException(I18n.message("error.ai.base_url_invalid"), e);
         }
         if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
                 || uri.getHost() == null) {
-            throw new IllegalArgumentException("AI 模型 base URL 只允许 http/https 完整地址");
+            throw new IllegalArgumentException(I18n.message("error.ai.base_url_scheme"));
         }
         if ((apiKey == null || apiKey.isBlank()) && !isLoopback(uri.getHost())) {
-            throw new IllegalArgumentException("远程 AI 模型必须通过 TWINKLE_LLM_API_KEY 注入密钥");
+            throw new IllegalArgumentException(I18n.message("error.ai.api_key_required"));
         }
     }
 

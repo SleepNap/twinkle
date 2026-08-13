@@ -1,5 +1,7 @@
 package org.gms.net.encryption;
 
+import org.gms.i18n.I18n;
+
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -44,7 +46,7 @@ public final class InitializationVector {
      */
     public static InitializationVector of(byte[] bytes) {
         if (bytes == null || bytes.length != 4) {
-            throw new IllegalArgumentException("IV 必须恰好 4 字节");
+            throw new IllegalArgumentException(I18n.message("error.iv.must_be_4_bytes"));
         }
         return new InitializationVector(bytes.clone());
     }

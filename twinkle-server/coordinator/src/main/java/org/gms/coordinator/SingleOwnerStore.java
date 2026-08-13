@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.gms.i18n.I18n;
 
 /**
  * 单一属主存储（架构 4.4 三机制之一"状态单一属主"：共享状态真值只在 coordinator 一处持有）。
@@ -47,8 +48,8 @@ public final class SingleOwnerStore {
         store.compute(key, (k, existing) -> {
             long current = existing == null ? 0 : existing.version();
             if (expectedVersion >= 0 && current != expectedVersion) {
-                throw new IllegalStateException("单一属主存储版本冲突: key=" + key
-                        + ", 期望=" + expectedVersion + ", 当前=" + current);
+                throw new IllegalStateException(I18n.message("error.coordinator.version_conflict",
+                        key, expectedVersion, current));
             }
             long next = current + 1;
             applied.set(next);

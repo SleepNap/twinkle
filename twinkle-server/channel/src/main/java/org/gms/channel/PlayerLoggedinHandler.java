@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.map.MapleMap;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -62,13 +63,13 @@ public final class PlayerLoggedinHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.LOGIN) {
-            session.close("阶段外收到进图包");
+            session.close(I18n.message("error.player_login.outside_stage"));
             return;
         }
         long charId = packet.readInt();
         var dbChar = characterRepo.findById(charId).orElse(null);
         if (dbChar == null) {
-            session.close("角色不存在: id=" + charId);
+            session.close(I18n.message("error.player_login.character_not_found", charId));
             return;
         }
         Character chr = characterLoader.fromData(dbChar);
@@ -95,7 +96,7 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         if (eventPublisher != null) {
             eventPublisher.playerOnline(chr);
         }
-        log.info("玩家进图: {} (id={}) 地图={}", chr.getName(), chr.getId(), map.getMapId());
+        log.info(I18n.message("log.player_login.entered_map"), chr.getName(), chr.getId(), map.getMapId());
     }
 
     /** 移除地图/在线表里同 id 的非自身旧 Character（重复登录，防广播双发；旧代际断链迟到清理由 compare-and-remove 短路）。 */

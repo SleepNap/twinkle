@@ -12,6 +12,7 @@ import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.limit.ApiRateLimiter;
+import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
 import org.gms.service.agent.ServerAgentService;
 
@@ -88,31 +89,31 @@ public final class ToolExecutionService {
         if (visibleDetail.isEmpty()) {
             metrics.increment("twinkle.tool.rejected", "code", "resource_not_found");
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.NOT_FOUND,
-                    "resource_not_found", "Tool 不存在或对当前凭据不可见", false,
+                    "resource_not_found", I18n.message("error.execution.tool_not_found"), false,
                     null, call.requestId(), Map.of());
         }
         ToolCatalogService.ToolSpec spec = catalogService.executable(
                         principal, call.toolId(), call.toolVersion())
                 .orElseThrow(() -> new ToolProtocolException(io.micronaut.http.HttpStatus.BAD_REQUEST,
-                        "invalid_input", "不支持的 Tool 版本", false, null, call.requestId(),
+                        "invalid_input", I18n.message("error.execution.unsupported_tool_version"), false, null, call.requestId(),
                         Map.of("supportedVersion", ToolCatalogService.TOOL_VERSION)));
         if (!spec.available() || ((ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())
                 || ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) && !serverAgent.available())) {
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "tool_unavailable", "服务端 Agent 当前未启用", true, null,
+                    "tool_unavailable", I18n.message("error.execution.agent_disabled"), true, null,
                     call.requestId(), Map.of());
         }
         if ((ToolCatalogService.ONLINE_TOOL.equals(call.toolId())
                 || ToolCatalogService.INVENTORY_TOOL.equals(call.toolId()))
                 && (call.intentSummary() == null || call.intentSummary().isBlank())) {
-            throw invalidInput("敏感读取必须提供 clientContext.intentSummary",
+            throw invalidInput(I18n.message("error.execution.sensitive_read_intent_required"),
                     call.requestId(), null);
         }
         if (!principal.permits(spec.requiredScope())
                 || !serverIdentity.serverId().equals(principal.serverId())) {
             metrics.increment("twinkle.tool.rejected", "code", "permission_denied");
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.FORBIDDEN,
-                    "permission_denied", "当前凭据无权执行该 Tool", false, null,
+                    "permission_denied", I18n.message("error.execution.permission_denied"), false, null,
                     call.requestId(), Map.of("requiredScopes", List.of(spec.requiredScope())));
         }
         String duplicateExecutionId = executionIdByDedupeKey.get(dedupeKey);
@@ -125,7 +126,7 @@ public final class ToolExecutionService {
         if (!rateLimiter.tryConsume("tool:" + principal.credentialId() + ":" + call.toolId())) {
             metrics.increment("twinkle.tool.rejected", "code", "rate_limited");
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.TOO_MANY_REQUESTS,
-                    "rate_limited", "当前 Credential 的 Tool 调用频率过高", true,
+                    "rate_limited", I18n.message("error.execution.rate_limited"), true,
                     null, call.requestId(), Map.of());
         }
 
@@ -136,7 +137,7 @@ public final class ToolExecutionService {
         try {
             if (ToolCatalogService.HEALTH_TOOL.equals(call.toolId())) {
                 if (!call.input().isEmpty()) {
-                    throw invalidInput("server.health.read 的 input 必须为空对象",
+                    throw invalidInput(I18n.message("error.execution.health_input_empty"),
                             call.requestId(), executionId);
                 }
                 output = healthTool.read(call.requestId(), executionId);
@@ -150,7 +151,7 @@ public final class ToolExecutionService {
                 output = closeAgentConversation(principal, call);
             } else {
                 throw new ToolProtocolException(io.micronaut.http.HttpStatus.NOT_FOUND,
-                        "resource_not_found", "Tool 不存在", false, executionId,
+                        "resource_not_found", I18n.message("error.execution.tool_not_found_generic"), false, executionId,
                         call.requestId(), Map.of());
             }
         } catch (ToolProtocolException e) {
@@ -161,7 +162,7 @@ public final class ToolExecutionService {
                     "failed", e.getClass().getSimpleName());
             metrics.increment("twinkle.tool.calls", "tool", call.toolId(), "result", "failed");
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "tool_unavailable", "服务端 Agent 调查暂时失败", true, executionId,
+                    "tool_unavailable", I18n.message("error.execution.agent_investigation_failed"), true, executionId,
                     call.requestId(), Map.of());
         }
 
@@ -191,18 +192,19 @@ public final class ToolExecutionService {
 
     private ExecutionCall parse(Map<String, Object> body, String fallbackRequestId) {
         if (body == null) {
-            throw invalidInput("请求正文必须是 JSON 对象", fallbackRequestId, null);
+            throw invalidInput(I18n.message("error.execution.body_not_object"), fallbackRequestId, null);
         }
-        rejectExtraFields(body, ENVELOPE_FIELDS, fallbackRequestId, null, "调用信封");
+        rejectExtraFields(body, ENVELOPE_FIELDS, fallbackRequestId, null,
+                I18n.message("error.validation.envelope_label"));
         String contractVersion = requiredString(body.get("contractVersion"),
                 "contractVersion", 16, fallbackRequestId, null);
         if (!ApiContract.VERSION.equals(contractVersion)) {
-            throw invalidInput("不支持的 contractVersion", fallbackRequestId, null);
+            throw invalidInput(I18n.message("error.execution.unsupported_contract_version"), fallbackRequestId, null);
         }
         String requestId = requiredString(body.get("requestId"), "requestId", 128,
                 fallbackRequestId, null);
         if (!requestId.matches("[A-Za-z0-9._-]{1,128}")) {
-            throw invalidInput("requestId 格式无效", fallbackRequestId, null);
+            throw invalidInput(I18n.message("error.execution.request_id_invalid"), fallbackRequestId, null);
         }
         String taskId = optionalString(body.get("taskId"), "taskId", 128, requestId, null);
         String stepId = optionalString(body.get("stepId"), "stepId", 128, requestId, null);
@@ -211,13 +213,13 @@ public final class ToolExecutionService {
                 requestId, null);
         Map<String, Object> input = object(body.get("input"), "input", requestId, null);
         if (!body.containsKey("dryRun") || !(body.get("dryRun") instanceof Boolean dryRun)) {
-            throw invalidInput("dryRun 必须显式为 false", requestId, null);
+            throw invalidInput(I18n.message("error.execution.dryrun_must_be_false"), requestId, null);
         }
         if (dryRun) {
-            throw invalidInput("首批只读 Tool 不支持 dryRun", requestId, null);
+            throw invalidInput(I18n.message("error.execution.dryrun_unsupported"), requestId, null);
         }
         if (body.get("idempotencyKey") != null || body.get("approvalToken") != null) {
-            throw invalidInput("首批只读 Tool 不接受 idempotencyKey 或 approvalToken", requestId, null);
+            throw invalidInput(I18n.message("error.execution.idempotency_unsupported"), requestId, null);
         }
         ClientContext context = clientContext(body.get("clientContext"), requestId);
         return new ExecutionCall(requestId, taskId, stepId, toolId, toolVersion,
@@ -230,7 +232,7 @@ public final class ToolExecutionService {
         optionalString(context.get("locale"), "locale", 32, requestId, null);
         String source = requiredString(context.get("source"), "source", 32, requestId, null);
         if (!CLIENT_SOURCES.contains(source)) {
-            throw invalidInput("clientContext.source 不受支持", requestId, null);
+            throw invalidInput(I18n.message("error.execution.source_unsupported"), requestId, null);
         }
         String intent = optionalString(context.get("intentSummary"), "intentSummary", 512,
                 requestId, null);
@@ -298,7 +300,7 @@ public final class ToolExecutionService {
             conversationId = "twish-" + UUID.randomUUID().toString().replace("-", "");
         }
         if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
-            throw invalidInput("conversationId 格式无效", call.requestId(), null);
+            throw invalidInput(I18n.message("error.execution.conversation_id_invalid"), call.requestId(), null);
         }
         Long accountId = resolveBillingAccount(principal);
         if (accountId != null) {
@@ -317,7 +319,7 @@ public final class ToolExecutionService {
                 billingService.charge(accountId, reply.model(), reply.inputTokens(),
                         reply.outputTokens(), webSearchCount(reply.executedTools()));
             } catch (RuntimeException e) {
-                log.warn("积分扣费失败（不影响已返回结果）: accountId={}, model={}",
+                log.warn(I18n.message("log.billing.charge_failed"),
                         accountId, reply.model(), e);
             }
         }
@@ -337,7 +339,7 @@ public final class ToolExecutionService {
         String conversationId = requiredString(call.input().get("conversationId"),
                 "conversationId", 64, call.requestId(), null);
         if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
-            throw invalidInput("conversationId 格式无效", call.requestId(), null);
+            throw invalidInput(I18n.message("error.execution.conversation_id_invalid"), call.requestId(), null);
         }
         return Map.of("conversationId", conversationId,
                 "evicted", serverAgent.closeConversation(conversationId, principal.subjectId()));
@@ -348,9 +350,10 @@ public final class ToolExecutionService {
             return null;
         }
         ApiKeyRecord record = apiKeyRepository.findByPrefix(principal.keyPrefix())
-                .orElseThrow(() -> new BillingException("billing_account_required", "API Key 不存在"));
+                .orElseThrow(() -> new BillingException("billing_account_required",
+                        I18n.message("error.billing.api_key_not_found")));
         if (record.getOwnerAccountId() == null) {
-            throw new BillingException("billing_account_required", "API Key 未关联账号，无法计费");
+            throw new BillingException("billing_account_required", I18n.message("error.billing.api_key_unlinked"));
         }
         return record.getOwnerAccountId();
     }
@@ -373,7 +376,7 @@ public final class ToolExecutionService {
                     .digest(value.getBytes(StandardCharsets.UTF_8));
             return java.util.HexFormat.of().formatHex(digest, 0, 12);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("JDK 缺少 SHA-256", e);
+            throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "SHA-256"), e);
         }
     }
 
@@ -397,11 +400,11 @@ public final class ToolExecutionService {
     private static Map<String, Object> object(Object value, String field, String requestId,
                                               String executionId) {
         if (!(value instanceof Map<?, ?> raw)) {
-            throw invalidInput(field + " 必须是对象", requestId, executionId);
+            throw invalidInput(I18n.message("error.validation.must_be_object", field), requestId, executionId);
         }
         for (Object key : raw.keySet()) {
             if (!(key instanceof String)) {
-                throw invalidInput(field + " 的字段名必须是字符串", requestId, executionId);
+                throw invalidInput(I18n.message("error.validation.field_name_string", field), requestId, executionId);
             }
         }
         return (Map<String, Object>) raw;
@@ -411,7 +414,7 @@ public final class ToolExecutionService {
                                           String requestId, String executionId, String label) {
         for (String field : value.keySet()) {
             if (!allowed.contains(field)) {
-                throw invalidInput(label + " 包含未知字段: " + field, requestId, executionId);
+                throw invalidInput(I18n.message("error.validation.unknown_field", label, field), requestId, executionId);
             }
         }
     }
@@ -420,7 +423,7 @@ public final class ToolExecutionService {
                                          String requestId, String executionId) {
         String result = optionalString(value, field, maxLength, requestId, executionId);
         if (result == null || result.isBlank()) {
-            throw invalidInput(field + " 不能为空", requestId, executionId);
+            throw invalidInput(I18n.message("error.validation.required", field), requestId, executionId);
         }
         return result;
     }
@@ -431,7 +434,7 @@ public final class ToolExecutionService {
             return null;
         }
         if (!(value instanceof String text) || text.length() > maxLength) {
-            throw invalidInput(field + " 格式无效", requestId, executionId);
+            throw invalidInput(I18n.message("error.validation.invalid_format", field), requestId, executionId);
         }
         return text;
     }

@@ -6,6 +6,7 @@ import org.gms.data.entity.Character;
 import org.gms.data.entity.InventoryItemEntity;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -35,12 +36,12 @@ public final class ViewAllCharHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED && session.stage() != SessionStage.CHARLIST) {
-            session.close("阶段外收到查看所有角色");
+            session.close(I18n.message("error.view_all_char.outside_stage"));
             return;
         }
         Account account = session.getAttr("account");
         if (account == null) {
-            session.close("未登录收到查看所有角色");
+            session.close(I18n.message("error.view_all_char.not_logged_in"));
             return;
         }
         // M1 单世界：查 world=0 全部角色
@@ -52,7 +53,7 @@ public final class ViewAllCharHandler implements PacketHandler {
 
         int totalWorlds = 1;
         int totalChrs = characters.size();
-        log.info("查看所有角色: 账号={}, world=0, 角色数={}", account.getName(), totalChrs);
+        log.info(I18n.message("log.view_all_char.request"), account.getName(), totalChrs);
         session.send(LoginPacketFactory.showAllCharacter(totalWorlds, totalChrs));
         session.send(LoginPacketFactory.showAllCharacterInfo(0, characters, equippedByChar));
     }

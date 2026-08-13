@@ -1,5 +1,8 @@
 package org.gms.domain.script;
 
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,6 +17,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * ScriptRepository 数据源定位 + reload 增减改（架构 6.4 / M2-4 第 3/4 项）。
  */
 class ScriptRepositoryTest {
+
+    @BeforeEach
+    void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     @Test
     void constructorRejectsMissingDirectory(@TempDir Path empty) {

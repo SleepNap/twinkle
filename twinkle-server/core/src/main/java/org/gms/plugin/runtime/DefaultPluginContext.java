@@ -1,6 +1,7 @@
 package org.gms.plugin.runtime;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.plugin.ContributionHandle;
 import org.gms.plugin.ContributionRegistrar;
 import org.gms.plugin.PluginContext;
@@ -89,7 +90,7 @@ public final class DefaultPluginContext implements PluginContext {
     public <T> T getService(Class<T> serviceType) {
         Object service = serviceResolver.apply(serviceType);
         if (service == null) {
-            throw new IllegalArgumentException("宿主服务不可用: " + serviceType.getName() + "（插件 " + pluginId() + "）");
+            throw new IllegalArgumentException(I18n.message("error.plugin.service_unavailable", serviceType.getName(), pluginId()));
         }
         return (T) service;
     }
@@ -111,7 +112,7 @@ public final class DefaultPluginContext implements PluginContext {
             try {
                 h.close();
             } catch (Exception e) {
-                log.warn("关闭插件句柄异常: {}（插件 {}）", h, pluginId(), e);
+                log.warn(I18n.message("log.plugin.close_handle_failed"), h, pluginId(), e);
             }
         }
         tracked.clear();

@@ -6,6 +6,7 @@ import org.gms.config.ConfigChangeEvent;
 import org.gms.config.ConfigFacade;
 import org.gms.data.entity.ParamConf;
 import org.gms.event.EventBus;
+import org.gms.i18n.I18n;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -60,7 +61,7 @@ public final class DbConfigFacade implements ConfigFacade {
             if (event.isInitial()) {
                 return;
             }
-            log.info("配置变更广播收到，version={}，重读 param_conf", event.version());
+            log.info(I18n.message("log.config.change_received"), event.version());
             loadAll();
         });
     }
@@ -73,7 +74,7 @@ public final class DbConfigFacade implements ConfigFacade {
         }
         cache.clear();
         cache.putAll(fresh);
-        log.info("param_conf 加载完成，共 {} 项", cache.size());
+        log.info(I18n.message("log.config.loaded"), cache.size());
     }
 
     @Override
@@ -109,7 +110,7 @@ public final class DbConfigFacade implements ConfigFacade {
             }
             return (Optional<T>) Optional.of(raw);
         } catch (NumberFormatException e) {
-            log.warn("配置键 {} 类型转换失败:{} → {}", key, raw, type.getSimpleName());
+            log.warn(I18n.message("log.config.convert_failed"), key, raw, type.getSimpleName());
             return Optional.empty();
         }
     }

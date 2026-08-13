@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.net.encryption.AesCipher;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketCodec;
@@ -40,13 +41,13 @@ public final class V83PacketDecoder extends ByteToMessageDecoder {
         in.markReaderIndex();
         int header = in.readInt();
         if (!receiveCipher.isValidHeader(header)) {
-            log.warn("非法包 header（可能错序/篡改），断开连接: {}", Integer.toHexString(header));
+            log.warn(I18n.message("log.packet.invalid_header"), Integer.toHexString(header));
             ctx.close();
             return;
         }
         int length = AesCipher.decodePacketLength(header);
         if (length <= 0 || length > MAX_PACKET_LENGTH) {
-            log.warn("异常包长度 {}，断开连接", length);
+            log.warn(I18n.message("log.packet.invalid_length"), length);
             ctx.close();
             return;
         }

@@ -5,6 +5,7 @@ import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -37,12 +38,12 @@ public final class PickAllCharHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED && session.stage() != SessionStage.CHARLIST) {
-            session.close("阶段外收到总览选角");
+            session.close(I18n.message("error.pick_all_char.outside_stage"));
             return;
         }
         Account account = session.getAttr("account");
         if (account == null) {
-            session.close("未登录收到总览选角");
+            session.close(I18n.message("error.pick_all_char.not_logged_in"));
             return;
         }
         long charId = packet.readInt();
@@ -56,13 +57,13 @@ public final class PickAllCharHandler implements PacketHandler {
                 .findFirst()
                 .orElse(null);
         if (selected == null) {
-            session.close("总览选角越权: charId=" + charId);
+            session.close(I18n.message("error.pick_all_char.forbidden", charId));
             return;
         }
 
         session.setAttr("selectedChar", selected);
         session.transition(SessionStage.SELECTED);
-        log.info("总览界面选中角色: {} (id={})", selected.getName(), charId);
+        log.info(I18n.message("log.pick_all_char.selected"), selected.getName(), charId);
         session.send(LoginPacketFactory.serverIp(channelIp, channelPort, (int) charId));
     }
 }

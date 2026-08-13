@@ -1,6 +1,7 @@
 package org.gms.ai.service;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
 import org.gms.task.BackgroundTaskRegistry;
 
@@ -60,7 +61,7 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
         taskRegistry.updateNextRun(SCHEDULE_ID, Instant.now().plusSeconds(60));
         scheduler.scheduleWithFixedDelay(this::runScheduledSummary, 60,
                 TimeUnit.HOURS.toSeconds(24), TimeUnit.SECONDS);
-        log.info("AI 每日总结调度已启动（首跑 60s 后，此后每 24h）");
+        log.info(I18n.message("log.ai.daily_summary_started"));
     }
 
     /** 立即执行一次每日总结（手动触发，也供测试）。 */
@@ -80,11 +81,11 @@ public final class AiDailySummaryScheduler implements AutoCloseable {
             lastRunEpoch.set(System.currentTimeMillis());
             metrics.increment("ai.daily_summary.runs");
             metrics.gauge("ai.daily_summary.last_run", lastRunEpoch.get());
-            log.info("AI 每日总结生成完成: {}", report);
+            log.info(I18n.message("log.ai.daily_summary_completed"), report);
         } catch (RuntimeException e) {
             errorCount.incrementAndGet();
             metrics.increment("ai.daily_summary.errors");
-            log.error("AI 每日总结执行异常", e);
+            log.error(I18n.message("log.ai.daily_summary_error"), e);
             throw e;
         }
     }

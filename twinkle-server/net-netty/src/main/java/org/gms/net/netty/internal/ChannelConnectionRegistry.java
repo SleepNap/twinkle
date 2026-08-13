@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信连接注册表（架构 4.6.4 注册中心：channel → 连接，coordinator 内建）。
@@ -28,13 +29,13 @@ public final class ChannelConnectionRegistry {
     public void registerChannel(int channelId, String host, int port, InternalConnection conn) {
         channels.put(channelId, conn);
         channelHosts.put(channelId, host + ":" + port);
-        log.info("频道连接注册: channel={} 端点={}", channelId, host + ":" + port);
+        log.info(I18n.message("log.registry.channel_registered"), channelId, host + ":" + port);
     }
 
     /** 管理进程连接注册（REGISTER 帧：admin=true）。 */
     public void registerAdmin(InternalConnection conn) {
         admin = conn;
-        log.info("管理进程连接注册");
+        log.info(I18n.message("log.registry.admin_registered"));
     }
 
     /** 断链移除（幂等，防旧连接迟到断链误删新连接）。 */

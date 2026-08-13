@@ -3,6 +3,7 @@ package org.gms.httpapi.auth;
 import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.ApiRequestAudit;
 import org.gms.data.repo.ApiRequestAuditRepository;
+import org.gms.i18n.I18n;
 
 /** 审计写入失败不改变业务响应，但会写错误日志供运维修复。 */
 @Log4j2
@@ -33,7 +34,7 @@ public final class ApiAuditService {
         try {
             repository.insert(audit);
         } catch (RuntimeException e) {
-            log.error("能力面审计写入失败: requestId={}", requestId, e);
+            log.error(I18n.message("log.audit.write_failed"), requestId, e);
         }
     }
 }

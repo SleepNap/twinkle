@@ -1,6 +1,7 @@
 package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
 import org.gms.event.ReliableDelivery;
@@ -66,7 +67,7 @@ public final class RemoteEventBus implements EventBus, ReliableDelivery {
         // 2) 跨进程转发 coordinator（低频控制消息，架构 4.5）；未连接仅本地派发（单频道可玩）
         InternalConnection conn = link.connection();
         if (conn == null) {
-            log.debug("coordinator 未连接，事件仅本地派发: target={}", target);
+            log.debug(I18n.message("log.eventbus.coordinator_unconnected"), target);
             return CompletableFuture.completedFuture(null);
         }
         InternalProtocol.EventPayload event = new InternalProtocol.EventPayload(
@@ -85,12 +86,12 @@ public final class RemoteEventBus implements EventBus, ReliableDelivery {
     private void dispatchRemote(InternalFrame frame) {
         InternalProtocol.EventPayload event = JsonCodec.decode(frame.payloadText(), InternalProtocol.EventPayload.class.getName());
         if (event == null) {
-            log.warn("EVENT 帧负载解析失败: messageId={}", frame.messageId());
+            log.warn(I18n.message("log.eventbus.event_parse_failed"), frame.messageId());
             return;
         }
         Object payload = JsonCodec.decode(event.payload(), event.type());
         if (payload == null) {
-            log.warn("EVENT 负载反序列化失败: type={}", event.type());
+            log.warn(I18n.message("log.eventbus.event_deserialize_failed"), event.type());
             return;
         }
         // 可靠序号存在 → 携带派发（订阅方若用 ReliableReceiver 可恰好一次）；

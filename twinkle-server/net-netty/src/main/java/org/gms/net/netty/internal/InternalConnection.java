@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信连接（架构 4.5：每个进程 Netty 客户端 + 服务端，与 coordinator TCP 长连接）。
@@ -120,11 +121,11 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
                 try {
                     respHandler.accept(frame);
                 } catch (RuntimeException e) {
-                    log.error("内部 RPC 响应处理异常: messageId={}", frame.messageId(), e);
+                    log.error(I18n.message("log.internal.rpc_response_error"), frame.messageId(), e);
                 }
                 return;
             }
-            log.warn("未匹配的 RPC 响应: messageId={}", frame.messageId());
+            log.warn(I18n.message("log.internal.unmatched_rpc_response"), frame.messageId());
             return;
         }
         if (frame.type() == InternalFrame.MessageType.RPC) {
@@ -138,7 +139,7 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
                     try {
                         rpcHandler.accept(new RpcRequestEnvelope(req, frame.messageId()));
                     } catch (RuntimeException e) {
-                        log.error("内部 RPC 处理异常: method={}", req.method(), e);
+                        log.error(I18n.message("log.internal.rpc_process_error"), req.method(), e);
                     }
                 }
                 return;
@@ -147,21 +148,21 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
         }
         Consumer<InternalFrame> handler = frameHandler;
         if (handler == null) {
-            log.warn("内部连接未注册帧处理，丢弃: type={} messageId={}", frame.type(), frame.messageId());
+            log.warn(I18n.message("log.internal.no_frame_handler"), frame.type(), frame.messageId());
             return;
         }
         try {
             handler.accept(frame);
         } catch (RuntimeException e) {
             // 日志红线 9：log.error("描述", e)，禁用 printStackTrace
-            log.error("内部帧处理异常: type={} messageId={}", frame.type(), frame.messageId(), e);
+            log.error(I18n.message("log.internal.frame_process_error"), frame.type(), frame.messageId(), e);
         }
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         // 断链：pending RPC 全部失败（防调用方永久等待）
-        RuntimeException closed = new IllegalStateException("内部连接已关闭");
+        RuntimeException closed = new IllegalStateException(I18n.message("error.internal.connection_closed"));
         pending.forEach((id, fut) -> fut.completeExceptionally(closed));
         pending.clear();
         if (closeHandler != null) {

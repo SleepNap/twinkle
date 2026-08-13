@@ -1,5 +1,7 @@
 package org.gms.net.packet;
 
+import org.gms.i18n.I18n;
+
 import java.nio.charset.Charset;
 import java.util.Arrays;
 
@@ -62,7 +64,7 @@ public final class ByteArrayInPacket implements InPacket {
     public String readString(Charset charset) {
         int length = readUnsignedShort();
         if (length > available()) {
-            throw new IllegalStateException("字符串长度越界: length=" + length + ", available=" + available());
+            throw new IllegalStateException(I18n.message("error.packet.string_length_overflow", length, available()));
         }
         return new String(readBytes(length), charset);
     }

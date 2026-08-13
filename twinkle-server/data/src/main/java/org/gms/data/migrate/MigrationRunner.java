@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 自研迁移器（架构 6.2 决策：Flyway 社区版不支持 SQLite，三库统一自研迁移器）。
@@ -69,7 +70,7 @@ public final class MigrationRunner {
         ensureVersionTable();
         TreeMap<Integer, String> files = discoverMigrations();
         if (files.isEmpty()) {
-            log.info("无可用迁移脚本");
+            log.info(I18n.message("log.migrate.none"));
             return 0;
         }
 
@@ -82,7 +83,7 @@ public final class MigrationRunner {
                 if (isApplied(conn, version)) {
                     continue;
                 }
-                log.info("应用迁移 V{}: {}", version, name);
+                log.info(I18n.message("log.migrate.applied"), version, name);
                 String sql = loadResource(name);
                 List<String> statements = splitStatements(sql);
                 for (String stmt : statements) {
@@ -97,9 +98,9 @@ public final class MigrationRunner {
             conn.commit();
         }
         if (applied == 0) {
-            log.info("数据库已是最新（跳过 {} 个已应用迁移）", files.size());
+            log.info(I18n.message("log.migrate.up_to_date"), files.size());
         } else {
-            log.info("本次共应用 {} 个迁移", applied);
+            log.info(I18n.message("log.migrate.total_applied"), applied);
         }
         return applied;
     }
@@ -175,7 +176,7 @@ public final class MigrationRunner {
                 }
             }
         } catch (Exception e) {
-            log.error("扫描迁移目录失败: {}", dir, e);
+            log.error(I18n.message("log.migrate.scan_failed"), dir, e);
         }
     }
 
@@ -189,7 +190,7 @@ public final class MigrationRunner {
             int version = Integer.parseInt(filename.substring(1, filename.indexOf("__")));
             map.put(version, fullResourcePath);
         } catch (NumberFormatException e) {
-            log.warn("迁移文件名格式异常: {}", filename);
+            log.warn(I18n.message("log.migrate.bad_filename"), filename);
         }
     }
 
@@ -197,11 +198,11 @@ public final class MigrationRunner {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         try (InputStream in = cl.getResourceAsStream(path)) {
             if (in == null) {
-                throw new IllegalStateException("迁移资源不存在: " + path);
+                throw new IllegalStateException(I18n.message("error.migrate.resource_missing", path));
             }
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new RuntimeException("加载迁移失败: " + path, e);
+            throw new RuntimeException(I18n.message("error.migrate.load_failed", path), e);
         }
     }
 
@@ -224,7 +225,7 @@ public final class MigrationRunner {
         try {
             return new MigrationRunner(dataSource, dialectId).run();
         } catch (SQLException e) {
-            throw new RuntimeException("迁移失败", e);
+            throw new RuntimeException(I18n.message("error.migrate.failed"), e);
         }
     }
 }

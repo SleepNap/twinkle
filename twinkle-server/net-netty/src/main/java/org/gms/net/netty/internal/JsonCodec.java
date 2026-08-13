@@ -2,6 +2,7 @@ package org.gms.net.netty.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信 JSON 编解码工具（架构 4.5：内部帧负载序列化）。
@@ -25,7 +26,7 @@ public final class JsonCodec {
         try {
             return MAPPER.writeValueAsString(value);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IllegalArgumentException("JSON 序列化失败: " + value.getClass().getName(), e);
+            throw new IllegalArgumentException(I18n.message("error.json.serialize_failed", value.getClass().getName()), e);
         }
     }
 
@@ -36,10 +37,10 @@ public final class JsonCodec {
             Class<?> type = Class.forName(typeName);
             return (T) MAPPER.readValue(json, type);
         } catch (ClassNotFoundException e) {
-            log.error("JSON 反序列化类型不存在: {}", typeName);
+            log.error(I18n.message("log.json.type_not_found"), typeName);
             return null;
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            log.error("JSON 反序列化失败: type={}", typeName, e);
+            log.error(I18n.message("log.json.deserialize_failed"), typeName, e);
             return null;
         }
     }
@@ -49,7 +50,7 @@ public final class JsonCodec {
         try {
             return MAPPER.readValue(json, typeRef);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            log.error("JSON 反序列化失败（泛型）: {}", typeRef.getType().getTypeName(), e);
+            log.error(I18n.message("log.json.deserialize_generic_failed"), typeRef.getType().getTypeName(), e);
             return null;
         }
     }

@@ -1,6 +1,7 @@
 package org.gms.httpapi.execution;
 
 import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.i18n.I18n;
 import org.gms.observability.HealthIndicator;
 import org.gms.observability.HealthRegistry;
 
@@ -31,7 +32,7 @@ public final class ServerHealthTool {
             statuses = healthRegistry.statuses();
         } catch (RuntimeException e) {
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "tool_unavailable", "健康检查暂不可用", true, executionId, requestId, Map.of());
+                    "tool_unavailable", I18n.message("error.health.unavailable"), true, executionId, requestId, Map.of());
         }
 
         List<Map<String, Object>> checks = new ArrayList<>();

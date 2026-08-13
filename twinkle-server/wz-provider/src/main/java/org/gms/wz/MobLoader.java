@@ -2,6 +2,7 @@ package org.gms.wz;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.mob.MobData;
+import org.gms.i18n.I18n;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,9 +38,9 @@ public final class MobLoader {
                         mobs.put(data.getMobId(), data);
                     });
         } catch (IOException e) {
-            throw new IllegalStateException("遍历 Mob.wz 失败: " + mobWz, e);
+            throw new IllegalStateException(I18n.message("error.wz.mob_walk_failed", mobWz), e);
         }
-        log.info("Mob.wz 解析完成：{} 个怪物（根={}）", mobs.size(), wzRoot);
+        log.info(I18n.message("log.wz.mob_loaded"), mobs.size(), wzRoot);
         return mobs;
     }
 

@@ -11,6 +11,7 @@ import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.inventory.PetItem;
 import org.gms.domain.script.ScriptManager;
 import org.gms.hotreload.RestartCoordinator;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.PacketSession;
 import org.gms.service.admin.AdminService;
 
@@ -91,7 +92,7 @@ public final class ChannelAdminService implements AdminService {
         if (session == null) {
             return false;
         }
-        session.close("管理侧踢下线: characterId=" + characterId);
+        session.close(I18n.message("error.admin.kick", characterId));
         // 断链注销由 DisconnectListener 完成（ChannelServer 装配），此处只触发关闭。
         return true;
     }
@@ -99,18 +100,18 @@ public final class ChannelAdminService implements AdminService {
     @Override
     public int reloadScripts() {
         int changed = scriptManager.reload();
-        log.info("管理侧触发脚本重载，变化脚本数: {}", changed);
+        log.info(I18n.message("log.admin.reload_scripts"), changed);
         return changed;
     }
 
     @Override
     public void requestRestart() {
-        log.info("管理侧请求重启，后台执行 DRAINING → FLUSH_DIRTY → 退出");
+        log.info(I18n.message("log.admin.restart_requested"));
         Thread daemon = new Thread(() -> {
             try {
                 restartService.restart(restartProcess);
             } catch (Exception e) {
-                log.error("管理侧重启编排异常", e);
+                log.error(I18n.message("log.admin.restart_error"), e);
             }
         }, "admin-requested-restart");
         daemon.setDaemon(true);

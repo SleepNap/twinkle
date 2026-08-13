@@ -3,6 +3,7 @@ package org.gms.wz;
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.mob.MobData;
+import org.gms.i18n.I18n;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -51,10 +52,10 @@ public final class WzCache {
         if (Files.isRegularFile(file)) {
             try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(file))) {
                 Map<Integer, T> hit = (Map<Integer, T>) in.readObject();
-                log.info("WZ 缓存命中: {}（{} 条）", name, hit.size());
+                log.info(I18n.message("log.wz.cache_hit"), name, hit.size());
                 return hit;
             } catch (IOException | ClassNotFoundException e) {
-                log.warn("WZ 缓存读取失败，重新解析: {}", name, e);
+                log.warn(I18n.message("log.wz.cache_read_failed"), name, e);
             }
         }
         Map<Integer, T> fresh = loader.get();
@@ -68,9 +69,9 @@ public final class WzCache {
             try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(file))) {
                 out.writeObject(obj);
             }
-            log.info("WZ 缓存写入: {}", file.getFileName());
+            log.info(I18n.message("log.wz.cache_written"), file.getFileName());
         } catch (IOException e) {
-            log.warn("WZ 缓存写入失败（不影响运行）: {}", file, e);
+            log.warn(I18n.message("log.wz.cache_write_failed"), file, e);
         }
     }
 
@@ -80,7 +81,7 @@ public final class WzCache {
             Files.deleteIfExists(cacheDir.resolve(ITEMS_FILE));
             Files.deleteIfExists(cacheDir.resolve(MOBS_FILE));
         } catch (IOException e) {
-            log.warn("清 WZ 缓存失败: {}", cacheDir, e);
+            log.warn(I18n.message("log.wz.cache_clear_failed"), cacheDir, e);
         }
     }
 }

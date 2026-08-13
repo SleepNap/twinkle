@@ -14,6 +14,7 @@ import dev.langchain4j.model.chat.request.ChatRequestParameters;
 import dev.langchain4j.model.chat.request.DefaultChatRequestParameters;
 import lombok.extern.log4j.Log4j2;
 import org.gms.ai.model.tool.ToolRouter;
+import org.gms.i18n.I18n;
 
 import java.util.List;
 import java.util.Set;
@@ -66,7 +67,7 @@ public final class LocalRuleChatModel implements ChatModel, StreamingChatModel {
                     .arguments(arguments)
                     .build();
             // 参数可能含角色名/账号名，日志只记录工具标识。
-            log.info("本地模型路由到工具: {}", toolName);
+            log.info(I18n.message("log.ai.local_model_routed"), toolName);
             return ChatResponse.builder().aiMessage(new AiMessage(List.of(req))).build();
         }
 

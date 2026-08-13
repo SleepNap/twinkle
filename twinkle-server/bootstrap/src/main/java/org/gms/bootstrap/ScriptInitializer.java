@@ -4,6 +4,7 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.domain.script.ScriptManager;
 import org.gms.role.ChannelProcessCondition;
 
@@ -23,6 +24,6 @@ public final class ScriptInitializer {
 
 
     public ScriptInitializer(ScriptManager scriptManager) {
-        log.info("脚本引擎装配完成：根={}", scriptManager.root());
+        log.info(I18n.message("log.bootstrap.script_ready"), scriptManager.root());
     }
 }

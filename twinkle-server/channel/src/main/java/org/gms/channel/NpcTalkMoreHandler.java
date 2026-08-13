@@ -2,6 +2,7 @@ package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.script.ConversationScript;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -32,7 +33,7 @@ public final class NpcTalkMoreHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到 NPC 对话继续");
+            session.close(I18n.message("error.npc.talk_more.outside_stage"));
             return;
         }
         ConversationScript script = session.getAttr("npcConversation");
@@ -65,7 +66,7 @@ public final class NpcTalkMoreHandler implements PacketHandler {
             try {
                 script.invoke("action", mode, (int) lastMsg, selection);
             } catch (RuntimeException e) {
-                log.error("NPC 对话 action() 失败", e);
+                log.error(I18n.message("log.npc.action_failed"), e);
                 NpcTalkHandler.closeConversation(session);
             }
         }
@@ -131,7 +132,7 @@ public final class NpcTalkMoreHandler implements PacketHandler {
         try {
             script.invoke(fn, args);
         } catch (RuntimeException e) {
-            log.error("nextlevel 函数 {} 失败", fn, e);
+            log.error(I18n.message("log.npc.nextlevel_failed"), fn, e);
             host.dispose();
         }
     }

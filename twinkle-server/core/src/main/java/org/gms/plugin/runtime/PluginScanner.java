@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 插件扫描器（架构 6.4 数据源定位风格：配置直接指定路径、单份数据、读不到启动报错）。
@@ -32,7 +33,7 @@ public final class PluginScanner {
      */
     public List<Path> scanJars() {
         if (!Files.isDirectory(pluginsDir)) {
-            log.warn("插件目录不存在，跳过插件加载: {}（配置 twinkle.plugin.path）", pluginsDir);
+            log.warn(I18n.message("log.plugin.dir_missing"), pluginsDir);
             return List.of();
         }
         try (var stream = Files.list(pluginsDir)) {
@@ -41,7 +42,7 @@ public final class PluginScanner {
                     .sorted()
                     .toList();
         } catch (IOException e) {
-            throw new IllegalStateException("扫描插件目录失败: " + pluginsDir, e);
+            throw new IllegalStateException(I18n.message("error.plugin.scan_failed", pluginsDir), e);
         }
     }
 

@@ -5,6 +5,9 @@ import org.gms.plugin.Plugin;
 import org.gms.plugin.PluginContext;
 import org.gms.plugin.PluginDescriptor;
 import org.gms.plugin.PluginHost;
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -20,6 +23,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 插件管理器生命周期测试（架构 7.2：可装卸 + SDK 版本化）。
  */
 class PluginManagerTest {
+
+    @BeforeEach
+    void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     @TempDir
     Path tmp;

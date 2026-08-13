@@ -1,6 +1,7 @@
 package org.gms.domain.script;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
@@ -56,7 +57,7 @@ public final class ConversationScript implements AutoCloseable {
             session.context.eval(Source.create("js", source));
             return session;
         } catch (RuntimeException e) {
-            log.error("对话脚本加载失败: {}", key, e);
+            log.error(I18n.message("log.script.conversation_load_failed"), key, e);
             session.close();
             return null;
         }
@@ -87,7 +88,7 @@ public final class ConversationScript implements AutoCloseable {
         try {
             context.close();
         } catch (Exception e) {
-            log.warn("关闭对话脚本上下文异常", e);
+            log.warn(I18n.message("log.script.conversation_context_close_failed"), e);
         }
     }
 }

@@ -1,5 +1,6 @@
 package org.gms.net.packet;
 
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.RecvOpcode;
 
 import java.util.Optional;
@@ -42,7 +43,7 @@ public final class HandlerRegistry {
     public void register(RecvOpcode opcode, PacketHandler handler, int version) {
         Registration put = slots.putIfAbsent(opcode.getValue(), new Registration(version, handler));
         if (put != null) {
-            throw new IllegalStateException("opcode 已注册: " + opcode + "（请用 replace 替换）");
+            throw new IllegalStateException(I18n.message("error.handler.opcode_registered", opcode));
         }
     }
 
@@ -52,8 +53,8 @@ public final class HandlerRegistry {
     public void replace(RecvOpcode opcode, PacketHandler handler, int version) {
         slots.compute(opcode.getValue(), (key, existing) -> {
             if (existing != null && version <= existing.version()) {
-                throw new IllegalStateException("替换版本须高于现版本: opcode=" + opcode
-                        + ", 现有=" + existing.version() + ", 新=" + version);
+                throw new IllegalStateException(I18n.message("error.handler.version_not_higher",
+                        opcode, existing.version(), version));
             }
             return new Registration(version, handler);
         });

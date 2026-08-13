@@ -4,6 +4,7 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.LogicSystemRegistry;
 import org.gms.hotreload.versioned.VersionGate;
@@ -60,14 +61,14 @@ public final class PluginInitializer {
                 loaded++;
                 metrics.increment(Sli.PLUGIN_LOADED);
             } catch (PluginManager.PluginLoadException e) {
-                log.error("插件启动加载失败: {}（{}）", descriptor.id(), e.getMessage());
+                log.error(I18n.message("log.plugin.startup_load_failed"), descriptor.id(), e.getMessage());
                 metrics.increment(Sli.PLUGIN_FAILED);
             }
         }
         if (loaded > 0) {
-            log.info("插件启动加载完成: {} 个", loaded);
+            log.info(I18n.message("log.plugin.startup_loaded"), loaded);
         } else {
-            log.info("插件启动加载: 无可用插件（目录可能为空或不存在）");
+            log.info(I18n.message("log.plugin.startup_no_plugins"));
         }
     }
 }

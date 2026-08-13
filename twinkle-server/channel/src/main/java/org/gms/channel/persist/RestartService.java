@@ -3,6 +3,7 @@ package org.gms.channel.persist;
 import lombok.extern.log4j.Log4j2;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
+import org.gms.i18n.I18n;
 import org.gms.tick.TickScheduler;
 
 /**
@@ -49,7 +50,7 @@ public final class RestartService {
                         saveQueue.drain();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
-                        throw new RuntimeException("DRAINING 存档队列被中断", e);
+                        throw new RuntimeException(I18n.message("error.restart.drain_interrupted"), e);
                     }
                 },
                 saveQueue::flushAllSync,  // FLUSH_DIRTY：同步落库脏角色（红线 17，确保重启前落盘）

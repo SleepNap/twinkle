@@ -2,6 +2,7 @@ package org.gms.httpapi.mirror;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
+import org.gms.i18n.I18n;
 import org.gms.service.admin.OnlinePlayerEvents;
 
 import java.util.List;
@@ -79,7 +80,7 @@ public final class OnlinePlayerMirror implements AutoCloseable {
             subscriptionOnline.close();
             subscriptionOffline.close();
         } catch (Exception e) {
-            log.warn("关闭在线镜像订阅异常", e);
+            log.warn(I18n.message("log.mirror.close_subscription_failed"), e);
         }
     }
 

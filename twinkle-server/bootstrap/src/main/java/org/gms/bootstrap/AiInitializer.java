@@ -4,6 +4,7 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.ai.service.AiDailySummaryScheduler;
 import org.gms.role.AiEnabledCondition;
 
@@ -26,6 +27,6 @@ public final class AiInitializer {
 
     public AiInitializer(AiDailySummaryScheduler scheduler) {
         scheduler.start();
-        log.info("AI 模块启动装配完成");
+        log.info(I18n.message("log.bootstrap.ai_ready"));
     }
 }

@@ -6,6 +6,7 @@ import org.gms.domain.script.host.Em;
 import org.gms.domain.script.host.Im;
 import org.gms.domain.script.host.Qm;
 import org.gms.domain.script.host.Rm;
+import org.gms.i18n.I18n;
 import org.graalvm.polyglot.Value;
 
 import java.util.LinkedHashMap;
@@ -49,7 +50,7 @@ public final class ScriptManager {
     public Optional<Value> run(String key, Map<String, Object> bindings) {
         ScriptSource src = repository.loadAll().get(key);
         if (src == null) {
-            log.warn("脚本不存在: {}", key);
+            log.warn(I18n.message("log.script.not_found"), key);
             return Optional.empty();
         }
         // 注入 cm/qm/em/rm/im 等宿主契约 + 用户传入的额外绑定
@@ -91,7 +92,7 @@ public final class ScriptManager {
     public ConversationScript openConversation(String key, Map<String, Object> bindings) {
         ScriptSource src = repository.loadAll().get(key);
         if (src == null) {
-            log.warn("对话脚本不存在: {}", key);
+            log.warn(I18n.message("log.script.conversation_not_found"), key);
             return null;
         }
         return ConversationScript.open(key, src.content(), bindings);
@@ -103,7 +104,7 @@ public final class ScriptManager {
      */
     public int reload() {
         int changed = repository.reload();
-        log.info("ScriptManager L2 热重载：{} 条目变化", changed);
+        log.info(I18n.message("log.script.manager_reloaded"), changed);
         return changed;
     }
 

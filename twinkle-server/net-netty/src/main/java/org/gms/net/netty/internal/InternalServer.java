@@ -13,6 +13,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信服务端（架构 4.5：coordinator 端监听，接收各进程 TCP 长连接）。
@@ -60,7 +61,7 @@ public final class InternalServer implements AutoCloseable {
                     }
                 });
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        log.info("内部通信服务端启动，监听端口: {}", port);
+        log.info(I18n.message("log.internal.server_started"), port);
     }
 
     public int boundPort() {
@@ -83,6 +84,6 @@ public final class InternalServer implements AutoCloseable {
         if (workerGroup != null) {
             workerGroup.shutdownGracefully().syncUninterruptibly();
         }
-        log.info("内部通信服务端已停止");
+        log.info(I18n.message("log.internal.server_stopped"));
     }
 }

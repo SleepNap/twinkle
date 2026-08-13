@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
+import org.gms.i18n.I18n;
 import org.gms.service.admin.OnlinePlayerEvents;
 
 import javax.crypto.Mac;
@@ -41,11 +42,11 @@ public final class OnlinePlayerPageService {
         if (configuredSigningKey == null || configuredSigningKey.isBlank()) {
             this.signingKey = new byte[32];
             new SecureRandom().nextBytes(this.signingKey);
-            log.warn("未配置 TWINKLE_CURSOR_SIGNING_KEY：在线分页 Cursor 将在服务重启后失效");
+            log.warn(I18n.message("log.cursor.signing_key_missing"));
         } else {
             this.signingKey = configuredSigningKey.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             if (this.signingKey.length < 32) {
-                log.warn("TWINKLE_CURSOR_SIGNING_KEY 长度不足 32 字节，请更换高熵密钥");
+                log.warn(I18n.message("log.cursor.signing_key_short"));
             }
         }
     }
@@ -66,7 +67,7 @@ public final class OnlinePlayerPageService {
             }
             if (decoded.snapshotVersion() != snapshot.version()) {
                 throw new ToolProtocolException(io.micronaut.http.HttpStatus.CONFLICT,
-                        "snapshot_changed", "在线玩家快照已变化，请从第一页重新读取", true,
+                        "snapshot_changed", I18n.message("error.cursor.snapshot_changed"), true,
                         executionId, requestId, Map.of(
                         "currentSnapshotVersion", "online_" + snapshot.version()));
             }
@@ -122,7 +123,7 @@ public final class OnlinePlayerPageService {
             Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
             return encoder.encodeToString(payload) + "." + encoder.encodeToString(hmac(payload));
         } catch (IOException e) {
-            throw new IllegalStateException("生成 Cursor 失败", e);
+            throw new IllegalStateException(I18n.message("error.cursor.encode_failed"), e);
         }
     }
 
@@ -160,7 +161,7 @@ public final class OnlinePlayerPageService {
             mac.init(new SecretKeySpec(signingKey, "HmacSHA256"));
             return mac.doFinal(payload);
         } catch (java.security.GeneralSecurityException e) {
-            throw new IllegalStateException("JDK 缺少 HmacSHA256", e);
+            throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "HmacSHA256"), e);
         }
     }
 
@@ -170,7 +171,7 @@ public final class OnlinePlayerPageService {
         }
         if (!(value instanceof Number number) || number.doubleValue() != number.intValue()
                 || number.intValue() < 1 || number.intValue() > MAX_PAGE_SIZE) {
-            throw invalidInput("pageSize 必须是 1-200 的整数", requestId, executionId);
+            throw invalidInput(I18n.message("error.cursor.page_size_range"), requestId, executionId);
         }
         return number.intValue();
     }
@@ -181,7 +182,7 @@ public final class OnlinePlayerPageService {
             return null;
         }
         if (!(value instanceof String text) || text.length() > maxLength) {
-            throw invalidInput(field + " 格式无效", requestId, executionId);
+            throw invalidInput(I18n.message("error.validation.invalid_format", field), requestId, executionId);
         }
         return text;
     }
@@ -190,7 +191,7 @@ public final class OnlinePlayerPageService {
                                           String requestId, String executionId) {
         for (String field : input.keySet()) {
             if (!allowed.contains(field)) {
-                throw invalidInput("Tool input 包含未知字段: " + field, requestId, executionId);
+                throw invalidInput(I18n.message("error.cursor.unknown_field", field), requestId, executionId);
             }
         }
     }
@@ -202,7 +203,7 @@ public final class OnlinePlayerPageService {
     }
 
     private static ToolProtocolException invalidCursor(String requestId, String executionId) {
-        return invalidInput("cursor 无效、已过期或被篡改", requestId, executionId);
+        return invalidInput(I18n.message("error.cursor.invalid"), requestId, executionId);
     }
 
     private record CursorValue(long snapshotVersion, long afterCharacterId,

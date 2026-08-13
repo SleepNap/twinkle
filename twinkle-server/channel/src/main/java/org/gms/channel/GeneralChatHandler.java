@@ -2,6 +2,7 @@ package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -40,12 +41,12 @@ public final class GeneralChatHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到普通聊天");
+            session.close(I18n.message("error.chat.outside_stage"));
             return;
         }
         Character character = session.getAttr("character");
         if (character == null) {
-            session.close("未进图收到普通聊天");
+            session.close(I18n.message("error.chat.not_in_map"));
             return;
         }
         if (packet.available() < 2) {
@@ -56,12 +57,12 @@ public final class GeneralChatHandler implements PacketHandler {
         try {
             text = packet.readString().trim();
         } catch (RuntimeException e) {
-            session.close("普通聊天包格式非法");
+            session.close(I18n.message("error.chat.invalid_packet"));
             return;
         }
         int show = packet.available() > 0 ? packet.readByte() & 0xFF : 0;
         if (text.isEmpty() || text.length() > MAX_CHAT_LENGTH) {
-            sendNotice(session, "聊天内容必须为 1-" + MAX_CHAT_LENGTH + " 个字符。");
+            sendNotice(session, I18n.message("game.chat.length_invalid", MAX_CHAT_LENGTH));
             return;
         }
 
@@ -77,21 +78,21 @@ public final class GeneralChatHandler implements PacketHandler {
 
     private void handleAgentQuestion(PacketSession session, Character character, String question) {
         if (question.isEmpty()) {
-            sendNotice(session, "用法：@gm 你的问题");
+            sendNotice(session, I18n.message("game.chat.gm_usage"));
             return;
         }
         if (!agent.available()) {
-            sendNotice(session, "AI 值班 GM 当前未启用。");
+            sendNotice(session, I18n.message("game.chat.gm_disabled"));
             return;
         }
         long retryAfterSeconds = reserveRequest(character.getId());
         if (retryAfterSeconds > 0) {
-            sendNotice(session, "请求过于频繁，请约 " + retryAfterSeconds + " 秒后再试。");
+            sendNotice(session, I18n.message("game.chat.gm_rate_limited", retryAfterSeconds));
             return;
         }
 
         long expectedSessionId = session.sessionId();
-        sendNotice(session, "AI 值班 GM 已受理，只会读取证，不会修改角色数据。");
+        sendNotice(session, I18n.message("game.chat.gm_accepted"));
         PlayerSupportAgent.PlayerQuestion request = new PlayerSupportAgent.PlayerQuestion(
                 character.getId(), character.getName(), expectedSessionId, question);
         agent.ask(request).whenComplete((reply, error) -> {
@@ -101,14 +102,14 @@ public final class GeneralChatHandler implements PacketHandler {
                 return;
             }
             if (error != null || reply == null || reply.text() == null || reply.text().isBlank()) {
-                log.warn("玩家值班 GM 调用失败: characterId={}, sessionId={}",
+                log.warn(I18n.message("log.chat.gm_call_failed"),
                         character.getId(), expectedSessionId, error);
-                sendNotice(session, "AI 值班 GM 暂时无法回答，请稍后重试。");
+                sendNotice(session, I18n.message("game.chat.gm_error"));
                 return;
             }
             sendChunkedNotice(session, reply.text());
             if (!reply.auditRefs().isEmpty()) {
-                sendNotice(session, "取证审计号：" + String.join(",", reply.auditRefs()));
+                sendNotice(session, I18n.message("game.chat.gm_audit_refs", String.join(",", reply.auditRefs())));
             }
         });
     }
@@ -135,7 +136,7 @@ public final class GeneralChatHandler implements PacketHandler {
         String normalized = text.replace('\r', ' ').replace('\n', ' ').trim();
         for (int start = 0; start < normalized.length(); start += NOTICE_CHUNK_LENGTH) {
             int end = Math.min(normalized.length(), start + NOTICE_CHUNK_LENGTH);
-            sendNotice(session, "[AI值班GM] " + normalized.substring(start, end));
+            sendNotice(session, I18n.message("game.chat.gm_reply_prefix", normalized.substring(start, end)));
         }
     }
 

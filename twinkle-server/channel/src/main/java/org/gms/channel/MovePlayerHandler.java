@@ -3,6 +3,7 @@ package org.gms.channel;
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.map.MapleMap;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketHandler;
@@ -40,12 +41,12 @@ public final class MovePlayerHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到移动包");
+            session.close(I18n.message("error.move.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到移动包");
+            session.close(I18n.message("error.move.not_in_map"));
             return;
         }
         MapleMap map = chr.getMapObject();
@@ -118,7 +119,7 @@ public final class MovePlayerHandler implements PacketHandler {
                 case 14 -> pos += 9;         // 下跳未定，跳过
                 case 21 -> pos += 3;         // Aran 特殊，跳过
                 default -> {
-                    log.warn("未知移动片段 command={}，丢弃移动包", command);
+                    log.warn(I18n.message("log.move.unknown_fragment"), command);
                     return null;
                 }
             }

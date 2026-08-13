@@ -3,6 +3,7 @@ package org.gms.channel;
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.event.EventBus;
+import org.gms.i18n.I18n;
 import org.gms.message.MessageTargets;
 import org.gms.message.WhisperRequest;
 import org.gms.net.opcodes.SendOpcode;
@@ -45,12 +46,12 @@ public final class WhisperHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到悄悄话");
+            session.close(I18n.message("error.whisper.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到悄悄话");
+            session.close(I18n.message("error.whisper.not_in_map"));
             return;
         }
 
@@ -68,7 +69,7 @@ public final class WhisperHandler implements PacketHandler {
         // 定位表查目标频道
         Long toId = resolvePlayerIdByName(toName);
         if (toId == null) {
-            sendWhisperResult(session, toName, "目标玩家不在线");
+            sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
             return;
         }
         int toChannel = intercoord.locate(toId).orElse(-1);
@@ -80,13 +81,13 @@ public final class WhisperHandler implements PacketHandler {
             if (target != null) {
                 target.send(whisperPacket(req));
             } else {
-                sendWhisperResult(session, toName, "目标玩家不在线");
+                sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
             }
         } else if (toChannel > 0) {
             // 跨频道：经消息总线投递目标频道（总线不存状态，只负责送达）
             eventBus.send(MessageTargets.channel(toChannel), req);
         } else {
-            sendWhisperResult(session, toName, "目标玩家不在线");
+            sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
         }
     }
 

@@ -8,6 +8,7 @@ import org.gms.ai.model.AiModelBundle;
 import org.gms.ai.model.tool.AgentToolAudit;
 import org.gms.data.entity.AiUsageEntity;
 import org.gms.data.repo.AiUsageRepository;
+import org.gms.i18n.I18n;
 import org.gms.service.agent.ServerAgentService;
 
 import java.nio.charset.StandardCharsets;
@@ -89,7 +90,7 @@ public final class AiFacade implements ServerAgentService {
                 return agentReply;
             }
         } catch (RuntimeException e) {
-            log.error("AI 值班 GM 调查异常: conversationId={}", safeConversationId, e);
+            log.error(I18n.message("log.ai.investigation_error"), safeConversationId, e);
             throw e;
         } finally {
             if (active.decrementAndGet() == 0) {
@@ -180,7 +181,7 @@ public final class AiFacade implements ServerAgentService {
         try {
             usageRepository.insert(usage);
         } catch (RuntimeException e) {
-            log.warn("AI 使用记录落库失败（不影响对话）", e);
+            log.warn(I18n.message("log.ai.usage_record_failed"), e);
         }
     }
 
@@ -233,14 +234,14 @@ public final class AiFacade implements ServerAgentService {
     private static String validatedConversationId(String conversationId) {
         String value = blankDefault(conversationId, "conv-" + UUID.randomUUID());
         if (!value.matches("[A-Za-z0-9._:-]{1,64}")) {
-            throw new IllegalArgumentException("conversationId 格式非法");
+            throw new IllegalArgumentException(I18n.message("error.ai.conversation_id_invalid"));
         }
         return value;
     }
 
     private static String validatedMessage(String message) {
         if (message == null || message.isBlank() || message.length() > 2000) {
-            throw new IllegalArgumentException("message 必须为 1-2000 个字符");
+            throw new IllegalArgumentException(I18n.message("error.ai.message_length"));
         }
         return message.trim();
     }
@@ -255,7 +256,7 @@ public final class AiFacade implements ServerAgentService {
                     .digest(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest, 0, 12);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("JDK 缺少 SHA-256", e);
+            throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "SHA-256"), e);
         }
     }
 

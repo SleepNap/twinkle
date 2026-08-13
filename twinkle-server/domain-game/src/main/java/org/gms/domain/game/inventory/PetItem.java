@@ -2,6 +2,7 @@ package org.gms.domain.game.inventory;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.gms.i18n.I18n;
 
 /**
  * 宠物现金物品实例。
@@ -26,7 +27,7 @@ public class PetItem extends Item {
     public PetItem(int itemId, int petId) {
         super(itemId);
         if (petId <= 0) {
-            throw new IllegalArgumentException("宠物实例 id 必须为正数");
+            throw new IllegalArgumentException(I18n.message("error.pet.invalid_pet_id"));
         }
         setPetId(petId);
         this.petName = "";

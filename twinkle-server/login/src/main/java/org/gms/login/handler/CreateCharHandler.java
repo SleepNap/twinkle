@@ -5,6 +5,7 @@ import org.gms.data.entity.Account;
 import org.gms.data.entity.Character;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -38,12 +39,12 @@ public final class CreateCharHandler implements PacketHandler {
     public void handle(PacketSession session, InPacket packet) {
         // 建角发生在角色列表界面（CHARLIST 阶段）；登录态兜底用 AUTHED 兼容
         if (session.stage() != SessionStage.CHARLIST && session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到创建角色");
+            session.close(I18n.message("error.create_char.outside_stage"));
             return;
         }
         Account account = session.getAttr("account");
         if (account == null) {
-            session.close("未登录收到创建角色");
+            session.close(I18n.message("error.create_char.not_logged_in"));
             return;
         }
         String name = packet.readString();
@@ -60,7 +61,7 @@ public final class CreateCharHandler implements PacketHandler {
 
         // 防伪造：造型参数必须是 v83 默认建角可选值（思路参考 BeiDou isNewCharDefault* 校验集）
         if (!isDefaultLook(job, gender, face, hair, hairColor, skinColor, top, bottom, shoes, weapon)) {
-            log.warn("非法建角参数: 账号={}, 职业={}, 性别={}", account.getName(), job, gender);
+            log.warn(I18n.message("log.create_char.invalid_params"), account.getName(), job, gender);
             session.send(LoginPacketFactory.createCharFailed(9));
             return;
         }
@@ -69,11 +70,11 @@ public final class CreateCharHandler implements PacketHandler {
                 account.getId(), 0, name, job, face, hair + hairColor, skinColor,
                 top, bottom, shoes, weapon, gender);
         if (chr == null) {
-            log.warn("建角失败: 账号={}, 名字={}（名字不可用或已存在）", account.getName(), name);
+            log.warn(I18n.message("log.create_char.failed"), account.getName(), name);
             session.send(LoginPacketFactory.createCharFailed(9));
             return;
         }
-        log.info("账号 {} 创建角色: {} (id={}, job={})", account.getName(), name, chr.getId(), job);
+        log.info(I18n.message("log.create_char.created"), account.getName(), name, chr.getId(), job);
         // 建角成功后客户端不会重发角色列表，须把新角色追加进 session 缓存的选角列表，
         // 否则 CharSelectHandler 按缓存校验时误判"选角越权"（新角色不在旧列表里）。
         List<Character> characters = session.getAttr("characters");

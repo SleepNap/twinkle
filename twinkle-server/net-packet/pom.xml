@@ -14,5 +14,11 @@
     <name>twinkle-net-packet</name>
     <description>v83 opcode、HandlerRegistry、PacketCodec（不依赖业务）</description>
 
-    <!-- 无内部依赖：v83 协议字节级最底层 -->
+    <dependencies>
+        <!-- i18n 静态门面 org.gms.i18n.I18n（静态工具/HandlerRegistry 的日志与异常文案统一经此解析，见 docs/archived/i18n.md） -->
+        <dependency>
+            <groupId>org.gms</groupId>
+            <artifactId>twinkle-core</artifactId>
+        </dependency>
+    </dependencies>
 </project>

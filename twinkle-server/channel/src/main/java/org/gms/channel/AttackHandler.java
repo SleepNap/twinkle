@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.mob.MapleMonster;
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.OutPacket;
@@ -74,12 +75,12 @@ public final class AttackHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
-            session.close("阶段外收到攻击包");
+            session.close(I18n.message("error.attack.outside_stage"));
             return;
         }
         Character chr = session.getAttr("character");
         if (chr == null) {
-            session.close("未进图收到攻击包");
+            session.close(I18n.message("error.attack.not_in_map"));
             return;
         }
         MapleMap map = chr.getMapObject();

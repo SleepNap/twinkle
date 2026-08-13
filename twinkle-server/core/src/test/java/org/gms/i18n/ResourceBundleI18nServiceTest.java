@@ -2,9 +2,14 @@ package org.gms.i18n;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Locale;
+import java.util.Properties;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ResourceBundleI18nServiceTest {
 
@@ -22,8 +27,38 @@ class ResourceBundleI18nServiceTest {
 
     @Test
     void rejectsUnsupportedServerLanguage() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new ResourceBundleI18nService("fr-FR"))
+        assertThatThrownBy(() -> new ResourceBundleI18nService("fr-FR"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fr-FR");
+    }
+
+    @Test
+    void logTemplateKeepsSlf4jPlaceholderWhenNoArgs() {
+        ResourceBundleI18nService service = new ResourceBundleI18nService("zh-CN");
+        // 日志 key：无参 message() 返回原始 {} 模板，参数交给 log4j 填充
+        assertThat(service.message("log.tick.started")).isEqualTo("GameTickLoop 启动，间隔 {}ms");
+    }
+
+    @Test
+    void exceptionMessageInterpolatesWithMessageFormat() {
+        ResourceBundleI18nService service = new ResourceBundleI18nService("zh-CN");
+        assertThat(service.message("error.plugin.jar_not_found", "com.acme", "/plugins"))
+                .isEqualTo("插件 jar 未找到: com.acme（目录=/plugins）");
+    }
+
+    @Test
+    void zhCnAndEnUsHaveMatchingKeys() throws IOException {
+        Set<String> zh = loadKeys("messages_zh_CN.properties");
+        Set<String> en = loadKeys("messages_en_US.properties");
+        assertThat(en).isEqualTo(zh);
+    }
+
+    private static Set<String> loadKeys(String resourceName) throws IOException {
+        Properties props = new Properties();
+        try (InputStream in = ResourceBundleI18nServiceTest.class.getClassLoader()
+                .getResourceAsStream("org/gms/i18n/" + resourceName)) {
+            props.load(in);
+        }
+        return props.stringPropertyNames();
     }
 }

@@ -1,6 +1,7 @@
 package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.event.InProcessEventBus;
 import org.gms.message.MessageTargets;
 import org.gms.service.intercoord.IntercoordService;
@@ -63,7 +64,7 @@ public final class CoordinatorFrameRouter {
             case EVENT -> handleEvent(conn, frame);
             case RPC -> handleRpc(conn, frame);
             case RPC_RESPONSE -> handleRpcResponse(conn, frame);
-            default -> log.warn("coordinator 收到不可路由帧类型: {} messageId={}", frame.type(), frame.messageId());
+            default -> log.warn(I18n.message("log.coordinator.unroutable_frame"), frame.type(), frame.messageId());
         }
     }
 
@@ -79,14 +80,14 @@ public final class CoordinatorFrameRouter {
         InternalProtocol.RpcRequest req = JsonCodec.decode(frame.payloadText(),
                 InternalProtocol.RpcRequest.class.getName());
         if (req == null) {
-            sendRpcError(conn, frame.messageId(), "RPC 请求解析失败");
+            sendRpcError(conn, frame.messageId(), I18n.message("error.rpc.request_parse_failed"));
             return;
         }
         // 目标频道编码在方法名前缀 "channel:{id}:"（管理进程→频道运维操作）
         if (req.method() != null && req.method().startsWith("channel:")) {
             int colon = req.method().indexOf(':', "channel:".length());
             if (colon < 0) {
-                sendRpcError(conn, frame.messageId(), "RPC 目标频道格式非法");
+                sendRpcError(conn, frame.messageId(), I18n.message("error.rpc.target_channel_format_invalid"));
                 return;
             }
             String idStr = req.method().substring("channel:".length(), colon);
@@ -94,7 +95,7 @@ public final class CoordinatorFrameRouter {
                 int channelId = Integer.parseInt(idStr);
                 InternalConnection target = registry.channel(channelId);
                 if (target == null || !target.isActive()) {
-                    sendRpcError(conn, frame.messageId(), "目标频道未连接: " + channelId);
+                    sendRpcError(conn, frame.messageId(), I18n.message("error.rpc.target_channel_unconnected", channelId));
                     return;
                 }
                 // 转发（method 去掉前缀，保留原 messageId 供响应关联）；记住来源连接
@@ -104,7 +105,7 @@ public final class CoordinatorFrameRouter {
                 target.send(new DefaultInternalFrame(InternalFrame.MessageType.RPC,
                         frame.messageId(), JsonCodec.encode(inner)));
             } catch (NumberFormatException e) {
-                sendRpcError(conn, frame.messageId(), "RPC 目标频道非法: " + idStr);
+                sendRpcError(conn, frame.messageId(), I18n.message("error.rpc.target_channel_invalid", idStr));
             }
             return;
         }
@@ -132,13 +133,13 @@ public final class CoordinatorFrameRouter {
         InternalProtocol.RegisterPayload reg = JsonCodec.decode(frame.payloadText(),
                 InternalProtocol.RegisterPayload.class.getName());
         if (reg == null) {
-            log.warn("REGISTER 帧负载解析失败");
+            log.warn(I18n.message("log.coordinator.register_parse_failed"));
             return;
         }
         if (reg.admin()) {
             registry.registerAdmin(conn);
             // 注册表里有频道连接时，把已有频道信息回给管理进程（admin 查询 channels 用）
-            log.info("管理进程已注册（连接数={}）", registry.channelsSnapshot().size());
+            log.info(I18n.message("log.coordinator.admin_registered"), registry.channelsSnapshot().size());
         } else {
             registry.registerChannel(reg.channelId(), reg.host(), reg.port(), conn);
             intercoord.registerChannel(reg.channelId(), reg.host(), reg.port(), reg.onlineCount());
@@ -158,7 +159,7 @@ public final class CoordinatorFrameRouter {
         InternalProtocol.EventPayload event = JsonCodec.decode(frame.payloadText(),
                 InternalProtocol.EventPayload.class.getName());
         if (event == null) {
-            log.warn("EVENT 帧负载解析失败");
+            log.warn(I18n.message("log.coordinator.event_parse_failed"));
             return;
         }
         // 先本地派发（管理进程 = coordinator 进程，架构 4.6.2：OnlinePlayerMirror 等订阅者在此）。
@@ -183,10 +184,10 @@ public final class CoordinatorFrameRouter {
                 if (conn != null && conn.isActive()) {
                     forwardEvent(conn, event);
                 } else {
-                    log.debug("EVENT 目标频道未连接，丢弃: target={}", target);
+                    log.debug(I18n.message("log.coordinator.event_channel_unconnected"), target);
                 }
             } catch (NumberFormatException e) {
-                log.warn("EVENT target 非法: {}", target);
+                log.warn(I18n.message("log.coordinator.event_target_invalid"), target);
             }
             return;
         }
@@ -198,7 +199,7 @@ public final class CoordinatorFrameRouter {
         }
         // 其它 target（如 online-player-events）→ 管理进程已本地派发（架构 4.6.2 管理进程=coordinator）。
         // 若未来管理进程独立部署，此处补转发管理进程连接（当前不转发防镜像重复）。
-        log.debug("EVENT 非频道 target 仅本地派发: {}", target);
+        log.debug(I18n.message("log.coordinator.event_local_only"), target);
     }
 
     private void forwardEvent(InternalConnection conn, InternalProtocol.EventPayload event) {

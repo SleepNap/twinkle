@@ -1,5 +1,8 @@
 package org.gms.hotreload.versioned;
 
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +13,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 版本门契约测试（架构 5.3）：版本一致放行、迟到写识别为 STALE、换代版本递增、未来版本报错。
  */
 class VersionGateTest {
+
+    @BeforeEach
+    void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     @Test
     @DisplayName("版本一致 → ALLOW")

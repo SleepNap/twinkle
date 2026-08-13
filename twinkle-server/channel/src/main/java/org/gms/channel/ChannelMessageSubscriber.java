@@ -2,6 +2,7 @@ package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
+import org.gms.i18n.I18n;
 import org.gms.message.MessageTargets;
 import org.gms.message.NoticeMessage;
 import org.gms.message.WhisperRequest;
@@ -42,7 +43,7 @@ public final class ChannelMessageSubscriber {
     private void deliverWhisper(WhisperRequest req) {
         // 定位校验：目标必须在本频道（防跨频道消息投到错误频道）
         if (intercoord.locate(req.toId()).orElse(-1) != channelId) {
-            log.warn("悄悄话投递目标不在本频道: toId={} channel={}", req.toId(), channelId);
+            log.warn(I18n.message("log.whisper.target_not_in_channel"), req.toId(), channelId);
             return;
         }
         PacketSession target = sessions.get(req.toId());
@@ -57,6 +58,6 @@ public final class ChannelMessageSubscriber {
         for (PacketSession s : sessions.all()) {
             s.send(packet);
         }
-        log.info("频道 {} 收到公告: {}", channelId, notice.content());
+        log.info(I18n.message("log.channel.notice_received"), channelId, notice.content());
     }
 }

@@ -6,6 +6,7 @@ import java.net.URLClassLoader;
 import java.util.Objects;
 import java.util.Set;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 可重载模块 classloader（架构 5.1：可重载逻辑隔离在模块 classloader，状态不进该 classloader）。
@@ -91,12 +92,12 @@ public class ReloadableClassLoader extends URLClassLoader {
 
     /** 卸载钩子：释放到模块的引用（GC 接管旧 loader 及其实例）。 */
     public void dispose() {
-        log.info("卸载可重载模块 loader: {}", moduleName);
+        log.info(I18n.message("log.reload.loader_dispose"), moduleName);
         // URLClassLoader.close() 关闭打开的 jar 文件句柄
         try {
             close();
         } catch (Exception e) {
-            log.warn("关闭模块 loader 异常: {}", moduleName, e);
+            log.warn(I18n.message("log.reload.loader_close_failed"), moduleName, e);
         }
     }
 

@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.Account;
 import org.gms.data.repo.AccountRepository;
 import org.gms.login.LoginPacketFactory;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -30,12 +31,12 @@ public final class SetGenderHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到设置性别");
+            session.close(I18n.message("error.gender.outside_stage"));
             return;
         }
         Account account = session.getAttr("account");
         if (account == null) {
-            session.close("未登录收到设置性别");
+            session.close(I18n.message("error.gender.not_logged_in"));
             return;
         }
         if (account.getGender() != 10) {
@@ -44,13 +45,13 @@ public final class SetGenderHandler implements PacketHandler {
         }
         int confirmed = packet.readByte();
         if (confirmed != 1) {
-            session.close("性别确认失败");
+            session.close(I18n.message("error.gender.confirm_failed"));
             return;
         }
         int gender = packet.readByte();
         account.setGender(gender);
         accountRepository.update(account);
-        log.info("账号 {} 设置性别: {}", account.getName(), gender);
+        log.info(I18n.message("log.gender.set"), account.getName(), gender);
         session.send(LoginPacketFactory.loginStatusSuccess(
                 account.getId(), account.getGender(), account.getName()));
     }

@@ -3,6 +3,7 @@ package org.gms.login.handler;
 import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.Character;
 import org.gms.login.LoginPacketFactory;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -32,7 +33,7 @@ public final class CharSelectHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.CHARLIST) {
-            session.close("阶段外收到选角包");
+            session.close(I18n.message("error.char_select.outside_stage"));
             return;
         }
         long charId = packet.readInt();
@@ -45,13 +46,13 @@ public final class CharSelectHandler implements PacketHandler {
                 .findFirst()
                 .orElse(null);
         if (selected == null) {
-            session.close("选角越权: charId=" + charId);
+            session.close(I18n.message("error.char_select.forbidden", charId));
             return;
         }
 
         session.setAttr("selectedChar", selected);
         session.transition(SessionStage.SELECTED);
-        log.info("选中角色: {} (id={})", selected.getName(), charId);
+        log.info(I18n.message("log.char_select.selected"), selected.getName(), charId);
         session.send(LoginPacketFactory.serverIp(channelIp, channelPort, (int) charId));
     }
 }

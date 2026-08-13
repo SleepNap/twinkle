@@ -9,7 +9,10 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.service.agent.PlayerSupportAgent;
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
 import org.gms.service.agent.UnavailablePlayerSupportAgent;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -23,6 +26,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** 玩家聊天接入值班 GM 的协议、异步回包和限流测试。 */
 class GeneralChatHandlerTest {
+
+    @BeforeEach
+    void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     @Test
     void chatTextPacketMatchesV83Layout() {

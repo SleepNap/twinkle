@@ -2,6 +2,7 @@ package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.login.LoginPacketFactory;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -21,7 +22,7 @@ public final class ServerStatusRequestHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到服务器状态请求");
+            session.close(I18n.message("error.server_status.outside_stage"));
             return;
         }
         packet.readShort(); // world id

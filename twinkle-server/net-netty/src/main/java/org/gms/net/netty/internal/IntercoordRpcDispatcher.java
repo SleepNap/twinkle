@@ -1,6 +1,7 @@
 package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.util.Optional;
@@ -36,7 +37,7 @@ public final class IntercoordRpcDispatcher {
             String value = invoke(method, args);
             return InternalProtocol.RpcResponse.ok(value);
         } catch (Exception e) {
-            log.error("RPC 分发失败: method={}", method, e);
+            log.error(I18n.message("log.rpc.dispatch_failed"), method, e);
             return InternalProtocol.RpcResponse.fail(e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
@@ -83,7 +84,7 @@ public final class IntercoordRpcDispatcher {
             case "write" -> String.valueOf(intercoord.write(strArg(args, 0), objArg(args, 1), longArg(args, 2)));
             case "increment" -> String.valueOf(intercoord.increment(strArg(args, 0), longArg(args, 1)));
             case "storeSnapshot" -> JsonCodec.encode(intercoord.storeSnapshot());
-            default -> throw new IllegalArgumentException("未知 RPC 方法: " + method);
+            default -> throw new IllegalArgumentException(I18n.message("error.rpc.unknown_method", method));
         };
     }
 

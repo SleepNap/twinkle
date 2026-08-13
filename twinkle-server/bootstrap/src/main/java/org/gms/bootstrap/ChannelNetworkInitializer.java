@@ -5,6 +5,7 @@ import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelServer;
 import org.gms.net.packet.HandlerRegistry;
@@ -31,7 +32,7 @@ public final class ChannelNetworkInitializer {
                                      ChannelServer channelServer,
                                      @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int port) {
         channelHandlers.register(registry);
-        log.info("频道 handler 注册完成，共 {} 个贡献点", registry.registeredCount());
+        log.info(I18n.message("log.bootstrap.channel_handlers_registered"), registry.registeredCount());
         channelServer.start(port);
     }
 }

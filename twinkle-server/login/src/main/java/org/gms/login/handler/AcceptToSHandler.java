@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.Account;
 import org.gms.data.repo.AccountRepository;
 import org.gms.login.LoginPacketFactory;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
@@ -30,21 +31,21 @@ public final class AcceptToSHandler implements PacketHandler {
     @Override
     public void handle(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.AUTHED) {
-            session.close("阶段外收到接受条款");
+            session.close(I18n.message("error.accept_tos.outside_stage"));
             return;
         }
         Account account = session.getAttr("account");
         if (account == null) {
-            session.close("未登录收到接受条款");
+            session.close(I18n.message("error.accept_tos.not_logged_in"));
             return;
         }
         if (packet.available() == 0 || packet.readByte() != 1) {
-            session.close("条款确认失败");
+            session.close(I18n.message("error.accept_tos.confirm_failed"));
             return;
         }
         account.setTos(1);
         accountRepository.update(account);
-        log.info("账号 {} 接受服务条款", account.getName());
+        log.info(I18n.message("log.accept_tos.accepted"), account.getName());
         session.send(LoginPacketFactory.loginStatusSuccess(
                 account.getId(), account.getGender(), account.getName()));
     }

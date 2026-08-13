@@ -4,6 +4,7 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.ApiKeyRecord;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.i18n.I18n;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -45,9 +46,9 @@ public final class ApiKeyService {
         this.serverIdentity = serverIdentity;
         this.secureRandom = secureRandom;
         if (this.bootstrapKey.isBlank()) {
-            log.warn("twish 能力面未配置 TWINKLE_API_BOOTSTRAP_KEY：公开契约可读，其余 /api/v1 请求均拒绝，直至配置初始管理密钥");
+            log.warn(I18n.message("log.apikey.bootstrap_missing"));
         } else if (this.bootstrapKey.length() < 32) {
-            log.warn("TWINKLE_API_BOOTSTRAP_KEY 长度不足 32 字符，请尽快更换高熵密钥");
+            log.warn(I18n.message("log.apikey.bootstrap_short"));
         }
     }
 
@@ -67,7 +68,7 @@ public final class ApiKeyService {
             return persistNewKey(issuer, prefix, normalizedName, ownerAccountId, scopes,
                     normalizedExpiry, null);
         }
-        throw new IllegalStateException("无法生成唯一 API-key 前缀");
+        throw new IllegalStateException(I18n.message("error.apikey.cannot_generate_prefix"));
     }
 
     public Optional<ApiPrincipal> authenticate(String token) {
@@ -223,10 +224,10 @@ public final class ApiKeyService {
 
     private void requireIssuerMayGrant(ApiPrincipal issuer, Set<String> scopes) {
         if (!serverIdentity.serverId().equals(issuer.serverId())) {
-            throw new IllegalArgumentException("Credential 无权为其他服务器签发 key");
+            throw new IllegalArgumentException(I18n.message("error.apikey.cannot_grant_cross_server"));
         }
         if (!issuer.scopes().contains("*") && !issuer.scopes().containsAll(scopes)) {
-            throw new IllegalArgumentException("新 key 的 scope 不能超过签发者");
+            throw new IllegalArgumentException(I18n.message("error.apikey.scope_exceeds_issuer"));
         }
     }
 
@@ -240,20 +241,20 @@ public final class ApiKeyService {
     private static String normalizeDisplayName(String displayName) {
         String normalized = displayName == null ? "" : displayName.trim();
         if (normalized.isBlank() || normalized.length() > 128) {
-            throw new IllegalArgumentException("displayName 必须为 1-128 个字符");
+            throw new IllegalArgumentException(I18n.message("error.apikey.display_name_length"));
         }
         return normalized;
     }
 
     private static Set<String> normalizeScopes(Set<String> requestedScopes) {
         if (requestedScopes == null || requestedScopes.isEmpty()) {
-            throw new IllegalArgumentException("scopes 不能为空");
+            throw new IllegalArgumentException(I18n.message("error.apikey.scopes_empty"));
         }
         TreeSet<String> normalized = new TreeSet<>();
         for (String scope : requestedScopes) {
             String value = scope == null ? "" : scope.trim();
             if (!ApiScopes.SUPPORTED.contains(value)) {
-                throw new IllegalArgumentException("不支持的 scope: " + value);
+                throw new IllegalArgumentException(I18n.message("error.apikey.unsupported_scope", value));
             }
             normalized.add(value);
         }
@@ -263,21 +264,21 @@ public final class ApiKeyService {
     private static String normalizeExpiry(String expiresAt, String issuerExpiry) {
         if (expiresAt == null || expiresAt.isBlank()) {
             if (issuerExpiry != null) {
-                throw new IllegalArgumentException("新 key 的有效期不能超过签发者");
+                throw new IllegalArgumentException(I18n.message("error.apikey.expiry_exceeds_issuer"));
             }
             return null;
         }
         try {
             Instant parsed = Instant.parse(expiresAt.trim());
             if (!parsed.isAfter(Instant.now())) {
-                throw new IllegalArgumentException("expiresAt 必须晚于当前时间");
+                throw new IllegalArgumentException(I18n.message("error.apikey.expiry_not_future"));
             }
             if (issuerExpiry != null && parsed.isAfter(Instant.parse(issuerExpiry))) {
-                throw new IllegalArgumentException("新 key 的有效期不能超过签发者");
+                throw new IllegalArgumentException(I18n.message("error.apikey.expiry_exceeds_issuer"));
             }
             return parsed.toString();
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("expiresAt 必须是 ISO-8601 UTC 时间", e);
+            throw new IllegalArgumentException(I18n.message("error.apikey.expiry_invalid_format"), e);
         }
     }
 
@@ -349,7 +350,7 @@ public final class ApiKeyService {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("JDK 缺少 SHA-256", e);
+            throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "SHA-256"), e);
         }
     }
 

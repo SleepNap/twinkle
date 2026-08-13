@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 重启协调器状态机（架构 5.4 L4：DRAINING → 增量 FLUSH → 重启 → 恢复）。
@@ -102,7 +103,7 @@ public final class RestartCoordinator {
         this.lastFailure = cause;
         transition(Phase.FAILED);
         // 日志红线 9：log.error("描述", e)
-        log.error("重启编排失败，进程保持运行等待人工介入", cause);
+        log.error(I18n.message("log.restart.failed"), cause);
     }
 
     /** 复位到 RUNNING（恢复成功 / 人工确认后）。 */
@@ -118,13 +119,13 @@ public final class RestartCoordinator {
     private void transition(Phase next) {
         Phase prev = phase;
         phase = next;
-        log.info("RestartCoordinator 状态: {} → {}", prev, next);
+        log.info(I18n.message("log.restart.transition"), prev, next);
         for (Consumer<Phase> l : listeners) {
             try {
                 l.accept(next);
             } catch (RuntimeException e) {
                 // 监听器异常不影响状态机
-                log.error("状态监听器异常", e);
+                log.error(I18n.message("log.restart.listener_error"), e);
             }
         }
     }

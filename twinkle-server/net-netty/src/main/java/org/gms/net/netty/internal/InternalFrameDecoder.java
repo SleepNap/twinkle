@@ -6,6 +6,7 @@ import io.netty.handler.codec.ByteToMessageDecoder;
 
 import java.util.List;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 内部通信帧解码器（架构 4.5：进程间自定义二进制帧线格式）。
@@ -31,7 +32,7 @@ public final class InternalFrameDecoder extends ByteToMessageDecoder {
         in.markReaderIndex();
         short magic = in.readShort();
         if (magic != InternalFrameEncoder.MAGIC) {
-            log.warn("内部帧 magic 不符: {}，断开连接", Integer.toHexString(magic));
+            log.warn(I18n.message("log.internal.frame_bad_magic"), Integer.toHexString(magic));
             ctx.close();
             return;
         }
@@ -39,7 +40,7 @@ public final class InternalFrameDecoder extends ByteToMessageDecoder {
         long messageId = in.readLong();
         int payloadLen = in.readInt();
         if (payloadLen < 0 || payloadLen > InternalFrameEncoder.MAX_PAYLOAD) {
-            log.warn("内部帧负载长度非法: {}，断开连接", payloadLen);
+            log.warn(I18n.message("log.internal.frame_bad_length"), payloadLen);
             ctx.close();
             return;
         }
@@ -50,7 +51,7 @@ public final class InternalFrameDecoder extends ByteToMessageDecoder {
         }
         InternalFrame.MessageType type = fromOrdinal(typeOrdinal);
         if (type == null) {
-            log.warn("内部帧类型非法: {}", typeOrdinal);
+            log.warn(I18n.message("log.internal.frame_bad_type"), typeOrdinal);
             ctx.close();
             return;
         }

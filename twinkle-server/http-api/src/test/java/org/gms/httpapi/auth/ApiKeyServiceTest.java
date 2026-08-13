@@ -3,6 +3,9 @@ package org.gms.httpapi.auth;
 import org.gms.data.entity.ApiKeyRecord;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.httpapi.identity.ServerIdentity;
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
@@ -16,6 +19,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** API-key 的明文隔离、scope 和吊销行为。 */
 public final class ApiKeyServiceTest {
+
+    @BeforeEach
+    public void setUp() {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+    }
 
     @Test
     public void issuedTokenAuthenticatesButPlaintextIsNeverStored() {

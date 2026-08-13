@@ -8,6 +8,7 @@ import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
 import org.gms.net.netty.internal.AdminRpcDispatcher;
@@ -92,7 +93,7 @@ public class SplitConfig {
                                          @Property(name = "twinkle.coordinator.port", defaultValue = "8510") int port) {
         InternalServer server = new InternalServer(router.connectionHandler());
         server.start(port);
-        log.info("coordinator 内部通信已启动，监听端口: {}", port);
+        log.info(I18n.message("log.bootstrap.coordinator_started"), port);
         return server;
     }
 
@@ -129,7 +130,7 @@ public class SplitConfig {
             conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
                     conn.nextMessageId(), JsonCodec.encode(
                     new InternalProtocol.RegisterPayload(channelId, channelHost, channelPort, false, 0))));
-            log.info("频道 {} 已上报 coordinator: {}:{}", channelId, channelHost, channelPort);
+            log.info(I18n.message("log.bootstrap.channel_reported"), channelId, channelHost, channelPort);
         });
         link.start();
         return link;

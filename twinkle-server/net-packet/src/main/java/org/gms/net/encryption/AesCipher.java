@@ -4,6 +4,7 @@ package org.gms.net.encryption;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * v83 会话加密核心（AES-OFB 变种，字节级兼容，红线 1）。
@@ -87,8 +88,8 @@ public final class AesCipher {
             aesBlock.init(javax.crypto.Cipher.ENCRYPT_MODE, SESSION_KEY);
         } catch (Exception e) {
             // 日志红线 9：log.error("描述", e)
-            log.error("AES 加密器初始化失败", e);
-            throw new IllegalStateException("AES 加密器初始化失败", e);
+            log.error(I18n.message("log.aes.init_failed"), e);
+            throw new IllegalStateException(I18n.message("error.aes.init_failed"), e);
         }
         this.iv = iv.getBytes();
         this.initialIv = iv.getBytes();
@@ -170,8 +171,8 @@ public final class AesCipher {
             byte[] result = aesBlock.doFinal(block);
             return result.length == block.length ? result : java.util.Arrays.copyOf(result, block.length);
         } catch (Exception e) {
-            log.error("AES 块变换失败", e);
-            throw new IllegalStateException("AES 块变换失败", e);
+            log.error(I18n.message("log.aes.transform_failed"), e);
+            throw new IllegalStateException(I18n.message("error.aes.transform_failed"), e);
         }
     }
 

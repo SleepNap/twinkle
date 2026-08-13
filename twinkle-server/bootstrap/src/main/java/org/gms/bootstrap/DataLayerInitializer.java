@@ -5,6 +5,7 @@ import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.config.ConfigFacade;
 import org.gms.dialect.DbDialectRegistry;
 
@@ -48,7 +49,7 @@ public final class DataLayerInitializer implements ApplicationEventListener<Serv
     @Override
     public void onApplicationEvent(ServerStartupEvent event) {
         // 构造函数参数注入即强制装配（Bean 实例化时依赖图解析）。
-        log.info("数据层装配完成：方言={}, 配置项版本={}",
+        log.info(I18n.message("log.bootstrap.data_layer_ready"),
                 dialectRegistry.resolveByUrl("").id() == null ? "?" : currentDialectName(),
                 configFacade.currentVersion());
     }

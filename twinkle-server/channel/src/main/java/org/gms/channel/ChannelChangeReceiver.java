@@ -3,6 +3,7 @@ package org.gms.channel;
 import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.event.ReliableReceiver;
+import org.gms.i18n.I18n;
 import org.gms.message.ChangeChannelRequest;
 import org.gms.message.MessageTargets;
 import org.gms.service.intercoord.IntercoordService;
@@ -50,7 +51,7 @@ public final class ChannelChangeReceiver {
     private void apply(ChangeChannelRequest req) {
         // 定位表确认迁移（幂等：目标频道 = 本频道）
         intercoord.movePlayer(req.playerId(), channelId);
-        log.info("玩家 {} 迁移到本频道 {}（from={}, reason={}）",
+        log.info(I18n.message("log.channel.change.received"),
                 req.playerId(), channelId, req.fromChannel(), req.reason());
     }
 

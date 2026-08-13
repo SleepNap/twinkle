@@ -5,6 +5,7 @@ import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.login.handler.LoginHandlerRegistrar;
 import org.gms.net.netty.LoginServer;
 import org.gms.net.packet.HandlerRegistry;
@@ -40,7 +41,7 @@ public final class NetworkServerInitializer {
                                     @Property(name = "twinkle.server.name", defaultValue = "twinkle") String serverName,
                                     @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
         loginHandlers.register(registry, serverName, CHANNEL_IP, channelPort);
-        log.info("登录 handler 注册完成，共 {} 个贡献点", registry.registeredCount());
+        log.info(I18n.message("log.bootstrap.login_handlers_registered"), registry.registeredCount());
         loginServer.start(port);
     }
 }

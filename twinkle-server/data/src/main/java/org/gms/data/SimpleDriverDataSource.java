@@ -1,5 +1,7 @@
 package org.gms.data;
 
+import org.gms.i18n.I18n;
+
 import javax.sql.DataSource;
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -42,7 +44,7 @@ public final class SimpleDriverDataSource implements DataSource {
                 Class.forName("com.mysql.cj.jdbc.Driver");
             }
         } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("未找到 JDBC 驱动: " + url, e);
+            throw new IllegalStateException(I18n.message("error.data.jdbc_driver_not_found", url), e);
         }
     }
 

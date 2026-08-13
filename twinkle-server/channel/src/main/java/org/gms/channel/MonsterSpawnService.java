@@ -8,6 +8,7 @@ import org.gms.domain.game.map.SpawnPoint;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.domain.game.mob.MobData;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 
@@ -132,7 +133,7 @@ public final class MonsterSpawnService {
         MobData data = mobData.get(sp.getMonsterId());
         if (data == null) {
             missingMobData.incrementAndGet();
-            log.warn("刷怪缺 MobData: monsterId={}", sp.getMonsterId());
+            log.warn(I18n.message("log.monster.spawn_missing_data"), sp.getMonsterId());
             return null;
         }
         MapleMonster monster = new MapleMonster(data);

@@ -1,6 +1,7 @@
 package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.util.Map;
@@ -158,7 +159,7 @@ public final class RemoteIntercoordService implements IntercoordService {
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {
         InternalConnection conn = link.connection();
         if (conn == null) {
-            log.warn("RPC 调用时 coordinator 未连接: method={}（降级默认值）", method);
+            log.warn(I18n.message("log.intercoord.coordinator_unconnected"), method);
             return null;
         }
         try {
@@ -173,7 +174,7 @@ public final class RemoteIntercoordService implements IntercoordService {
             InternalFrame reply = fut.get(timeoutMillis, TimeUnit.MILLISECONDS);
             return JsonCodec.decode(reply.payloadText(), InternalProtocol.RpcResponse.class.getName());
         } catch (Exception e) {
-            log.warn("RPC 调用失败: method={}（降级默认值）", method);
+            log.warn(I18n.message("log.intercoord.rpc_failed"), method);
             return null;
         }
     }

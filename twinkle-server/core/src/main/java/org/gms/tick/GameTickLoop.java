@@ -4,6 +4,7 @@ package org.gms.tick;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.log4j.Log4j2;
+import org.gms.i18n.I18n;
 
 /**
  * 游戏循环单线程实现（架构 5.1：游戏 tick 单线程，换点干净——tick 帧边界暂停、卸载、
@@ -28,7 +29,7 @@ public final class GameTickLoop implements TickScheduler {
 
     public GameTickLoop(long intervalMillis) {
         if (intervalMillis <= 0) {
-            throw new IllegalArgumentException("intervalMillis 必须 > 0: " + intervalMillis);
+            throw new IllegalArgumentException(I18n.message("error.tick.invalid_interval", intervalMillis));
         }
         this.intervalMillis = intervalMillis;
     }
@@ -55,7 +56,7 @@ public final class GameTickLoop implements TickScheduler {
         }
         running = true;
         thread = Thread.ofPlatform().name("game-tick").daemon(true).start(this::loop);
-        log.info("GameTickLoop 启动，间隔 {}ms", intervalMillis);
+        log.info(I18n.message("log.tick.started"), intervalMillis);
     }
 
     @Override
@@ -65,19 +66,19 @@ public final class GameTickLoop implements TickScheduler {
             thread.interrupt();
             thread = null;
         }
-        log.info("GameTickLoop 停止，共 {} ticks", tickCount.get());
+        log.info(I18n.message("log.tick.stopped"), tickCount.get());
     }
 
     @Override
     public synchronized void pause() {
         paused = true;
-        log.info("GameTickLoop 暂停（安全点，tick={}）", tickCount.get());
+        log.info(I18n.message("log.tick.paused"), tickCount.get());
     }
 
     @Override
     public synchronized void resume() {
         paused = false;
-        log.info("GameTickLoop 恢复（tick={}）", tickCount.get());
+        log.info(I18n.message("log.tick.resumed"), tickCount.get());
     }
 
     @Override
@@ -114,7 +115,7 @@ public final class GameTickLoop implements TickScheduler {
                 handler.tick(count);
             } catch (RuntimeException e) {
                 lastTickError = e;
-                log.error("tick handler 异常（记录并继续）", e);
+                log.error(I18n.message("log.tick.handler_error"), e);
             }
         }
     }

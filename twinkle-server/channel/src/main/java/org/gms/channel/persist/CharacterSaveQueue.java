@@ -7,6 +7,7 @@ import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.data.repo.InventoryItemRepository;
 import org.gms.domain.game.Character;
+import org.gms.i18n.I18n;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,7 +91,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
                 persist(chr);
                 chr.clearDirty(savedVersion);
             } catch (RuntimeException e) {
-                log.error("角色存档失败: id={}", chr.getId(), e);
+                log.error(I18n.message("log.save.failed"), chr.getId(), e);
             } finally {
                 pending.remove(chr.getId());
             }
@@ -113,7 +114,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
             persist(chr);
             chr.clearDirty(savedVersion);
         } catch (RuntimeException e) {
-            log.error("角色同步存档失败: id={}", chr.getId(), e);
+            log.error(I18n.message("log.save.sync_failed"), chr.getId(), e);
         }
     }
 
@@ -186,9 +187,9 @@ public final class CharacterSaveQueue implements AutoCloseable {
             Thread.sleep(10);
         }
         if (pendingCount() > 0) {
-            log.warn("存档队列排空超时，仍有 {} 个待写角色", pendingCount());
+            log.warn(I18n.message("log.save.drain_timeout"), pendingCount());
         }
-        log.info("存档队列已排空");
+        log.info(I18n.message("log.save.drained"));
     }
 
     /** 当前待写角色数（观测，Sli.WRITE_QUEUE_DEPTH）。 */
