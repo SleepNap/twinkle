@@ -33,8 +33,8 @@ Web 控制台采用 React 19、Vite、Tailwind CSS v4 和 shadcn `radix-nova`，
 后台任务通过统一注册表提供有界执行历史、状态、耗时、失败摘要、调度启停和失败重试，
 现有 AI 每日总结是首个接入任务。
 
-详细范围与遗留见 [控制台路线图](twinkle-web/docs/console-roadmap.md)，视觉与组件纪律见
-[Web 设计规范](twinkle-web/docs/design-system.md)。
+详细范围与遗留见 [控制台路线图](docs/in-progress/console-roadmap.md)，视觉与组件纪律见
+[Web 设计规范](docs/archived/design/design-system.md)。
 
 ## 本地验证
 

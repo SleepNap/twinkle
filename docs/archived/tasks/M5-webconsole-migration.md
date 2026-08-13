@@ -40,7 +40,7 @@ Web 控制台（替代 JavaFX）、单库迁移、上线切换。
 
 - [x] `--profile` 装配的正式档位确认（默认 `single`，`BootstrapProfile.parse` 未知回落 SINGLE）
 - [x] 日志规范（log4j2，`log.error("描述", e)`，禁用 `e.printStackTrace()`，红线 9）——`LoggingDisciplineTest` 静态扫描守护
-- [x] 切换脚本 / 步骤——`scripts/start.sh` + `scripts/migrate-newmaple.sh` + `docs/ops/switch-to-production.md`
+- [x] 切换脚本 / 步骤——`scripts/start.sh` + `scripts/migrate-newmaple.sh` + `docs/archived/ops/switch-to-production.md`
 - [x] 灰度 / 回滚路径（CC 兜底：升级前挪玩家 → 重启 → CC 回来）——`scripts/rollback.sh` + 文档第 3/4 节
 
 ## 验收标准
@@ -80,4 +80,4 @@ Web 控制台（替代 JavaFX）、单库迁移、上线切换。
 **newmaple 兼容已删除**：用户明确"这是全新自研项目，不兼容 newmaple/北斗"。`NewMapleImporter`/
 `NewMapleImportMain`/`MigrationImportE2ETest`/`NewMapleImporterTest`/`V7QueststatusColumnsMigrationTest`/
 `migrate-newmaple.sh` 全部删除；`V7__queststatus_newmaple_columns` 并入 `quest_status` 建表（四列一次建全）。
-上文勾选的迁移/导入项不再适用——见 `docs/ops/switch-to-production.md` 新库自建说明。
+上文勾选的迁移/导入项不再适用——见 `docs/archived/ops/switch-to-production.md` 新库自建说明。

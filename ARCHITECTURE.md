@@ -58,8 +58,8 @@
 - **SQLite 规模验证（搜索核证）**：WAL 下实测 70K reads/s + 3.6K writes/s，读吞吐 2 倍于 MySQL、p99 读延迟低 19 倍；极限是"持续 >10 并发写/秒"而非"人数"——本架构低频批量写天然避开。**三件套做对即稳**：WAL + 单写连接 + busy_timeout。
 - **AI 选定 LangChain4j**：流式 + 工具调用同时支持是硬需求。
 - **框架选定 Micronaut 4**：轻量 + 中间件全主流。Vert.x 因响应式风格与命令式游戏逻辑割裂被否。
-- **Java 后台语言由服务端配置统一决定**：`twinkle.service.language` 使用 BCP 47（首批 `zh-CN`、`en-US`），日志、异常、HTTP 消息和系统文案统一经 `I18nService` 解析；客户端请求与账号不得覆盖。Web 控制台有独立 UI locale。错误码、opcode、字段 ID、JSON key 等机器契约保持稳定。WZ/脚本不参与该机制，继续按显式路径加载。完整规范见 `docs/i18n.md`。
-- **前端框架选定 React 19 + Vite + TypeScript + shadcn**：运维后台统一使用 shadcn Registry 组件，固定 `radix-nova` preset、Radix、Lucide、CSS Variables 与 Tailwind CSS v4。视觉以 shadcn 官方组件、variant、密度和 neutral 浅深主题为准，不再模仿其他品牌设计系统；页面只在业务组合与布局层扩展，避免重复实现基础组件。前端为独立工程 `twinkle-web/`，与 Java 服务端通过 `http-api` 模块（`/api/v1`）解耦，浏览器端不受 2C2G 红线约束。详细纪律见 `twinkle-web/docs/design-system.md`。
+- **Java 后台语言由服务端配置统一决定**：`twinkle.service.language` 使用 BCP 47（首批 `zh-CN`、`en-US`），日志、异常、HTTP 消息和系统文案统一经 `I18nService` 解析；客户端请求与账号不得覆盖。Web 控制台有独立 UI locale。错误码、opcode、字段 ID、JSON key 等机器契约保持稳定。WZ/脚本不参与该机制，继续按显式路径加载。完整规范见 `docs/archived/i18n.md`。
+- **前端框架选定 React 19 + Vite + TypeScript + shadcn**：运维后台统一使用 shadcn Registry 组件，固定 `radix-nova` preset、Radix、Lucide、CSS Variables 与 Tailwind CSS v4。视觉以 shadcn 官方组件、variant、密度和 neutral 浅深主题为准，不再模仿其他品牌设计系统；页面只在业务组合与布局层扩展，避免重复实现基础组件。前端为独立工程 `twinkle-web/`，与 Java 服务端通过 `http-api` 模块（`/api/v1`）解耦，浏览器端不受 2C2G 红线约束。详细纪律见 `docs/archived/design/design-system.md`。
 
 ---
 

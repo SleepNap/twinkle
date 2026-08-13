@@ -2,7 +2,7 @@
 
 > 本文档记录 twinkle split 档（分布式）的部署、启动、滚动升级、coordinator 重启与回滚流程。
 > 配套脚本：`scripts/split-start.sh`、`scripts/rolling-restart.sh`。
-> 单进程档（默认）操作见 `docs/ops/switch-to-production.md`。
+> 单进程档（默认）操作见 `docs/archived/ops/switch-to-production.md`。
 
 ## 1. split 档形态与代价
 

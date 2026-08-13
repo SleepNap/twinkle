@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服务端），MIT 协议。权威规范是 `ARCHITECTURE.md`（设计决策、模块划分、运行拓扑均以该文档为准），M0-M6 实施任务拆在 `twinkle-server/tasks/`。
+twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服务端），MIT 协议。权威规范是 `ARCHITECTURE.md`（设计决策、模块划分、运行拓扑均以该文档为准），M0-M6 实施任务拆在 `docs/archived/tasks/`。
 
 **进度（2026-08-06）**：M0 骨架与基础设施完成；**M1（协议+Netty+登录）核心完成**（net-packet 协议层、data MyBatis-Flex、net-netty、login、bootstrap 装配、parity 录包回放），全链路 E2E 验证通过。M1 剩真实 v83 客户端接入验收。**M2（游戏逻辑重写）进图打通 + 脚本引擎 + WZ 数据 + 核心机制全部完成 + parity 逻辑对照**：进图链路（WZ foothold + data↔domain 投影 + 频道初版 + SET_FIELD 包 + E2E）；脚本引擎（host 契约 + ScriptManager + L2 热重载）；Item.wz/Mob.wz + WzCache；核心机制六件套（背包/战斗/移动/交易/任务/生命恢复）统一 CharacterState spi 接口 + 版本门；parity 逻辑公式对照（伤害/落点 vs 参考项目）。M2 剩 parity 真实录包回放（需客户端素材）。
 
@@ -20,9 +20,9 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 
 **任务/流程/子线程可观测口子（2026-08-07 用户要求）**：做 Web 管理时要能**清晰管理/监控各类任务、流程、子线程**——此前是隐式的、看不到具体发生了什么。已存在的隐式调度器：`GameTickLoop`（core tick 线程）、`MonsterSpawnService.respawnScheduler`（channel 怪物重生，独立 ScheduledExecutor）。可观测地基已就绪但未挂钩：core `observability`（`HealthRegistry`/`Metrics`/`MdcKeys`/`Sli`）。**How to apply**：做 web/M5 时给所有调度器/任务加监控钩子（生命周期、运行数、最近一次执行、异常计数），经 `Metrics`/`Health` 暴露；新写的调度器（如 MonsterSpawnService 已落地）就应带可观测口子，不重蹈隐式覆辙。
 
-**评审跟进（2026-08-06，见 `docs/architecture-review.md` 决策记录）**：二轮评审采纳 A 组落地——R3 版本门前移（core `hotreload.versioned`）、R4/R5/R15/R14 文档、R10 可观测性地基（core `observability`：Metrics/Health/MdcKeys，HTTP 绑定留 M3）、安全门槛（gitignore、`SqlInjectionScanTest`、注入 demo）。C1 已清（CLAUDE.md 无 Flyway）。推迟项见评审决策记录。
+**评审跟进（2026-08-06，见 `docs/archived/architecture-review.md` 决策记录）**：二轮评审采纳 A 组落地——R3 版本门前移（core `hotreload.versioned`）、R4/R5/R15/R14 文档、R10 可观测性地基（core `observability`：Metrics/Health/MdcKeys，HTTP 绑定留 M3）、安全门槛（gitignore、`SqlInjectionScanTest`、注入 demo）。C1 已清（CLAUDE.md 无 Flyway）。推迟项见评审决策记录。
 
-**How to apply:** 改动前先读 `ARCHITECTURE.md`；按 `tasks/README.md` 顺序推进 M0→M6。关键红线：v83 协议字节级兼容、`newmaple` 库兼容、2C2G 强制单进程、状态与逻辑分离、可替换层不得引用稳定层具体类。参考兄弟项目时遵守 [[reference-projects-discipline]]；M1 的字节级验证方式与关键坑见 [[m1-progress]]；M2 进图字节结构（SET_FIELD/addCharacterInfo）与数据映射坑见 [[m2-progress]]。所有文档/注释用中文。
+**How to apply:** 改动前先读 `ARCHITECTURE.md`；按 `docs/archived/tasks/README.md` 顺序推进 M0→M6。关键红线：v83 协议字节级兼容、`newmaple` 库兼容、2C2G 强制单进程、状态与逻辑分离、可替换层不得引用稳定层具体类。参考兄弟项目时遵守 [[reference-projects-discipline]]；M1 的字节级验证方式与关键坑见 [[m1-progress]]；M2 进图字节结构（SET_FIELD/addCharacterInfo）与数据映射坑见 [[m2-progress]]。所有文档/注释用中文。
 
 **M4 全完成（2026-08-09）**：插件系统 + 热更新 L1-L4 全通 + 频道间三机制 + 可靠性三件套 + 配置中心形态五块全落地。
 - **M4-1 插件系统（VSCode 式）**：`plugin-api` 纯 SPI（`org.gms.plugin`：SdkVersion/Plugin/PluginContext/PluginDescriptor/ContributionType 7 类/PluginHost）+ core 插件运行时（`org.gms.plugin.runtime`：PluginManager/PluginClassLoader/ManifestPluginDescriptorParser/PluginScanner）+ `LogicSystemRegistry`（core hotreload）。**关键设计**：插件 classloader = `org.gms.*` 一律父优先（结构上不可能遮蔽稳定层类防 CCE）；manifest 声明式注册（`META-INF/twinkle-plugin.properties`）；贡献点版本化（红线 13，reload 用 `max(声明版本, versionGate.currentVersion())` 保单调）；bootstrap `TwinklePluginHost` 接线 5 类贡献点（packet/tick/event/script-namespace/logic-system），AI Tool + HTTP 端点声明不接线（M4 决策，M5 随管理进程插件宿主）。插件 reload = L3（unload + 版本门换代 + 渐进重载）。
@@ -32,7 +32,7 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **M4-5 配置中心形态**：DB 真值 + 版本号广播链路全验证（ConfigCenterE2ETest：admin 写→DB→版本+1→广播→订阅者重读）。单进程"TCP 长连接订阅"= 进程内 EventBus 订阅，接口按 4.6.5 设计，M6 换网络。
 - 迁移 V5__bus_outbox.sql + V6__buddylist.sql；全量测试 29+ 全绿。
 
-**M4 完成范围诚实标注（后续开发必读，详见 tasks/M4-plugin-hotreload-channels.md"完成范围诚实标注"节）**：
+**M4 完成范围诚实标注（后续开发必读，详见 docs/archived/tasks/M4-plugin-hotreload-channels.md"完成范围诚实标注"节）**：
 - 插件 HTTP 路由 / AI Tool 贡献点：**未接线**（M5 随管理进程插件宿主做）。
 - 加好友：`buddyListPacket` 是简化版（数量写死 0，未读真实 DB 列表回填）；v83 BUDDYLIST 包逐字节布局未核对。
 - 喇叭：**只有活动公告广播**，喇叭道具 handler（点喇叭消耗道具）未做。
@@ -46,11 +46,11 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **关键补齐**：`ChannelRegistryRegistrar`（bootstrap @Context 装配）——此前生产无人调 `registerChannel`，注册表恒空，`/admin/v1/channels` 空列表。构造期上报频道（host 读 `twinkle.net.channel.host` 默认 127.0.0.1，port 读 `twinkle.net.channel.port`）。**这是频道状态列表可用的前提。**
 - **重启测试安全**：`twinkle.admin.restart.exit=false` 供测试（只编排不真退出）；生产默认 true（编排完 System.exit，外部启动脚本拉起）。进程边界是配置（铁律 1）。
 - **M5-2 单库迁移**：`V7__queststatus_newmaple_columns.sql` 补 queststatus 四列（expires/forfeited/completed/info，newmaple 有 twinkle V3 无；每列一条独立 ALTER，红线 2）。`QuestStatusEntity` 加四字段（domain 层不改）。`NewMapleImporter`（data `org.gms.data.tools`，复制引擎，显式列清单+显式主键保 ID 外键）+ `NewMapleImportMain`（bootstrap CLI，`--reset-passwords` 默认把非 BCrypt 老哈希重置为 changeMe123!）。**坑**：COALESCE 表达式列名在 SQLite 不保留原名，`rs.getObject` 必须按索引取。跳过 buddies（与 twinkle buddylist 结构不兼容）。
-- **M5-3 上线切换**：`micronaut.server.host` 默认 127.0.0.1（红线 20 网络平面收敛）；`LoggingDisciplineTest`（静态扫描 src/main/java 禁 printStackTrace/System.out/System.err，CLI 工具包白名单）；`scripts/start.sh`/`migrate-newmaple.sh`/`rollback.sh` + `docs/ops/switch-to-production.md`（profile 清单/迁移/切换/回滚/CC 兜底/已知差异）。
+- **M5-3 上线切换**：`micronaut.server.host` 默认 127.0.0.1（红线 20 网络平面收敛）；`LoggingDisciplineTest`（静态扫描 src/main/java 禁 printStackTrace/System.out/System.err，CLI 工具包白名单）；`scripts/start.sh`/`migrate-newmaple.sh`/`rollback.sh` + `docs/archived/ops/switch-to-production.md`（profile 清单/迁移/切换/回滚/CC 兜底/已知差异）。
 - **测试**：全量 `mvn -B verify` 17 模块 SUCCESS，bootstrap 33 测试全绿。新增 AdminConsoleE2ETest/MigrationImportE2ETest/LoggingDisciplineTest/NewMapleImporterTest/V7QueststatusColumnsMigrationTest + ChannelAdminServiceTest 扩展。
 - **完成范围诚实标注**：①前端页面未做（留后续，API 不搬家）②`/admin/v1` 无鉴权仅靠 loopback 兜底（强鉴权留后续安全里程碑）③老库密码不保真（reset 为默认口令）④好友列表不迁移（buddies 跳过）⑤queststatus 四列领域层不使用默认 0。
 
-**幽灵玩家事故报告阶段 B 完成（2026-08-09）**：`docs/ghost-player-monster-controller-incident.md` 的 Twinkle 稳定层补强五项全部落地（报告 §5.1 缺口属实）。核心是**三块稳定层设计**：
+**幽灵玩家事故报告阶段 B 完成（2026-08-09）**：`docs/archived/ghost-player-monster-controller-incident.md` 的 Twinkle 稳定层补强五项全部落地（报告 §5.1 缺口属实）。核心是**三块稳定层设计**：
 - **分阶段心跳**（net-netty）：`HeartbeatGuard` 状态机 readerIdle→PING(seq)→PONG deadline，替代无效的 allIdle（原 allIdle 会被服务端发包重置永不触发）；PONG 在 HandlerRegistry 分发前拦截（各阶段共享稳定贡献点）；PROBING 中任意收包视为传输响应（防探测期恢复发包假阳性）；单调时钟。**坑**：IdleStateHandler 需毫秒级配置（用 TimeUnit.MILLISECONDS 构造），测试才能驱动小值。
 - **会话代际**：`NetworkSession` 不可变 `sessionId`（进 PacketSession 接口，全部 handler 可读）；`PlayerSessionRegistry` 改 Entry(sessionId,generation) + `claim`/`unregister` compare-and-remove（旧代际迟到关闭只记 `supersededCleanupRejected` 计数，不误删新会话）；`PlayerStorage.remove` 身份比较；断链回调 unregister 失败即短路（**防旧态覆盖新会话 DB**——不仅是"不删登记"）。重复登录 `PlayerLoggedinHandler` 认领前先移除地图/在线表同 id 旧角色。
 - **怪物控制租约**：`ControllerLeaseService` 放 **domain-game**（不是 core——core 的 service.* 是跨进程契约，租约只在频道进程内；贴近稳定层状态）。按 LeaseOwner(characterId,sessionId,generation) 归属、受控活怪按 owner 聚合（报告 §4.4）、`renew` fail-closed（任一校验不过丢弃整包防伪造续租）、仅 LEASE_EXPIRED 进冷却、计数归零即 IDLE 不处罚、onClaim 立即 SESSION_REPLACED 释放旧代际。巡检 = `DefaultControllerLeaseService implements TickHandler` 挂 GameTickLoop（**不新增线程**，tick 暂停自动停扫、恢复后 gap>3× 加宽限）。控制分配：`SPAWN_MONSTER_CONTROL(0xEE)`/`MOVE_MONSTER(0xEF)`/`MOVE_MONSTER_RESPONSE(0xF0)` + `MoveLifeHandler`；`ensureSpawned`（按 mobId 去重，**修复了 spawnForMap 每玩家进图怪物翻倍 bug**）+ `onPlayerEnter`（进图玩家刷怪包唯一通道）+ `reassign`（周期无主怪接管）。
@@ -73,3 +73,14 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **实体改名**：10 个实体 `@Table` 新表名 + 字段 snake_case（MyBatis-Flex 驼峰→下划线自动匹配，无需 @Column）。`CharacterLoader`/`LoginPacketFactory`/各 repo/测试同步 getter/setter。
 - **删除 newmaple**：`NewMapleImporter`/`NewMapleImportMain`/`MigrationImportE2ETest`/`NewMapleImporterTest`/`V7QueststatusColumnsMigrationTest`/`migrate-newmaple.sh` 全删；CLAUDE.md 红线 2 改为"表结构由自研迁移器管理"。
 - **坑**：`data/` 运行时目录 gitignore；`ChannelServer`/`LoginServer` bean 加 preDestroy=close（多 context 测试端口不残留）；旧库直接删除重建。全量 `mvn -B verify` 通过，bootstrap 39 测试绿。
+
+**积分计费系统 + 前端重构完成（2026-08-13）**：账号层积分额度 + 模型倍率 + plan 三档限额 + 充值/签到 + 联网搜索 + API Key 批量，配套文档归档与菜单分组。
+- **计费模型**：积分挂 `account_records.id`（账号层共享）；AI 调用扣 `ceil(inputTokens×inputRate + outputTokens×outputRate)/1e4`，`model_rate` 按模型倍率（local-rule 倍率 0 免费）；`subscription_plan` 月/周/5h 三档滚动限额（limit>0 生效，0=不限制），无 plan 纯余额扣；`*` scope 管理员 key 免计费，普通 key 无 `ownerAccountId` 调 AI 拒绝。
+- **数据层**：V12__point_billing.sql（三方言）+ V13__point_billing_seed.sql（common）——`point_account`/`model_rate`/`subscription_plan`/`point_transaction` 四表 + `ai_usage_log` 补 model/input_tokens/output_tokens/points_cost/account_id 五列；实体/Repo/Mapper 全套 + `MyBatisFlexFactory` 注册（18 Mapper）。
+- **计费服务**：`BillingService`（http-api `org.gms.httpapi.billing`）precheck/charge/adjust/signin/purchase/balance/setPlan；挂 `ToolExecutionService.investigateWithAgent`（唯一 AI 入口）——调用前 precheck（超额 429），调用后 charge（token+websearch 扣分，扣费失败不阻断已返回结果）。
+- **联网搜索**：`WebSearchTool`（ai `@Tool(name="web_search")`，接 Tavily REST，`twinkle.ai.websearch.provider=off|tavily`，off 不注册进 tools；按次扣 `twinkle.billing.websearch.cost` 默认 1 积分）。
+- **管理 API**：`BillingAdminController`（/admin/v1/billing/*：账号额度/调账/设 plan/流水/plan CRUD/倍率 CRUD）+ `AccountAdminController`（/admin/v1/accounts 账号搜索）+ `AccountRepository.findById/findByNameLike`。
+- **API Key**：签发 dialog 改账号搜索多选（批量签发，1 key : 1 账号，`IssuedKey` 加 ownerAccountId）；列表 checkbox 批量禁用/吊销；余额列（读 billing 账号额度）。
+- **前端**：菜单可折叠分组（监控/玩家数据/系统运维/安全凭据）+ 新增积分额度页 `/billing`；文档统一归档到 `docs/{planned,in-progress,archived}/`。
+- **坑**：Micronaut annotation processor 增量编译残留旧 `$MyBatisFlexFactory$XxxRepositoryN$Definition` 类 → NonUniqueBeanException，`mvn clean verify` 解决；改 `AccountRepository` 接口须同步测试桩（LoginServiceTest/AiFacadeBillingTest/AiAgentTest）。
+- **范围诚实标注**：点券/金币/签约为抽象调账（落流水+每日限，不连真实 nx_credit/meso）；plan/倍率前端仅展示+后端 upsert 端点，前端编辑交互留后续。

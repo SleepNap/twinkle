@@ -37,7 +37,7 @@ HTTP 重做（`/internal` + `/api`）+ LangChain4j AI + 按实体渐进重载。
 - [x] **AI 工具不得直踩游戏内存对象**，只经 application service 接口
 - [x] 计费 / 记忆 / 配置落 SQLite（复用 Dao 设计）
 
-> **2026-08-11 更新**：在原 M3 Agent 地基上接入 OpenAI-compatible / DeepSeek 真实模型，并落地游戏内 `@gm` AI 值班 GM。工具扩展为在线概览、角色存档、已落库背包、账号状态，全部只读并写权威审计；玩家入口仅能查本人。模型调用走独立小线程池，会话、并发、玩家频率均有界；默认仍关闭。完整配置与未完成边界见 `docs/server-agent.md`。
+> **2026-08-11 更新**：在原 M3 Agent 地基上接入 OpenAI-compatible / DeepSeek 真实模型，并落地游戏内 `@gm` AI 值班 GM。工具扩展为在线概览、角色存档、已落库背包、账号状态，全部只读并写权威审计；玩家入口仅能查本人。模型调用走独立小线程池，会话、并发、玩家频率均有界；默认仍关闭。完整配置与未完成边界见 `docs/archived/server-agent.md`。
 
 ### 3. 按实体渐进重载（L3）
 
