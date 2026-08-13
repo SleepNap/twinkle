@@ -1,5 +1,6 @@
 package org.gms.httpapi.billing;
 
+import org.gms.config.ConfigFacade;
 import org.gms.data.entity.ModelRate;
 import org.gms.data.entity.PointAccount;
 import org.gms.data.entity.PointTransaction;
@@ -27,6 +28,7 @@ class BillingServiceTest {
     private MemoryModelRateRepository modelRateRepository;
     private MemoryPlanRepository planRepository;
     private MemoryTransactionRepository transactionRepository;
+    private MemoryConfigFacade configFacade;
     private BillingService billingService;
 
     @BeforeEach
@@ -35,8 +37,9 @@ class BillingServiceTest {
         modelRateRepository = new MemoryModelRateRepository();
         planRepository = new MemoryPlanRepository();
         transactionRepository = new MemoryTransactionRepository();
+        configFacade = new MemoryConfigFacade();
         billingService = new BillingService(pointAccountRepository, modelRateRepository,
-                planRepository, transactionRepository, 1);
+                planRepository, transactionRepository, configFacade);
         modelRateRepository.insert(rate(1L, "deepseek-chat", 10000, 10000));
         modelRateRepository.insert(rate(2L, "local-rule", 0, 0));
     }
@@ -63,6 +66,15 @@ class BillingServiceTest {
         long points = billingService.charge(1L, "deepseek-chat", 0, 0, 3);
         assertThat(points).isEqualTo(3);
         assertThat(billingService.balance(1L).balance()).isEqualTo(997);
+    }
+
+    @Test
+    void charge_联网搜索成本从配置中心读取() {
+        configFacade.put("billing.websearch.cost", "5");
+        billingService.adjust(1L, 1000L, "admin_adjust");
+        long points = billingService.charge(1L, "deepseek-chat", 0, 0, 3);
+        assertThat(points).isEqualTo(15);
+        assertThat(billingService.balance(1L).balance()).isEqualTo(985);
     }
 
     @Test
@@ -215,6 +227,36 @@ class BillingServiceTest {
                     .filter(tx -> reason.equals(tx.getReason()))
                     .filter(tx -> tx.getCreatedAt() != null && tx.getCreatedAt().compareTo(since) >= 0)
                     .count();
+        }
+    }
+
+    private static final class MemoryConfigFacade implements ConfigFacade {
+        final Map<String, String> values = new LinkedHashMap<>();
+
+        public long currentVersion() {
+            return 0;
+        }
+
+        @SuppressWarnings("unchecked")
+        public <T> Optional<T> get(String key, Class<T> type) {
+            String raw = values.get(key);
+            if (raw == null) {
+                return Optional.empty();
+            }
+            if (type == Integer.class) {
+                return (Optional<T>) Optional.of(Integer.parseInt(raw));
+            }
+            if (type == String.class) {
+                return (Optional<T>) Optional.of(raw);
+            }
+            return (Optional<T>) Optional.of(raw);
+        }
+
+        public void signalChange() {
+        }
+
+        void put(String key, String value) {
+            values.put(key, value);
         }
     }
 }

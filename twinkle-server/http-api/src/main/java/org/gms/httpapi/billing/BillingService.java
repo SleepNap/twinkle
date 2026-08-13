@@ -1,6 +1,7 @@
 package org.gms.httpapi.billing;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.config.ConfigFacade;
 import org.gms.data.entity.ModelRate;
 import org.gms.data.entity.PointAccount;
 import org.gms.data.entity.PointTransaction;
@@ -32,23 +33,25 @@ public final class BillingService {
     private static final int DAILY_SIGNIN_LIMIT = 1;
     /** 每日金币购买次数上限。 */
     private static final int DAILY_MESO_PURCHASE_LIMIT = 3;
+    /** 联网搜索计费成本配置键（配置中心可调，默认 1 积分/次）。 */
+    private static final String WEBSEARCH_COST_KEY = "billing.websearch.cost";
 
     private final PointAccountRepository pointAccountRepository;
     private final ModelRateRepository modelRateRepository;
     private final SubscriptionPlanRepository planRepository;
     private final PointTransactionRepository transactionRepository;
-    private final int webSearchCost;
+    private final ConfigFacade configFacade;
 
     public BillingService(PointAccountRepository pointAccountRepository,
                           ModelRateRepository modelRateRepository,
                           SubscriptionPlanRepository planRepository,
                           PointTransactionRepository transactionRepository,
-                          int webSearchCost) {
+                          ConfigFacade configFacade) {
         this.pointAccountRepository = pointAccountRepository;
         this.modelRateRepository = modelRateRepository;
         this.planRepository = planRepository;
         this.transactionRepository = transactionRepository;
-        this.webSearchCost = Math.max(0, webSearchCost);
+        this.configFacade = configFacade;
     }
 
     /** 调用前粗检：余额或 plan 限额不足以支持一次调用时抛异常。 */
@@ -198,10 +201,14 @@ public final class BillingService {
     }
 
     private long webSearchPoints(int webSearchCount) {
-        if (webSearchCount <= 0 || webSearchCost <= 0) {
+        if (webSearchCount <= 0) {
             return 0;
         }
-        return (long) webSearchCount * webSearchCost;
+        int cost = configFacade.getOrDefault(WEBSEARCH_COST_KEY, 1);
+        if (cost <= 0) {
+            return 0;
+        }
+        return (long) webSearchCount * cost;
     }
 
     private PointAccount getOrCreate(Long accountId) {

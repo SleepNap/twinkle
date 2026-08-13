@@ -5,6 +5,7 @@ import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
+import org.gms.config.ConfigFacade;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.data.repo.ModelRateRepository;
@@ -101,10 +102,9 @@ public class HttpApiConfig {
                                          ModelRateRepository modelRateRepository,
                                          SubscriptionPlanRepository planRepository,
                                          PointTransactionRepository transactionRepository,
-                                         @Property(name = "twinkle.billing.websearch.cost", defaultValue = "1")
-                                         int webSearchCost) {
+                                         ConfigFacade configFacade) {
         return new BillingService(pointAccountRepository, modelRateRepository, planRepository,
-                transactionRepository, webSearchCost);
+                transactionRepository, configFacade);
     }
 
     @Bean
