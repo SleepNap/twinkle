@@ -51,6 +51,7 @@ export interface IssuedApiKey {
   token: string
   displayName: string
   subjectId: string
+  ownerAccountId: number | null
   scopes: string[]
   serverId: string
   createdAt: string

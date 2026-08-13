@@ -1,6 +1,6 @@
-import { Activity, FileSearch, Globe2, KeyRound, ListTodo, Radio, Server, Settings2, UserRoundSearch, Users, Wrench } from "lucide-react"
+import { Activity, ChevronDown, Coins, FileSearch, Globe2, KeyRound, ListTodo, Radio, Server, Settings2, UserRoundSearch, Users, Wrench } from "lucide-react"
 import { NavLink, Outlet } from "react-router-dom"
-import { Suspense } from "react"
+import { Suspense, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -10,21 +10,65 @@ import { cn } from "@/lib/utils"
 import { supportedLocales, useI18n, type MessageKey } from "@/i18n"
 import { useCredential } from "@/auth/use-credential"
 
-const navigation = [
-  { to: "/", label: "nav.overview", icon: Activity, end: true },
-  { to: "/channels", label: "nav.channels", icon: Radio },
-  { to: "/players", label: "nav.players", icon: Users },
-  { to: "/accounts", label: "nav.accounts", icon: UserRoundSearch },
-  { to: "/config", label: "nav.config", icon: Settings2 },
-  { to: "/operations", label: "nav.operations", icon: Wrench },
-  { to: "/api-keys", label: "nav.apiKeys", icon: KeyRound },
-  { to: "/audits", label: "nav.audits", icon: FileSearch },
-  { to: "/tasks", label: "nav.tasks", icon: ListTodo },
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof Activity
+  end?: boolean
+}
+
+interface NavGroup {
+  key: string
+  label: string
+  items: NavItem[]
+}
+
+const navigationGroups: NavGroup[] = [
+  {
+    key: "monitoring",
+    label: "nav.group.monitoring",
+    items: [
+      { to: "/", label: "nav.overview", icon: Activity, end: true },
+      { to: "/channels", label: "nav.channels", icon: Radio },
+      { to: "/players", label: "nav.players", icon: Users },
+      { to: "/tasks", label: "nav.tasks", icon: ListTodo },
+    ],
+  },
+  {
+    key: "players",
+    label: "nav.group.players",
+    items: [
+      { to: "/accounts", label: "nav.accounts", icon: UserRoundSearch },
+      { to: "/billing", label: "nav.billing", icon: Coins },
+    ],
+  },
+  {
+    key: "operations",
+    label: "nav.group.operations",
+    items: [
+      { to: "/config", label: "nav.config", icon: Settings2 },
+      { to: "/operations", label: "nav.operations", icon: Wrench },
+    ],
+  },
+  {
+    key: "security",
+    label: "nav.group.security",
+    items: [
+      { to: "/api-keys", label: "nav.apiKeys", icon: KeyRound },
+      { to: "/audits", label: "nav.audits", icon: FileSearch },
+    ],
+  },
 ]
 
 export function AppShell() {
   const { locale, setLocale, t } = useI18n()
   const { token } = useCredential()
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  function toggleGroup(key: string) {
+    setCollapsed((current) => ({ ...current, [key]: !current[key] }))
+  }
+
   return (
     <div className="min-h-svh bg-muted/30 text-foreground">
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
@@ -60,23 +104,43 @@ export function AppShell() {
 
       <div className="mx-auto grid max-w-7xl md:grid-cols-[13rem_1fr]">
         <aside className="min-w-0 border-b bg-background px-3 py-3 md:min-h-[calc(100svh-3.5rem)] md:border-r md:border-b-0 md:py-5">
-          <nav aria-label={t("app.navigation")} className="flex flex-wrap gap-1 md:flex-col md:flex-nowrap">
-            {navigation.map(({ to, label, icon: Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  cn(
-                    buttonVariants({ variant: isActive ? "secondary" : "ghost" }),
-                    "shrink-0 justify-start",
-                  )
-                }
-              >
-                <Icon data-icon="inline-start" />
-                {t(label as MessageKey)}
-              </NavLink>
-            ))}
+          <nav aria-label={t("app.navigation")} className="flex flex-col gap-2">
+            {navigationGroups.map((group) => {
+              const isCollapsed = collapsed[group.key] ?? false
+              return (
+                <div key={group.key}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ChevronDown className={cn("size-3.5 transition-transform", isCollapsed && "-rotate-90")} />
+                    {t(group.label as MessageKey)}
+                  </button>
+                  {!isCollapsed && (
+                    <div className="flex flex-col gap-1">
+                      {group.items.map(({ to, label, icon: Icon, end }) => (
+                        <NavLink
+                          key={to}
+                          to={to}
+                          end={end}
+                          className={({ isActive }) =>
+                            cn(
+                              buttonVariants({ variant: isActive ? "secondary" : "ghost" }),
+                              "shrink-0 justify-start",
+                            )
+                          }
+                        >
+                          <Icon data-icon="inline-start" />
+                          {t(label as MessageKey)}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </nav>
           <Separator className="my-4 hidden md:block" />
           <p className="hidden px-2 text-xs leading-5 text-muted-foreground md:block">
