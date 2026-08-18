@@ -90,3 +90,11 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **key 前缀约定**：`log.*`（日志模板，`{}` 占位，`I18n.message(key)` 无参返回模板，参数交 log4j）/ `error.*`（异常/校验，`{0}` 占位，有参插值）/ `game.*`（游戏内玩家提示，发 GBK，`{0}`）。日志 `{}` 与异常 `{0}` 不得混用。
 - **编码规则（务必记住）**：语言 `zh-CN`→中文 WZ/script→中文客户端（GBK 多字节）；语言 `en-US`→英文 WZ/script→英文客户端（ASCII）。协议编码器固定 GBK（`InPacket.DEFAULT_CHARSET`，GBK 是 ASCII 超集，英文用 GBK 编=ASCII 字节），`twinkle.service.language` 只改文案内容不改编码；HTTP 固定 UTF-8。开源后国外玩家换英文 WZ/script + en-US 即可玩。
 - **游戏内提示受控**：交易取消、踢人原因等经 GBK 协议发玩家的文案也走 i18n key（game.*），受 `twinkle.service.language` 控制（区别于 WZ/script 不受控）。
+
+**Web 控制台强鉴权 + RBAC + 不可抵赖审计（安全顺序 1/2/3，2026-08-18）**：`/admin/v1` 从零鉴权（仅 loopback 兜底）升级为完整鉴权面。
+- **强鉴权**：`AdminAuthFilter`（http-api `org.gms.httpapi.admin`，`@Filter("/admin/v1/**")`）认证 → RBAC 授权 → 写操作 reason 强制 → 审计。管理员 = `account_records` 账号（复用游戏登录 BCrypt 密码），登录发 DB session token（`admin_session`，SHA-256 摘要 + 恒定时间比较，默认 24h 可配）。
+- **RBAC 可配置角色表**：`admin_role`（permissions 逗号分隔，`*` 通配）+ `account_admin_role` 关联；`AdminPermission` 9 权限点（`admin:read` 统一读 + 8 写细分）；内置 super_admin/operator/auditor。`AdminRoleController`（角色 CRUD + 账号角色分配）+ bootstrap 首个管理员（`TWINKLE_ADMIN_BOOTSTRAP_ACCOUNT/PASSWORD`）。
+- **不可抵赖审计**：`admin_operation_audit` 表；写操作强制 `X-Admin-Reason`（缺 reason 400 前置拒绝），记录操作者 accountName + reason + 结果 + requestId。
+- **前端**：登录页 + `AdminAuthProvider` 会话 + 路由守卫 + 退出；`admin.ts`/`billing.ts` 自动带 Bearer，401 跳登录；`ConfirmationDialog` 加 reason 输入；`roles-page`（角色 CRUD + 账号搜索分配）。
+- **迁移**：V15__admin_rbac / V16__admin_session / V17__admin_operation_audit / V18__admin_rbac_seed（`AccountRepository` 加 insert，测试桩 LoginServiceTest/AiAgentTest/AiFacadeBillingTest 同步）。
+- **诚实标注**：审计 best-effort + 强日志（非 fail-closed，管理操作非 DB 事务无法原子）；before/after 摘要字段建表未填充；`/internal/v1` 不加鉴权；管理员密码与游戏密码同源；session 集群失效广播未做。

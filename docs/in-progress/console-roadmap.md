@@ -4,6 +4,14 @@
 >
 > 原则：参考成熟游戏服务后台的能力覆盖，但所有页面必须接真实服务契约，不以模拟数据冒充完成。
 
+## 2026-08-18 已完成增量（安全顺序 1/2/3 落地）
+
+- 控制台强鉴权 + 管理员会话：`/admin/v1` 挂 `AdminAuthFilter`（`@Filter("/admin/v1/**")`），管理员账号（`account_records`）BCrypt 登录 + DB session token（`admin_session`，只存 SHA-256 摘要）。
+- 可配置角色表 RBAC：`admin_role` + `account_admin_role`，内置 `super_admin`/`operator`/`auditor`；`AdminRoleController`（角色 CRUD + 账号角色分配）+ 前端 `roles-page`（角色 CRUD + 账号搜索分配，权限点 checkbox 可视化）。
+- 不可抵赖审计：`admin_operation_audit`，写操作强制 `X-Admin-Reason`（缺 reason → 400 前置拒绝），记录操作者 + reason + 结果 + requestId。
+- bootstrap 首个管理员：`TWINKLE_ADMIN_BOOTSTRAP_ACCOUNT`/`TWINKLE_ADMIN_BOOTSTRAP_PASSWORD`（账号不存在则创建并授 super_admin）。
+- 前端登录页 + admin 会话上下文 + 路由守卫 + 退出登录；`admin.ts`/`billing.ts` 自动带 `Authorization: Bearer`，401 跳登录。
+
 ## 2026-08-12 已完成增量
 
 - API Key 支持直接更新 Scope；`ai:use` 可即时授予或收回，保存后自动刷新 `permissionVersion`。
@@ -113,10 +121,10 @@ PUT  /admin/v1/schedules/{scheduleId}/enabled
 
 ## 5. 安全顺序
 
-1. 控制台强鉴权与管理员会话。
-2. 管理员 RBAC 和高风险操作原因字段。
-3. API Key、AI 策略和所有 GM 写操作的不可抵赖审计。
+1. ~~控制台强鉴权与管理员会话~~ ✅ 已完成（2026-08-18）
+2. ~~管理员 RBAC 和高风险操作原因字段~~ ✅ 已完成（2026-08-18）
+3. ~~API Key、AI 策略和所有 GM 写操作的不可抵赖审计~~ ✅ GM 写操作审计已完成；AI 策略/预算留 4.2（2026-08-18）
 4. 任务注册表与统一状态机。
 5. 再扩展账号写操作、内容管理和运营功能。
 
-`/admin/v1` 当前只能部署在 loopback / 内网；在强鉴权完成前禁止直接暴露公网。
+`/admin/v1` 已套强鉴权（`AdminAuthFilter`）；对外暴露前仍需完成 4.2（AI 预算/策略）与 4.1（账号写操作）。
