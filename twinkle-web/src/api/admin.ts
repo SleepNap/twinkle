@@ -70,6 +70,18 @@ export interface RestartResponse extends RestartPhaseResponse {
   accepted: true
 }
 
+export interface AdminRole {
+  id: number
+  roleCode: string
+  displayName: string
+  description: string
+  permissions: string
+}
+
+export interface RolesResponse {
+  roles: AdminRole[]
+}
+
 export interface ApiRequestAudit {
   id: number
   requestId: string
@@ -303,6 +315,19 @@ export const adminApi = {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),
+  roles: (signal?: AbortSignal) => request<RolesResponse>("/roles", { signal }),
+  createRole: (role: { roleCode: string; displayName: string; description: string; permissions: string }, reason: string) =>
+    request<AdminRole>("/roles", {
+      method: "POST",
+      body: JSON.stringify(role),
+      headers: { "X-Admin-Reason": reason },
+    }),
+  updateRole: (roleId: number, role: { displayName: string; description: string; permissions: string }, reason: string) =>
+    request<AdminRole>(`/roles/${roleId}`, {
+      method: "PUT",
+      body: JSON.stringify(role),
+      headers: { "X-Admin-Reason": reason },
+    }),
 }
 
 export const adminQueryKeys = {
@@ -316,4 +341,5 @@ export const adminQueryKeys = {
   toolExecutionAudits: ["admin", "audits", "tool-executions"] as const,
   tasks: ["admin", "tasks"] as const,
   schedules: ["admin", "schedules"] as const,
+  roles: ["admin", "roles"] as const,
 }
