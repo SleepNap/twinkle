@@ -14,6 +14,8 @@ import io.micronaut.http.annotation.Put;
 import io.micronaut.http.annotation.QueryValue;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
+import org.gms.httpapi.admin.AdminAuthFilter;
+import org.gms.httpapi.admin.AdminPrincipal;
 import org.gms.task.BackgroundTaskRegistry;
 
 import java.util.Map;
@@ -74,11 +76,14 @@ public final class AdminTaskController {
     }
 
     private static String requestId(HttpRequest<?> request) {
-        return request.getHeaders().get("X-Request-Id");
+        return request.getAttribute(AdminAuthFilter.REQUEST_ID_ATTRIBUTE, String.class)
+                .orElseGet(() -> request.getHeaders().get("X-Request-Id"));
     }
 
     private static String subject(HttpRequest<?> request) {
-        return request.getHeaders().get("X-Operator-Id");
+        return request.getAttribute(AdminAuthFilter.PRINCIPAL_ATTRIBUTE, AdminPrincipal.class)
+                .map(AdminPrincipal::accountName)
+                .orElse(null);
     }
 
     public record EnabledRequest(boolean enabled) {

@@ -49,7 +49,8 @@ export function PlayersPage() {
     )
   }, [query.data?.players, search])
   const kickMutation = useMutation({
-    mutationFn: adminApi.kick,
+    mutationFn: ({ characterId, reason }: { characterId: number; reason: string }) =>
+      adminApi.kick(characterId, reason),
     onSuccess: ({ characterId }) => {
       toast.success(t("players.kicked"), { description: t("players.kickDescription", { id: characterId }) })
       void queryClient.invalidateQueries({ queryKey: adminQueryKeys.online })
@@ -146,7 +147,8 @@ export function PlayersPage() {
         confirmLabel={t("players.kickConfirm")}
         destructive
         pending={kickMutation.isPending}
-        onConfirm={() => kickTarget && kickMutation.mutate(kickTarget.characterId)}
+        requireReason
+        onConfirm={(reason) => kickTarget && kickMutation.mutate({ characterId: kickTarget.characterId, reason })}
       />
     </div>
   )

@@ -91,6 +91,11 @@ class AiFacadeBillingTest {
         }
 
         @Override
+        public void insert(Account account) {
+            // 测试桩：无需落库
+        }
+
+        @Override
         public Optional<Account> findById(Long id) {
             return Optional.empty();
         }

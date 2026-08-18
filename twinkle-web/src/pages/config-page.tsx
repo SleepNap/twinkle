@@ -35,6 +35,7 @@ interface ConfigDraft {
   key: string
   value: string
   existing: boolean
+  reason: string
 }
 
 export function ConfigPage() {
@@ -50,7 +51,7 @@ export function ConfigPage() {
     [query.data?.configs],
   )
   const mutation = useMutation({
-    mutationFn: ({ key, value }: ConfigDraft) => adminApi.setConfig(key, value),
+    mutationFn: ({ key, value, reason }: ConfigDraft) => adminApi.setConfig(key, value, reason),
     onSuccess: (result) => {
       queryClient.setQueryData(adminQueryKeys.config, (current: typeof query.data) => ({
         version: result.version,
@@ -65,7 +66,7 @@ export function ConfigPage() {
   })
 
   function saveDraft() {
-    if (!draft || !draft.key.trim()) return
+    if (!draft || !draft.key.trim() || !draft.reason.trim()) return
     mutation.mutate({ ...draft, key: draft.key.trim() })
   }
 
@@ -81,7 +82,7 @@ export function ConfigPage() {
               <RefreshCw data-icon="inline-start" className={query.isFetching ? "animate-spin" : undefined} />
               {t("common.refresh")}
             </Button>
-            <Button size="sm" onClick={() => setDraft({ key: "", value: "", existing: false })}>
+            <Button size="sm" onClick={() => setDraft({ key: "", value: "", existing: false, reason: "" })}>
               <Plus data-icon="inline-start" />{t("config.add")}
             </Button>
           </div>
@@ -117,7 +118,7 @@ export function ConfigPage() {
                         variant="ghost"
                         size="icon-sm"
                         aria-label={t("config.editLabel", { key })}
-                        onClick={() => setDraft({ key, value, existing: true })}
+                        onClick={() => setDraft({ key, value, existing: true, reason: "" })}
                       >
                         <Pencil />
                       </Button>
@@ -159,12 +160,22 @@ export function ConfigPage() {
                 onKeyDown={(event) => event.key === "Enter" && saveDraft()}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="config-reason">{t("auth.reasonLabel")}</Label>
+              <Input
+                id="config-reason"
+                value={draft?.reason ?? ""}
+                disabled={mutation.isPending}
+                onChange={(event) => setDraft((current) => current && { ...current, reason: event.target.value })}
+                placeholder={t("auth.reasonPlaceholder")}
+              />
+            </div>
           </div>
           <DialogFooter>
             {!mutation.isPending && (
               <DialogClose asChild><Button variant="outline">{t("common.cancel")}</Button></DialogClose>
             )}
-            <Button onClick={saveDraft} disabled={!draft?.key.trim() || mutation.isPending}>
+            <Button onClick={saveDraft} disabled={!draft?.key.trim() || !draft?.reason.trim() || mutation.isPending}>
               {mutation.isPending ? t("config.saving") : t("config.save")}
             </Button>
           </DialogFooter>

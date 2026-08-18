@@ -10,6 +10,10 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
+import org.gms.data.mapper.AccountAdminRoleMapper;
+import org.gms.data.mapper.AdminOperationAuditMapper;
+import org.gms.data.mapper.AdminRoleMapper;
+import org.gms.data.mapper.AdminSessionMapper;
 import org.gms.data.mapper.ApiKeyMapper;
 import org.gms.data.mapper.ApiRequestAuditMapper;
 import org.gms.data.mapper.AiUsageMapper;
@@ -28,6 +32,10 @@ import org.gms.data.mapper.PointAccountMapper;
 import org.gms.data.mapper.PointTransactionMapper;
 import org.gms.data.mapper.SubscriptionPlanMapper;
 import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.AccountAdminRoleRepository;
+import org.gms.data.repo.AdminOperationAuditRepository;
+import org.gms.data.repo.AdminRoleRepository;
+import org.gms.data.repo.AdminSessionRepository;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.data.repo.ApiRequestAuditRepository;
 import org.gms.data.repo.AiUsageRepository;
@@ -35,6 +43,10 @@ import org.gms.data.repo.BuddyListRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.data.repo.FlexAccountRepository;
+import org.gms.data.repo.FlexAccountAdminRoleRepository;
+import org.gms.data.repo.FlexAdminOperationAuditRepository;
+import org.gms.data.repo.FlexAdminRoleRepository;
+import org.gms.data.repo.FlexAdminSessionRepository;
 import org.gms.data.repo.FlexApiKeyRepository;
 import org.gms.data.repo.FlexApiRequestAuditRepository;
 import org.gms.data.repo.FlexAiUsageRepository;
@@ -110,6 +122,10 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(ModelRateMapper.class);
         bootstrap.addMapper(SubscriptionPlanMapper.class);
         bootstrap.addMapper(PointTransactionMapper.class);
+        bootstrap.addMapper(AdminRoleMapper.class);
+        bootstrap.addMapper(AccountAdminRoleMapper.class);
+        bootstrap.addMapper(AdminSessionMapper.class);
+        bootstrap.addMapper(AdminOperationAuditMapper.class);
         bootstrap.start();
         log.info(I18n.message("log.data.mybatis_flex_ready"));
         return bootstrap;
@@ -225,6 +241,30 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public AdminRoleMapper adminRoleMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(AdminRoleMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public AccountAdminRoleMapper accountAdminRoleMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(AccountAdminRoleMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public AdminSessionMapper adminSessionMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(AdminSessionMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public AdminOperationAuditMapper adminOperationAuditMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(AdminOperationAuditMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -329,5 +369,29 @@ public class MyBatisFlexFactory {
     @Singleton
     public PointTransactionRepository pointTransactionRepository(PointTransactionMapper mapper) {
         return new FlexPointTransactionRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public AdminRoleRepository adminRoleRepository(AdminRoleMapper mapper) {
+        return new FlexAdminRoleRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public AccountAdminRoleRepository accountAdminRoleRepository(AccountAdminRoleMapper mapper) {
+        return new FlexAccountAdminRoleRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public AdminSessionRepository adminSessionRepository(AdminSessionMapper mapper) {
+        return new FlexAdminSessionRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public AdminOperationAuditRepository adminOperationAuditRepository(AdminOperationAuditMapper mapper) {
+        return new FlexAdminOperationAuditRepository(mapper);
     }
 }

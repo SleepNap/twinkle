@@ -1,12 +1,17 @@
 package org.gms.httpapi;
 
 import io.micronaut.context.annotation.Bean;
+import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.config.ConfigFacade;
 import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.AccountAdminRoleRepository;
+import org.gms.data.repo.AdminOperationAuditRepository;
+import org.gms.data.repo.AdminRoleRepository;
+import org.gms.data.repo.AdminSessionRepository;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.data.repo.ModelRateRepository;
 import org.gms.data.repo.PointAccountRepository;
@@ -17,6 +22,9 @@ import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.event.EventBus;
 import org.gms.httpapi.limit.ApiRateLimiter;
+import org.gms.httpapi.admin.AdminAccessPolicy;
+import org.gms.httpapi.admin.AdminAuditService;
+import org.gms.httpapi.admin.AdminSessionService;
 import org.gms.httpapi.auth.ApiAccessPolicy;
 import org.gms.httpapi.auth.ApiAuditService;
 import org.gms.httpapi.auth.ApiKeyService;
@@ -89,6 +97,12 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
+    public AdminAccessPolicy adminAccessPolicy() {
+        return new AdminAccessPolicy();
+    }
+
+    @Bean
+    @Singleton
     public ApiKeyService apiKeyService(ApiKeyRepository repository,
                                        @Property(name = "twinkle.http.api.bootstrap-key", defaultValue = "")
                                        String bootstrapKey,
@@ -111,6 +125,12 @@ public class HttpApiConfig {
     @Singleton
     public ApiAuditService apiAuditService(ApiRequestAuditRepository repository) {
         return new ApiAuditService(repository);
+    }
+
+    @Bean
+    @Singleton
+    public AdminAuditService adminAuditService(AdminOperationAuditRepository repository) {
+        return new AdminAuditService(repository);
     }
 
     @Bean
@@ -155,5 +175,25 @@ public class HttpApiConfig {
         return new ToolExecutionService(catalogService, healthTool, onlineTool, inventoryTool,
                 auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService,
                 billingService, apiKeyRepository);
+    }
+
+    @Bean
+    @Singleton
+    @Context
+    public AdminSessionService adminSessionService(
+            AccountRepository accountRepository,
+            AdminRoleRepository adminRoleRepository,
+            AccountAdminRoleRepository accountAdminRoleRepository,
+            AdminSessionRepository adminSessionRepository,
+            @Property(name = "twinkle.http.admin.session-ttl-seconds", defaultValue = "86400")
+            long sessionTtlSeconds,
+            @Property(name = "twinkle.http.admin.bootstrap-account", defaultValue = "")
+            String bootstrapAccount,
+            @Property(name = "twinkle.http.admin.bootstrap-password", defaultValue = "")
+            String bootstrapPassword) {
+        AdminSessionService service = new AdminSessionService(accountRepository, adminRoleRepository,
+                accountAdminRoleRepository, adminSessionRepository, sessionTtlSeconds);
+        service.bootstrapAdmin(bootstrapAccount, bootstrapPassword);
+        return service;
     }
 }

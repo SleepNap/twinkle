@@ -1,7 +1,9 @@
-import { lazy } from "react"
-import { Route, Routes } from "react-router-dom"
+import { lazy, type ReactElement } from "react"
+import { Navigate, Route, Routes } from "react-router-dom"
 
+import { useAdminAuth } from "@/auth/use-admin-auth"
 import { AppShell } from "@/components/app-shell"
+import { LoginPage } from "@/pages/login-page"
 
 const OverviewPage = lazy(() => import("@/pages/overview-page").then((module) => ({ default: module.OverviewPage })))
 const ChannelsPage = lazy(() => import("@/pages/channels-page").then((module) => ({ default: module.ChannelsPage })))
@@ -15,10 +17,17 @@ const AuditsPage = lazy(() => import("@/pages/audits-page").then((module) => ({ 
 const TasksPage = lazy(() => import("@/pages/tasks-page").then((module) => ({ default: module.TasksPage })))
 const NotFoundPage = lazy(() => import("@/pages/not-found-page").then((module) => ({ default: module.NotFoundPage })))
 
+function RequireAuth({ children }: { children: ReactElement }) {
+  const { token } = useAdminAuth()
+  if (!token) return <Navigate to="/login" replace />
+  return children
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         <Route index element={<OverviewPage />} />
         <Route path="channels" element={<ChannelsPage />} />
         <Route path="players" element={<PlayersPage />} />

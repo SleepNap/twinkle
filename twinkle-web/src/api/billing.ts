@@ -58,6 +58,22 @@ export interface AccountOption {
   name: string
 }
 
+const ADMIN_SESSION_KEY = "twinkle.console.admin-session"
+const ADMIN_IDENTITY_KEY = "twinkle.console.admin-identity"
+
+function adminToken(): string {
+  if (typeof window === "undefined") return ""
+  return window.sessionStorage.getItem(ADMIN_SESSION_KEY) ?? ""
+}
+
+function redirectToLogin(): void {
+  window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  window.sessionStorage.removeItem(ADMIN_IDENTITY_KEY)
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login")
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response
   try {
@@ -65,6 +81,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init,
       headers: {
         Accept: "application/json",
+        ...(adminToken() ? { Authorization: `Bearer ${adminToken()}` } : {}),
         ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
       },
@@ -72,6 +89,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error
     throw new ApiError(translate("api.unreachable"))
+  }
+  if (response.status === 401) {
+    redirectToLogin()
+    throw new ApiError(translate("api.unauthenticated"), 401)
   }
   if (!response.ok) {
     const body = response.headers.get("content-type")?.includes("application/json")
@@ -90,26 +111,36 @@ export const billingApi = {
     request<{ accounts: BillingAccountSummary[] }>("/billing/accounts", { signal }),
   account: (accountId: number, signal?: AbortSignal) =>
     request<BillingAccountDetail>(`/billing/accounts/${accountId}`, { signal }),
-  adjust: (accountId: number, amount: number, reason?: string) =>
+  adjust: (accountId: number, amount: number, note: string | undefined, reason: string) =>
     request<{ adjusted: true }>(`/billing/accounts/${accountId}/adjust`, {
       method: "POST",
-      body: JSON.stringify({ amount, reason }),
+      body: JSON.stringify({ amount, reason: note }),
+      headers: { "X-Admin-Reason": reason },
     }),
-  setPlan: (accountId: number, planId: number | null) =>
+  setPlan: (accountId: number, planId: number | null, reason: string) =>
     request<{ set: true }>(`/billing/accounts/${accountId}/plan`, {
       method: "POST",
       body: JSON.stringify({ planId }),
+      headers: { "X-Admin-Reason": reason },
     }),
   transactions: (accountId: number, signal?: AbortSignal) =>
     request<{ transactions: PointTransaction[] }>(`/billing/transactions?accountId=${accountId}`, { signal }),
   plans: (signal?: AbortSignal) =>
     request<{ plans: SubscriptionPlan[] }>("/billing/plans", { signal }),
-  upsertPlan: (plan: Partial<SubscriptionPlan> & { planCode: string }) =>
-    request<SubscriptionPlan>("/billing/plans", { method: "POST", body: JSON.stringify(plan) }),
+  upsertPlan: (plan: Partial<SubscriptionPlan> & { planCode: string }, reason: string) =>
+    request<SubscriptionPlan>("/billing/plans", {
+      method: "POST",
+      body: JSON.stringify(plan),
+      headers: { "X-Admin-Reason": reason },
+    }),
   modelRates: (signal?: AbortSignal) =>
     request<{ rates: ModelRate[] }>("/billing/model-rates", { signal }),
-  upsertRate: (rate: Partial<ModelRate> & { modelKey: string }) =>
-    request<ModelRate>("/billing/model-rates", { method: "POST", body: JSON.stringify(rate) }),
+  upsertRate: (rate: Partial<ModelRate> & { modelKey: string }, reason: string) =>
+    request<ModelRate>("/billing/model-rates", {
+      method: "POST",
+      body: JSON.stringify(rate),
+      headers: { "X-Admin-Reason": reason },
+    }),
   searchAccounts: (query: string, limit = 20, signal?: AbortSignal) =>
     request<{ accounts: AccountOption[] }>(`/accounts?query=${encodeURIComponent(query)}&limit=${limit}`, { signal }),
 }

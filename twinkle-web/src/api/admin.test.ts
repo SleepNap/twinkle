@@ -31,7 +31,7 @@ describe("adminApi", () => {
     }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await adminApi.setConfig("game.exp.rate", "3.0")
+    await adminApi.setConfig("game.exp.rate", "3.0", "test")
 
     expect(fetchMock).toHaveBeenCalledWith("/admin/v1/config", expect.objectContaining({
       method: "POST",
@@ -46,7 +46,7 @@ describe("adminApi", () => {
       { status: 404, statusText: "Not Found" },
     )))
 
-    await expect(adminApi.kick(888)).rejects.toMatchObject({
+    await expect(adminApi.kick(888, "test")).rejects.toMatchObject({
       name: "ApiError",
       message: "该角色当前不在线或会话已经断开。",
       status: 404,
@@ -76,7 +76,7 @@ describe("adminApi", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ scheduleId: "daily", enabled: false }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await adminApi.setScheduleEnabled("daily", false)
+    await adminApi.setScheduleEnabled("daily", false, "test")
 
     expect(fetchMock).toHaveBeenCalledWith("/admin/v1/schedules/daily/enabled", expect.objectContaining({
       method: "PUT",

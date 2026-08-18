@@ -27,6 +27,7 @@ export function TasksPage() {
   const { locale, t } = useI18n()
   const queryClient = useQueryClient()
   const [action, setAction] = useState<PendingAction | null>(null)
+  const [enabledAction, setEnabledAction] = useState<{ schedule: TaskSchedule; enabled: boolean } | null>(null)
   const schedulesQuery = useQuery({
     queryKey: adminQueryKeys.schedules,
     queryFn: ({ signal }) => adminApi.schedules(signal),
@@ -49,9 +50,9 @@ export function TasksPage() {
     ])
   }
   const actionMutation = useMutation({
-    mutationFn: (current: PendingAction) => current.kind === "run"
-      ? adminApi.runSchedule(current.schedule.scheduleId)
-      : adminApi.retryTask(current.task.taskId),
+    mutationFn: ({ action, reason }: { action: PendingAction; reason: string }) => action.kind === "run"
+      ? adminApi.runSchedule(action.schedule.scheduleId, reason)
+      : adminApi.retryTask(action.task.taskId, reason),
     onSuccess: async () => {
       setAction(null)
       await invalidate()
@@ -60,8 +61,8 @@ export function TasksPage() {
     onError: (error) => toast.error(t("tasks.actionFailed"), { description: error.message }),
   })
   const enabledMutation = useMutation({
-    mutationFn: ({ scheduleId, enabled }: { scheduleId: string; enabled: boolean }) =>
-      adminApi.setScheduleEnabled(scheduleId, enabled),
+    mutationFn: ({ scheduleId, enabled, reason }: { scheduleId: string; enabled: boolean; reason: string }) =>
+      adminApi.setScheduleEnabled(scheduleId, enabled, reason),
     onSuccess: async () => {
       await invalidate()
       toast.success(t("tasks.scheduleUpdated"))
@@ -131,7 +132,7 @@ export function TasksPage() {
                     {schedule.lastStatus && <TaskStatus status={schedule.lastStatus} />}
                   </div></TableCell>
                   <TableCell className="text-right"><div className="flex justify-end gap-2">
-                    <Button size="sm" variant="outline" onClick={() => enabledMutation.mutate({ scheduleId: schedule.scheduleId, enabled: !schedule.enabled })} disabled={enabledMutation.isPending}>
+                    <Button size="sm" variant="outline" onClick={() => setEnabledAction({ schedule, enabled: !schedule.enabled })}>
                       {schedule.enabled ? t("tasks.disable") : t("tasks.enable")}
                     </Button>
                     <Button size="sm" onClick={() => setAction({ kind: "run", schedule })}>
@@ -198,7 +199,23 @@ export function TasksPage() {
         description={action?.kind === "retry" ? t("tasks.confirmRetryDescription") : t("tasks.confirmRunDescription")}
         confirmLabel={action?.kind === "retry" ? t("tasks.retry") : t("tasks.runNow")}
         pending={actionMutation.isPending}
-        onConfirm={() => action && actionMutation.mutate(action)}
+        requireReason
+        onConfirm={(reason) => action && actionMutation.mutate({ action, reason })}
+      />
+
+      <ConfirmationDialog
+        open={enabledAction !== null}
+        onOpenChange={(open) => !open && setEnabledAction(null)}
+        title={enabledAction?.enabled ? t("tasks.enable") : t("tasks.disable")}
+        description={t("tasks.schedulesDescription")}
+        confirmLabel={enabledAction?.enabled ? t("tasks.enable") : t("tasks.disable")}
+        pending={enabledMutation.isPending}
+        requireReason
+        onConfirm={(reason) => enabledAction && enabledMutation.mutate({
+          scheduleId: enabledAction.schedule.scheduleId,
+          enabled: enabledAction.enabled,
+          reason,
+        })}
       />
     </div>
   )

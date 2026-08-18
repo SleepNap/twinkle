@@ -1,5 +1,5 @@
-import { Activity, ChevronDown, Coins, FileSearch, Globe2, KeyRound, ListTodo, Radio, Server, Settings2, UserRoundSearch, Users, Wrench } from "lucide-react"
-import { NavLink, Outlet } from "react-router-dom"
+import { Activity, ChevronDown, Coins, FileSearch, Globe2, KeyRound, ListTodo, LogOut, Radio, Server, Settings2, UserRoundSearch, Users, Wrench } from "lucide-react"
+import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { Suspense, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { supportedLocales, useI18n, type MessageKey } from "@/i18n"
 import { useCredential } from "@/auth/use-credential"
+import { useAdminAuth } from "@/auth/use-admin-auth"
 
 interface NavItem {
   to: string
@@ -63,7 +64,14 @@ const navigationGroups: NavGroup[] = [
 export function AppShell() {
   const { locale, setLocale, t } = useI18n()
   const { token } = useCredential()
+  const { identity, logout } = useAdminAuth()
+  const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  function handleLogout() {
+    logout()
+    navigate("/login", { replace: true })
+  }
 
   function toggleGroup(key: string) {
     setCollapsed((current) => ({ ...current, [key]: !current[key] }))
@@ -99,6 +107,16 @@ export function AppShell() {
               ))}
             </select>
           </label>
+          {identity && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "ml-1")}
+            >
+              <LogOut data-icon="inline-start" className="size-4" />
+              {t("auth.signOut")}
+            </button>
+          )}
         </div>
       </header>
 

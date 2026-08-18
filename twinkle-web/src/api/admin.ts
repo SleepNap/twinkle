@@ -171,6 +171,22 @@ export class ApiError extends Error {
   }
 }
 
+const ADMIN_SESSION_KEY = "twinkle.console.admin-session"
+const ADMIN_IDENTITY_KEY = "twinkle.console.admin-identity"
+
+function adminToken(): string {
+  if (typeof window === "undefined") return ""
+  return window.sessionStorage.getItem(ADMIN_SESSION_KEY) ?? ""
+}
+
+function redirectToLogin(): void {
+  window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  window.sessionStorage.removeItem(ADMIN_IDENTITY_KEY)
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login")
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response
 
@@ -179,6 +195,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init,
       headers: {
         Accept: "application/json",
+        ...(adminToken() ? { Authorization: `Bearer ${adminToken()}` } : {}),
         ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
       },
@@ -190,12 +207,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(translate("api.unreachable"))
   }
 
+  if (response.status === 401) {
+    redirectToLogin()
+    throw new ApiError(translate("api.unauthenticated"), 401)
+  }
+
   if (!response.ok) {
     const body = contentType(response).includes("application/json")
-      ? await response.json().catch(() => null) as { error?: string } | null
+      ? await response.json().catch(() => null) as { error?: string; message?: string } | null
       : null
     throw new ApiError(
-      humanizeApiError(body?.error) ?? translate("api.httpError", {
+      body?.message ?? humanizeApiError(body?.error) ?? translate("api.httpError", {
         status: response.status,
         statusText: response.statusText,
       }).trim(),
@@ -228,22 +250,36 @@ export const adminApi = {
   channels: (signal?: AbortSignal) => request<ChannelsResponse>("/channels", { signal }),
   online: (signal?: AbortSignal) => request<OnlineResponse>("/online", { signal }),
   config: (signal?: AbortSignal) => request<ConfigResponse>("/config", { signal }),
-  setConfig: (key: string, value: string) =>
+  setConfig: (key: string, value: string, reason: string) =>
     request<ConfigSetResponse>("/config", {
       method: "POST",
       body: JSON.stringify({ key, value }),
+      headers: { "X-Admin-Reason": reason },
     }),
   inFlight: (signal?: AbortSignal) => request<InFlightResponse>("/reload/in-flight", { signal }),
   restartPhase: (signal?: AbortSignal) =>
     request<RestartPhaseResponse>("/restart/phase", { signal }),
-  kick: (characterId: number) =>
+  kick: (characterId: number, reason: string) =>
     request<KickResponse>("/kick", {
       method: "POST",
       body: JSON.stringify({ characterId }),
+      headers: { "X-Admin-Reason": reason },
     }),
-  reloadScripts: () => request<ScriptReloadResponse>("/reload/scripts", { method: "POST" }),
-  reloadLogic: () => request<LogicReloadResponse>("/reload/logic", { method: "POST" }),
-  restart: () => request<RestartResponse>("/restart", { method: "POST" }),
+  reloadScripts: (reason: string) =>
+    request<ScriptReloadResponse>("/reload/scripts", {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  reloadLogic: (reason: string) =>
+    request<LogicReloadResponse>("/reload/logic", {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  restart: (reason: string) =>
+    request<RestartResponse>("/restart", {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
   apiRequestAudits: (limit = 100, signal?: AbortSignal) =>
     request<AuditPage<ApiRequestAudit>>(`/audits/api-requests?limit=${limit}`, { signal }),
   toolExecutionAudits: (limit = 100, signal?: AbortSignal) =>
@@ -251,15 +287,22 @@ export const adminApi = {
   tasks: (limit = 100, signal?: AbortSignal) =>
     request<TasksResponse>(`/tasks?limit=${limit}`, { signal }),
   schedules: (signal?: AbortSignal) => request<SchedulesResponse>("/schedules", { signal }),
-  runSchedule: (scheduleId: string) =>
-    request<BackgroundTaskRun>(`/schedules/${encodeURIComponent(scheduleId)}/run`, { method: "POST" }),
-  setScheduleEnabled: (scheduleId: string, enabled: boolean) =>
+  runSchedule: (scheduleId: string, reason: string) =>
+    request<BackgroundTaskRun>(`/schedules/${encodeURIComponent(scheduleId)}/run`, {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  setScheduleEnabled: (scheduleId: string, enabled: boolean, reason: string) =>
     request<TaskSchedule>(`/schedules/${encodeURIComponent(scheduleId)}/enabled`, {
       method: "PUT",
       body: JSON.stringify({ enabled }),
+      headers: { "X-Admin-Reason": reason },
     }),
-  retryTask: (taskId: string) =>
-    request<BackgroundTaskRun>(`/tasks/${encodeURIComponent(taskId)}/retry`, { method: "POST" }),
+  retryTask: (taskId: string, reason: string) =>
+    request<BackgroundTaskRun>(`/tasks/${encodeURIComponent(taskId)}/retry`, {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
 }
 
 export const adminQueryKeys = {

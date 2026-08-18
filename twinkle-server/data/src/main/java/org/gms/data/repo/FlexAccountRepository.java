@@ -33,6 +33,11 @@ public class FlexAccountRepository implements AccountRepository {
     }
 
     @Override
+    public void insert(Account account) {
+        mapper.insertSelective(account);
+    }
+
+    @Override
     public void update(Account account) {
         mapper.update(account);
     }

@@ -29,6 +29,11 @@ class LoginServiceTest {
         }
 
         @Override
+        public void insert(Account account) {
+            byName.put(account.getName(), account);
+        }
+
+        @Override
         public void update(Account account) {
             byName.put(account.getName(), account);
         }

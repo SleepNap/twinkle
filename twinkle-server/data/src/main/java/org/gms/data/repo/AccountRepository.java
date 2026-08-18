@@ -23,6 +23,11 @@ public interface AccountRepository {
     Optional<Account> findById(Long id);
 
     /**
+     * 新建账号（bootstrap 管理员用）。
+     */
+    void insert(Account account);
+
+    /**
      * 更新账号（登录前置流程落库用：接受服务条款 tos、设置性别 gender 等）。
      */
     void update(Account account);

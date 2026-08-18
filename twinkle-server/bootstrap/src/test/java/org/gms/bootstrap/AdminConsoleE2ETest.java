@@ -16,15 +16,10 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * M5-1 验收：Web 控制台运维 API（架构 M5-1：/admin/v1/*）。
+ * M5-1 验收：Web 控制台运维 API（架构 M5-1：/admin/v1/*，强鉴权后带管理员会话）。
  *
- * <p>用 bootstrap 完整装配（单进程档，含频道注册钩子），起真实 EmbeddedServer，验证：
- * <ol>
- *   <li>/admin/v1/health、/admin/v1/channels（频道注册钩子生效）、/admin/v1/online（③只读镜像）。</li>
- *   <li>配置中心链路：GET /config 列表 → POST /config 热改 → 订阅者读到新值（版本+1）。</li>
- *   <li>运维操作：踢下线（② AdminService，在线 404/离线 404）、脚本重载（②，空目录 changed=0）、
- *       /restart 返回 202 + phase（不触发真实重启，编排由 L4RestartE2ETest 覆盖）。</li>
- * </ol>
+ * <p>用 bootstrap 完整装配（单进程档，含频道注册钩子），起真实 EmbeddedServer，bootstrap 首个管理员
+ * 后登录拿 token，验证运维端点在鉴权保护下正常：health/channels/online/config/运维操作。
  */
 class AdminConsoleE2ETest {
 
@@ -41,7 +36,9 @@ class AdminConsoleE2ETest {
                 "twinkle.net.channel.port", "0",
                 "twinkle.net.channel.host", "127.0.0.1",
                 "twinkle.admin.restart.exit", "false",  // 测试不真退出进程（编排由 L4RestartE2ETest 覆盖）
-                "twinkle.script.path", scriptDir))) {
+                "twinkle.script.path", scriptDir,
+                "twinkle.http.admin.bootstrap-account", "admin",
+                "twinkle.http.admin.bootstrap-password", "admin123"))) {
 
             EmbeddedServer server = ctx.getBean(EmbeddedServer.class);
             server.start();
@@ -49,16 +46,20 @@ class AdminConsoleE2ETest {
             String base = "http://127.0.0.1:" + port;
             HttpClient client = HttpClient.newHttpClient();
 
+            String token = login(client, base);
+
             // ---- /admin/v1/health ----
             HttpResponse<String> health = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/health")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/health"))
+                            .header("Authorization", bearer(token)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(health.statusCode()).isEqualTo(200);
             assertThat(health.body()).contains("healthy");
 
             // ---- /admin/v1/channels（频道启动注册钩子生效：至少 1 频道）----
             HttpResponse<String> channels = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/channels")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/channels"))
+                            .header("Authorization", bearer(token)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(channels.statusCode()).isEqualTo(200);
             assertThat(channels.body()).contains("channelId").contains("127.0.0.1");
@@ -69,21 +70,24 @@ class AdminConsoleE2ETest {
                     new OnlinePlayerEvents.PlayerOnline(888L, "AdminHero", 100000000, 10, 0));
 
             HttpResponse<String> online = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/online")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/online"))
+                            .header("Authorization", bearer(token)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(online.statusCode()).isEqualTo(200);
             assertThat(online.body()).contains("AdminHero").contains("onlineCount");
 
             // ---- /admin/v1/reload/in-flight（在途实体可观测）----
             HttpResponse<String> inFlight = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/reload/in-flight")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/reload/in-flight"))
+                            .header("Authorization", bearer(token)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(inFlight.statusCode()).isEqualTo(200);
             assertThat(inFlight.body()).contains("inFlightCount");
 
             // ---- 配置中心：GET 列表（含 V1 seed）----
             HttpResponse<String> cfgList = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/config")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/config"))
+                            .header("Authorization", bearer(token)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(cfgList.statusCode()).isEqualTo(200);
             assertThat(cfgList.body()).contains("game.level.rate").contains("version");
@@ -92,6 +96,8 @@ class AdminConsoleE2ETest {
             HttpResponse<String> cfgBefore = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/config"))
                             .header("Content-Type", "application/json")
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-config")
                             .POST(HttpRequest.BodyPublishers.ofString("{\"key\":\"game.exp.rate\",\"value\":\"2.5\"}"))
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -106,6 +112,8 @@ class AdminConsoleE2ETest {
             HttpResponse<String> badCfg = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/config"))
                             .header("Content-Type", "application/json")
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-config")
                             .POST(HttpRequest.BodyPublishers.ofString("{\"value\":\"x\"}"))
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -115,6 +123,8 @@ class AdminConsoleE2ETest {
             HttpResponse<String> kickOffline = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/kick"))
                             .header("Content-Type", "application/json")
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-kick")
                             .POST(HttpRequest.BodyPublishers.ofString("{\"characterId\":888}"))
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -124,6 +134,8 @@ class AdminConsoleE2ETest {
             HttpResponse<String> kickBad = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/kick"))
                             .header("Content-Type", "application/json")
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-kick")
                             .POST(HttpRequest.BodyPublishers.ofString("{\"characterId\":\"x\"}"))
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -132,6 +144,8 @@ class AdminConsoleE2ETest {
             // ---- 脚本重载（② AdminService.reloadScripts：空目录 changed=0）----
             HttpResponse<String> reloadScripts = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/reload/scripts"))
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-reload")
                             .POST(HttpRequest.BodyPublishers.noBody())
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -141,6 +155,8 @@ class AdminConsoleE2ETest {
             // ---- 逻辑重载（core 安全点重载：换代版本门）----
             HttpResponse<String> reloadLogic = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/reload/logic"))
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-reload")
                             .POST(HttpRequest.BodyPublishers.noBody())
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -150,6 +166,8 @@ class AdminConsoleE2ETest {
             // ---- 重启（202 accepted + phase，不触发真实 System.exit）----
             HttpResponse<String> restart = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/admin/v1/restart"))
+                            .header("Authorization", bearer(token))
+                            .header("X-Admin-Reason", "e2e-restart")
                             .POST(HttpRequest.BodyPublishers.noBody())
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -158,10 +176,35 @@ class AdminConsoleE2ETest {
 
             // ---- 重启阶段读取 ----
             HttpResponse<String> phase = client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/restart/phase")).GET().build(),
+                    HttpRequest.newBuilder(URI.create(base + "/admin/v1/restart/phase"))
+                            .header("Authorization", bearer(token)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(phase.statusCode()).isEqualTo(200);
             assertThat(phase.body()).contains("phase");
         }
+    }
+
+    private static String login(HttpClient client, String base) throws Exception {
+        HttpResponse<String> resp = client.send(
+                HttpRequest.newBuilder(URI.create(base + "/admin/v1/auth/login"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"admin\",\"password\":\"admin123\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(resp.statusCode()).isEqualTo(200);
+        return extractToken(resp.body());
+    }
+
+    private static String extractToken(String json) {
+        String needle = "\"token\":\"";
+        int start = json.indexOf(needle);
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        int valueStart = start + needle.length();
+        int end = json.indexOf('"', valueStart);
+        return json.substring(valueStart, end);
+    }
+
+    private static String bearer(String token) {
+        return "Bearer " + token;
     }
 }

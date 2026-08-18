@@ -4,6 +4,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { billingApi, billingQueryKeys, type BillingAccountSummary, type SubscriptionPlan } from "@/api/billing"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-state"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +34,7 @@ export function BillingPage() {
   const [adjustTarget, setAdjustTarget] = useState<BillingAccountSummary | null>(null)
   const [adjustAmount, setAdjustAmount] = useState("")
   const [adjustReason, setAdjustReason] = useState("")
+  const [planAction, setPlanAction] = useState<{ account: BillingAccountSummary; planId: number | null } | null>(null)
 
   const accountsQuery = useQuery({
     queryKey: billingQueryKeys.accounts,
@@ -53,7 +55,7 @@ export function BillingPage() {
   })
 
   const adjustMutation = useMutation({
-    mutationFn: () => billingApi.adjust(adjustTarget!.accountId, Number(adjustAmount), adjustReason.trim() || undefined),
+    mutationFn: () => billingApi.adjust(adjustTarget!.accountId, Number(adjustAmount), adjustReason.trim(), adjustReason.trim()),
     onSuccess: () => {
       toast.success(t("billing.adjusted"))
       setAdjustTarget(null)
@@ -67,7 +69,8 @@ export function BillingPage() {
     onError: (error) => toast.error(t("billing.adjustFailed"), { description: error.message }),
   })
   const planMutation = useMutation({
-    mutationFn: (args: { accountId: number; planId: number | null }) => billingApi.setPlan(args.accountId, args.planId),
+    mutationFn: (args: { accountId: number; planId: number | null; reason: string }) =>
+      billingApi.setPlan(args.accountId, args.planId, args.reason),
     onSuccess: () => {
       toast.success(t("billing.planSet"))
       void queryClient.invalidateQueries({ queryKey: billingQueryKeys.accounts })
@@ -129,7 +132,7 @@ export function BillingPage() {
                         <PlanSelect
                           account={account}
                           plans={plansQuery.data?.plans ?? []}
-                          onSelect={(planId) => planMutation.mutate({ accountId: account.accountId, planId })}
+                          onSelect={(planId) => setPlanAction({ account, planId })}
                         />
                       </div>
                     </TableCell>
@@ -264,6 +267,21 @@ export function BillingPage() {
         onClose={() => setAdjustTarget(null)}
         onConfirm={() => adjustMutation.mutate()}
       />
+
+      <ConfirmationDialog
+        open={planAction !== null}
+        onOpenChange={(open) => !open && setPlanAction(null)}
+        title={t("billing.setPlan")}
+        description={planAction ? `${planAction.account.name}` : ""}
+        confirmLabel={t("billing.setPlan")}
+        pending={planMutation.isPending}
+        requireReason
+        onConfirm={(reason) => planAction && planMutation.mutate({
+          accountId: planAction.account.accountId,
+          planId: planAction.planId,
+          reason,
+        })}
+      />
     </div>
   )
 }
@@ -298,7 +316,7 @@ function AdjustDialog({ target, amount, reason, pending, onAmountChange, onReaso
   onConfirm: () => void
 }) {
   const { t } = useI18n()
-  const validAmount = amount.trim() !== "" && !Number.isNaN(Number(amount))
+  const validAmount = amount.trim() !== "" && !Number.isNaN(Number(amount)) && reason.trim() !== ""
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent showCloseButton={false} className="sm:max-w-md">

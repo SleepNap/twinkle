@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -12,6 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useI18n } from "@/i18n"
 
 export function ConfirmationDialog({
@@ -24,6 +26,7 @@ export function ConfirmationDialog({
   open,
   onOpenChange,
   onConfirm,
+  requireReason = false,
 }: {
   trigger?: ReactNode
   title: string
@@ -33,9 +36,12 @@ export function ConfirmationDialog({
   pending?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  onConfirm: () => void
+  onConfirm: (reason: string) => void
+  requireReason?: boolean
 }) {
   const { t } = useI18n()
+  const [reason, setReason] = useState("")
+  const canConfirm = !requireReason || reason.trim().length > 0
   return (
     <Dialog
       open={open}
@@ -49,6 +55,17 @@ export function ConfirmationDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {requireReason && (
+          <div className="grid gap-2">
+            <Label htmlFor="confirm-reason">{t("auth.reasonLabel")}</Label>
+            <Input
+              id="confirm-reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder={t("auth.reasonPlaceholder")}
+            />
+          </div>
+        )}
         <DialogFooter>
           {!pending && (
             <DialogClose asChild>
@@ -57,8 +74,8 @@ export function ConfirmationDialog({
           )}
           <Button
             variant={destructive ? "destructive" : "default"}
-            onClick={onConfirm}
-            disabled={pending}
+            onClick={() => onConfirm(reason.trim())}
+            disabled={pending || !canConfirm}
           >
             {pending && <Loader2 data-icon="inline-start" className="animate-spin" />}
             {pending ? t("common.processing") : confirmLabel}

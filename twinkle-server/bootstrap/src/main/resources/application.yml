@@ -89,6 +89,13 @@ twinkle:
         capacity: ${TWINKLE_HTTP_RATE_CAPACITY:100}
         # 补满周期（秒）
         refill-seconds: ${TWINKLE_HTTP_RATE_REFILL:1}
+    # ============== Web 控制台管理面鉴权（强鉴权 + RBAC + 审计） ==============
+    admin:
+      # 会话有效期（秒），默认 24h
+      session-ttl-seconds: ${TWINKLE_ADMIN_SESSION_TTL_SECONDS:86400}
+      # 首个管理员 bootstrap：账号不存在则用该密码创建并授 super_admin；存在则仅补授角色
+      bootstrap-account: ${TWINKLE_ADMIN_BOOTSTRAP_ACCOUNT:}
+      bootstrap-password: ${TWINKLE_ADMIN_BOOTSTRAP_PASSWORD:}
 
 # ============== log4j2 ==============
 log4j2:

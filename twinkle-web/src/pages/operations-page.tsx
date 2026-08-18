@@ -49,7 +49,7 @@ export function OperationsPage() {
     refetchInterval: 2_000,
   })
   const scriptsMutation = useMutation({
-    mutationFn: adminApi.reloadScripts,
+    mutationFn: (reason: string) => adminApi.reloadScripts(reason),
     onSuccess: ({ changed }) => {
       toast.success(t("operations.scriptsSuccess"), {
         description: t("operations.scriptsSuccessDescription", { count: changed }),
@@ -59,7 +59,7 @@ export function OperationsPage() {
     onError: (error) => toast.error(t("operations.scriptsFailed"), { description: error.message }),
   })
   const logicMutation = useMutation({
-    mutationFn: adminApi.reloadLogic,
+    mutationFn: (reason: string) => adminApi.reloadLogic(reason),
     onSuccess: (result) => {
       toast.success(t("operations.logicSuccess"), {
         description: t("operations.logicSuccessDescription", {
@@ -72,7 +72,7 @@ export function OperationsPage() {
     onError: (error) => toast.error(t("operations.logicFailed"), { description: error.message }),
   })
   const restartMutation = useMutation({
-    mutationFn: adminApi.restart,
+    mutationFn: (reason: string) => adminApi.restart(reason),
     onSuccess: ({ phase }) => {
       toast.success(t("operations.restartAccepted"), {
         description: t("operations.restartAcceptedDescription", { phase: t(phaseLabelKeys[phase]) }),
@@ -128,7 +128,8 @@ export function OperationsPage() {
               description={t("operations.reloadScriptsDescription")}
               confirmLabel={t("operations.confirmReload")}
               pending={scriptsMutation.isPending}
-              onConfirm={() => scriptsMutation.mutate()}
+              requireReason
+              onConfirm={(reason) => scriptsMutation.mutate(reason)}
             />
           </CardContent>
         </Card>
@@ -148,7 +149,8 @@ export function OperationsPage() {
               description={t("operations.reloadLogicDescription", { count: inFlight.data?.inFlightCount ?? 0 })}
               confirmLabel={t("operations.confirmReload")}
               pending={logicMutation.isPending}
-              onConfirm={() => logicMutation.mutate()}
+              requireReason
+              onConfirm={(reason) => logicMutation.mutate(reason)}
             />
           </CardContent>
         </Card>
@@ -169,7 +171,8 @@ export function OperationsPage() {
               confirmLabel={t("operations.confirmRestart")}
               destructive
               pending={restartMutation.isPending}
-              onConfirm={() => restartMutation.mutate()}
+              requireReason
+              onConfirm={(reason) => restartMutation.mutate(reason)}
             />
           </CardContent>
         </Card>

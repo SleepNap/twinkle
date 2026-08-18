@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes"
 import App from "./App"
 import { Toaster } from "@/components/ui/sonner"
 import { I18nProvider } from "@/i18n"
+import { AdminAuthProvider } from "@/auth/admin-auth-provider"
 import { CredentialProvider } from "@/auth/credential-provider"
 import "./index.css"
 
@@ -23,14 +24,16 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
-        <CredentialProvider>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <BrowserRouter>
-              <App />
-              <Toaster richColors position="top-right" />
-            </BrowserRouter>
-          </ThemeProvider>
-        </CredentialProvider>
+        <AdminAuthProvider>
+          <CredentialProvider>
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+              <BrowserRouter>
+                <App />
+                <Toaster richColors position="top-right" />
+              </BrowserRouter>
+            </ThemeProvider>
+          </CredentialProvider>
+        </AdminAuthProvider>
       </I18nProvider>
     </QueryClientProvider>
   </StrictMode>,

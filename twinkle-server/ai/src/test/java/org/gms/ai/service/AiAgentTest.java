@@ -71,6 +71,10 @@ class AiAgentTest {
         }
 
         @Override
+        public void insert(Account account) {
+        }
+
+        @Override
         public Optional<Account> findById(Long id) {
             return Optional.empty();
         }
