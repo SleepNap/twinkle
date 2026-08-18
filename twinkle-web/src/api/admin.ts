@@ -82,6 +82,16 @@ export interface RolesResponse {
   roles: AdminRole[]
 }
 
+export interface AccountOption {
+  id: number
+  name: string
+}
+
+export interface AccountRolesResponse {
+  accountId: number
+  roles: AdminRole[]
+}
+
 export interface ApiRequestAudit {
   id: number
   requestId: string
@@ -326,6 +336,16 @@ export const adminApi = {
     request<AdminRole>(`/roles/${roleId}`, {
       method: "PUT",
       body: JSON.stringify(role),
+      headers: { "X-Admin-Reason": reason },
+    }),
+  searchAccounts: (query: string, limit = 20, signal?: AbortSignal) =>
+    request<{ accounts: AccountOption[] }>(`/accounts?query=${encodeURIComponent(query)}&limit=${limit}`, { signal }),
+  accountRoles: (accountId: number, signal?: AbortSignal) =>
+    request<AccountRolesResponse>(`/accounts/${accountId}/roles`, { signal }),
+  setAccountRoles: (accountId: number, roleIds: number[], reason: string) =>
+    request<AccountRolesResponse>(`/accounts/${accountId}/roles`, {
+      method: "PUT",
+      body: JSON.stringify({ roleIds }),
       headers: { "X-Admin-Reason": reason },
     }),
 }

@@ -170,6 +170,11 @@ const messages = {
     "roles.perm.reloadLogic": "逻辑重载", "roles.perm.reloadScripts": "脚本重载", "roles.perm.restart": "重启",
     "roles.perm.task": "任务管理", "roles.perm.billing": "计费管理", "roles.perm.role": "角色管理",
     "roles.perm.all": "全部权限",
+    "roles.assignTitle": "账号角色分配", "roles.assignDescription": "搜索账号并为其授予或收回管理员角色。",
+    "roles.accountSearchLabel": "搜索账号", "roles.accountSearchPlaceholder": "输入账号名搜索",
+    "roles.search": "搜索", "roles.account": "账号", "roles.assign": "分配角色",
+    "roles.assignDialogTitle": "分配角色 — {name}", "roles.assignDialogDescription": "勾选该账号应持有的角色，保存后覆盖生效。",
+    "roles.assignSuccess": "账号角色已更新", "roles.assignFailed": "分配角色失败",
   },
   "en-US": {
     "app.console": "Console", "app.navigation": "Console navigation",
@@ -341,6 +346,11 @@ const messages = {
     "roles.perm.reloadLogic": "Reload logic", "roles.perm.reloadScripts": "Reload scripts", "roles.perm.restart": "Restart",
     "roles.perm.task": "Task management", "roles.perm.billing": "Billing management", "roles.perm.role": "Role management",
     "roles.perm.all": "All permissions",
+    "roles.assignTitle": "Account role assignment", "roles.assignDescription": "Search an account and grant or revoke administrator roles.",
+    "roles.accountSearchLabel": "Search accounts", "roles.accountSearchPlaceholder": "Search by account name",
+    "roles.search": "Search", "roles.account": "Account", "roles.assign": "Assign roles",
+    "roles.assignDialogTitle": "Assign roles — {name}", "roles.assignDialogDescription": "Select the roles this account should hold; saving overwrites the current set.",
+    "roles.assignSuccess": "Account roles updated", "roles.assignFailed": "Failed to assign roles",
   },
 } as const
 

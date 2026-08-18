@@ -1,9 +1,9 @@
-import { Pencil, Plus, RefreshCw } from "lucide-react"
+import { Pencil, Plus, RefreshCw, Search } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { adminApi, adminQueryKeys, type AdminRole } from "@/api/admin"
+import { adminApi, adminQueryKeys, type AccountOption, type AdminRole } from "@/api/admin"
 import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-state"
 import { Badge } from "@/components/ui/badge"
@@ -95,6 +95,57 @@ export function RolesPage() {
       })
     },
   })
+
+  const [accountSearch, setAccountSearch] = useState("")
+  const [submittedSearch, setSubmittedSearch] = useState("")
+  const [assignTarget, setAssignTarget] = useState<AccountOption | null>(null)
+  const [assignRoleIds, setAssignRoleIds] = useState<number[]>([])
+  const [assignReason, setAssignReason] = useState("")
+
+  const accountSearchQuery = useQuery({
+    queryKey: ["admin", "account-search", submittedSearch],
+    queryFn: ({ signal }) => adminApi.searchAccounts(submittedSearch, 20, signal),
+    enabled: Boolean(submittedSearch),
+    retry: false,
+  })
+  const accountRolesQuery = useQuery({
+    queryKey: ["admin", "account-roles", assignTarget?.id ?? 0],
+    queryFn: ({ signal }) => adminApi.accountRoles(assignTarget!.id, signal),
+    enabled: Boolean(assignTarget),
+  })
+  const assignMutation = useMutation({
+    mutationFn: ({ accountId, roleIds, reason }: { accountId: number; roleIds: number[]; reason: string }) =>
+      adminApi.setAccountRoles(accountId, roleIds, reason),
+    onSuccess: () => {
+      toast.success(t("roles.assignSuccess"))
+      setAssignTarget(null)
+      setAssignReason("")
+    },
+    onError: (error) => toast.error(t("roles.assignFailed"), { description: error.message }),
+  })
+
+  useEffect(() => {
+    if (accountRolesQuery.data) {
+      setAssignRoleIds(accountRolesQuery.data.roles.map((role) => role.id))
+    }
+  }, [accountRolesQuery.data])
+
+  function submitAccountSearch() {
+    const normalized = accountSearch.trim()
+    if (normalized) setSubmittedSearch(normalized)
+  }
+
+  function openAssign(account: AccountOption) {
+    setAssignRoleIds([])
+    setAssignReason("")
+    setAssignTarget(account)
+  }
+
+  function toggleAssignRole(roleId: number) {
+    setAssignRoleIds((current) => current.includes(roleId)
+      ? current.filter((id) => id !== roleId)
+      : [...current, roleId])
+  }
 
   function openCreate() {
     setDraft({ roleCode: "", displayName: "", description: "", permissions: ["admin:read"], reason: "" })
@@ -208,6 +259,52 @@ export function RolesPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("roles.assignTitle")}</CardTitle>
+          <CardDescription>{t("roles.assignDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="flex max-w-xl gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                value={accountSearch}
+                onChange={(event) => setAccountSearch(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && submitAccountSearch()}
+                placeholder={t("roles.accountSearchPlaceholder")}
+                aria-label={t("roles.accountSearchLabel")}
+              />
+            </div>
+            <Button onClick={submitAccountSearch} disabled={!accountSearch.trim()}>{t("roles.search")}</Button>
+          </div>
+          {accountSearchQuery.data && accountSearchQuery.data.accounts.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("roles.account")}</TableHead>
+                  <TableHead className="text-right">{t("common.operation")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {accountSearchQuery.data.accounts.map((account) => (
+                  <TableRow key={account.id}>
+                    <TableCell>
+                      <div className="font-medium">{account.name}</div>
+                      <div className="font-mono text-xs text-muted-foreground">ID {account.id}</div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => openAssign(account)}>{t("roles.assign")}</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       <Dialog open={draft !== null} onOpenChange={(open) => !open && !saveMutation.isPending && setDraft(null)}>
         <DialogContent showCloseButton={false} className="sm:max-w-lg">
           <DialogHeader>
@@ -284,6 +381,53 @@ export function RolesPage() {
             )}
             <Button onClick={() => draft && saveMutation.mutate(draft)} disabled={!canSave || saveMutation.isPending}>
               {saveMutation.isPending ? t("common.processing") : t("roles.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignTarget !== null} onOpenChange={(open) => !open && !assignMutation.isPending && setAssignTarget(null)}>
+        <DialogContent showCloseButton={false} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("roles.assignDialogTitle", { name: assignTarget?.name ?? "" })}</DialogTitle>
+            <DialogDescription>{t("roles.assignDialogDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2 rounded-lg border p-3">
+              {query.data?.roles.map((role) => (
+                <label key={role.id} className="flex items-center gap-2">
+                  <Checkbox
+                    checked={assignRoleIds.includes(role.id)}
+                    onCheckedChange={() => toggleAssignRole(role.id)}
+                  />
+                  <span className="text-sm">{role.displayName || role.roleCode}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{role.roleCode}</span>
+                </label>
+              ))}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="assign-reason">{t("auth.reasonLabel")}</Label>
+              <Input
+                id="assign-reason"
+                value={assignReason}
+                onChange={(event) => setAssignReason(event.target.value)}
+                placeholder={t("auth.reasonPlaceholder")}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            {!assignMutation.isPending && (
+              <DialogClose asChild><Button variant="outline">{t("common.cancel")}</Button></DialogClose>
+            )}
+            <Button
+              onClick={() => assignTarget && assignMutation.mutate({
+                accountId: assignTarget.id,
+                roleIds: assignRoleIds,
+                reason: assignReason.trim(),
+              })}
+              disabled={assignMutation.isPending || !assignReason.trim()}
+            >
+              {assignMutation.isPending ? t("common.processing") : t("roles.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
