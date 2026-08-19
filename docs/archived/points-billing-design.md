@@ -1,6 +1,8 @@
 # 积分计费系统设计（points billing）
 
-> 状态：**planned**（设计定稿，待实施）。本文是积分计费系统的设计快照，落地时以代码为准。
+> 状态：**已落地并归档**。本文是设计快照，与代码不一致时以代码为准。
+> 实际实现见 V12/V13 迁移 + `BillingService`；模型键口径与计费点位置已在
+> 2026-08-19 修正（V19 迁移 + core `AiGovernanceService` 契约），下文相应段落已同步。
 
 ## 目标
 
@@ -9,7 +11,10 @@
 ## 计费模型
 
 - **额度 = 积分**（整数），挂在 `account_records.id`（账号层共享）。同一账号所有 API Key 共享积分。
-- **消耗**：`积分 = ceil(inputTokens × inputRate + outputTokens × outputRate)`，`inputRate/outputRate` 来自 `model_rate` 表（按模型标识匹配）。`local-rule` 模型 rate=0（本地无成本免费）。
+- **消耗**：`积分 = ceil(inputTokens × inputRate + outputTokens × outputRate)`，`inputRate/outputRate` 来自 `model_rate` 表。
+  **模型标识口径 = `provider/modelName`**（`AiModelBundle.descriptor()`，如 `deepseek/deepseek-chat`、
+  `local-rule/deterministic`）；早期 seed 误用裸 modelName 导致匹配落空、外部模型静默免费，已由 V19 修正。
+  `local-rule/deterministic` rate=0（本地无成本免费）。
 - **plan 订阅**：账号订阅 `subscription_plan`，含 monthly / weekly / five_hour 三档积分上限（滚动窗口）；任一窗口超额返回 `429 billing_limit_exceeded`。
 - **无 plan**：直接扣积分余额，余额不足返回 `429 insufficient_points`。
 - **免计费**：`*` scope 管理员 key（含 bootstrap）免计费；普通 key 无 `ownerAccountId` 调用 AI 拒绝 `billing_account_required`。
@@ -29,7 +34,11 @@
 ## 关键挂载点
 
 - **BillingService**（http-api 模块 `org.gms.httpapi.billing`）：`precheck` / `charge` / `adjust` / `purchase` / `signin` / `balance`。
-- **唯一 AI 入口**：`ToolExecutionService.investigateWithAgent()`（toolId=`server.agent.investigate`）。调用前 `precheck`，调用后拿 `reply.inputTokens/outputTokens/executedTools/model` 走 `charge`。
+- **唯一计费点**：`AiFacade.investigate()`（ai 模块）。AI 入口实际有三条——能力面
+  `server.agent.investigate`、`/api/v1/ai/chat`、游戏内 `@gm`——本设计初稿误以为只有能力面一条，
+  导致 `/api/v1/ai/chat` 长期完全不计费（2026-08-19 修复）。现由 core 契约
+  `AiGovernanceService`（`precheck` / `settle`）在 AI 门面内部统一执行，三条入口自动覆盖；
+  `ToolExecutionService` 不再自行扣费，只把额度拒绝映射成 429。
 - **联网搜索**：`WebSearchTool`（ai 模块，接 Tavily，`twinkle.ai.websearch.provider=tavily|off`），按次扣固定积分（`executedTools` 含 `web_search` 的次数）。
 
 ## 管理 API

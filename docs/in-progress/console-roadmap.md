@@ -62,6 +62,18 @@
 
 ### 4.2 AI 权限与预算
 
+> **开工前置（2026-08-19 发现，必须先决策）**：当前所有 API Key 的 `subjectId` 都继承签发者
+> （bootstrap 签发出来的是 `subject_owner`），没有独立 Subject 签发入口。此时把策略挂
+> `subjectId`，多数 Key 会共享同一条策略、塌缩成「全体一份」，预算形同虚设。
+> 二选一：补独立 Subject 签发，或把策略改挂账号维度（与积分账户同口径）。
+>
+> **已完成的前置止血（2026-08-19）**：预算要建在正确的计价口径和完整的入口覆盖上，
+> 故先修了两个存量缺陷——① `model_rate.model_key` 用裸 modelName、而计费传
+> `provider/modelName`，外部模型一路静默免费（V19 迁移修正口径）；
+> ② `/api/v1/ai/chat` 绕过能力面完全不计费（计费下沉为 core `AiGovernanceService` 契约，
+> 唯一计费点收敛到 `AiFacade.investigate`，能力面 / AI HTTP / 游戏内 `@gm` 三条入口全覆盖）。
+> 策略拦截将来接在同一个治理契约上即可，不必再逐入口接线。
+
 沿用现有 API Key Scope，不另建互相冲突的权限系统：
 
 - `ai:use`：是否允许调用 AI。

@@ -469,6 +469,14 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 - 场景：AI 报表 / AI 数据统计 / 多工具调用 / 每日总结（`@Scheduled`）/ 玩家游戏内 `@gm` 值班入口。
 - 结构化输出：返回 POJO/Enum/JSON 自动解析；RAG 全套备查 WZ/游戏知识库。
 - **AI 工具不得直踩游戏内存对象**（同 HTTP 约束），只经 application service 接口。计费/记忆/配置落 SQLite（复用现有 Dao 设计；低配模式下 SQLite 本即主库）。
+- **唯一计费点在 AI 门面内部**：AI 入口有三条——能力面 `server.agent.investigate`、`/api/v1/ai/chat`、
+  游戏内 `@gm`。计费与准入下沉为 core 稳定契约 `AiGovernanceService`（`precheck` / `settle`），
+  由 `AiFacade.investigate` 统一调用，实现 `BillingAiGovernance` 在 http-api，缺实现时用
+  `NoopAiGovernanceService` 放行兜底（同 `ServerAgentService` / `AdminService` 的跨模块契约范式）。
+  **禁止在各入口自行接线计费**——早期 `/api/v1/ai/chat` 就因绕过能力面而完全不扣费；
+  入口侧只负责把额度拒绝映射成 429。
+- **模型标识统一用 descriptor**（`provider/modelName`）：倍率表 `model_rate.model_key`、
+  计费入参与将来的模型白名单共用同一口径，不得退回裸 modelName。
 - Agent 默认关闭；真实模型密钥只经环境变量注入。玩家入口只读本人数据，工具调用写权威审计；外部模型在独立线程池运行，不得阻塞 Netty/游戏 tick。
 
 ---

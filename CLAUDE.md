@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、审计日志和任务监控页面；配置热改、踢下线、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。统一 `BackgroundTaskRegistry` 已提供有界执行历史、调度启停、立即运行与失败重试，`AiDailySummaryScheduler` 为首个真实接入任务。完整范围见 `docs/in-progress/console-roadmap.md`。**控制台强鉴权 + RBAC + 不可抵赖审计已落地**（2026-08-18，安全顺序 1/2/3）：`/admin/v1` 挂 `AdminAuthFilter`（账号 BCrypt 登录 + DB session token），可配置角色表（`admin_role`/`account_admin_role`）+ 写操作 reason 审计（`admin_operation_audit`），前端登录页 + `roles-page` 闭环。后续继续补齐 AI 预算/模型策略、任务持久化与集群聚合和部署。
 
+**AI 计费两处存量缺陷已修复**（2026-08-19，4.2 前置止血）：①`model_rate.model_key` 用裸 modelName、计费传 descriptor，外部模型一路静默免费（V19 迁移修正口径）；②`/api/v1/ai/chat` 绕过能力面完全不计费（计费下沉 core `AiGovernanceService` 契约，唯一计费点收敛到 `AiFacade.investigate`，三条入口全覆盖）。回归锁在 `AiBillingE2ETest`。**4.2 开工前置**：当前所有 API key 的 `subjectId` 都继承签发者，策略挂 subjectId 会塌缩成"全体一份"，需先决定补独立 Subject 签发还是改挂账号维度（见 `docs/in-progress/console-roadmap.md` 4.2 节）。
+
 **全局 i18n 全量完成**（2026-08-12 基座，2026-08-13 迁移完成）：`twinkle.service.language` 是 Java 后台唯一语言配置，HTTP 用 `Content-Language` 声明实际语言；Web 控制台首批支持 `zh-CN`/`en-US` 并独立持久化界面选择。存量 Java 日志/异常/游戏内玩家提示中文硬编码已全部迁入 i18n key（约 300 处，跨 12 模块），`en-US` 配置下后台文案全英文。统一入口：`I18nService`（`@Singleton`，可注入）+ 静态门面 `org.gms.i18n.I18n`（无法 DI 的代码用，bootstrap `I18nInitializer` 启动注入）。key 前缀：`log.*`（日志，`{}` 占位）/ `error.*`（异常，`{0}`）/ `game.*`（游戏内提示，`{0}`）。编码规则：协议层固定 GBK（`InPacket.DEFAULT_CHARSET`，GBK 兼容 ASCII），语言只改文案内容不改编码，HTTP 固定 UTF-8。WZ/脚本不受服务端语言控制，只读 `twinkle.wz.path` / `twinkle.script.path` 显式目录。规范见 `docs/archived/i18n.md`。
 
 **`ARCHITECTURE.md` 是唯一权威规范**——设计决策、模块划分、运行拓扑均以该文档为准，改动前必须先读。所有文档、注释使用中文。
@@ -18,7 +20,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 常用命令
 
-在 `twinkle-server/` 下执行（构建基线：**JDK 用 GraalVM for JDK 21**，版本须与 pom 的 `graalvm-js.version` 匹配，见 README「环境要求」）。
+### 后端（在 `twinkle-server/` 下执行）
+
+构建基线：**JDK 用 GraalVM for JDK 21**，版本须与 pom 的 `graalvm-js.version` 匹配（21.0.N ↔ 23.1.N，当前 23.1.11 ↔ 21.0.11；升 JDK 小版本必须同步改 pom，否则版本检查失败或降级解释执行），见 README「环境要求」。
 
 - **全量构建 + 测试**：`mvn -B verify`（17 模块；含 JaCoCo 覆盖率报告 + ArchUnit 架构测试 + LoggingDiscipline 静态扫描）
 - **单模块单测**：`mvn -pl <模块> -am -Dtest=<测试类> -Dsurefire.failIfNoSpecifiedTests=false test`（`-am` 带上游依赖；`-Dsurefire.failIfNoSpecifiedTests=false` 防上游模块因无匹配测试报错——实测必需）。例：`mvn -pl bootstrap -am -Dtest=BootstrapContextTest -Dsurefire.failIfNoSpecifiedTests=false test`
@@ -29,12 +33,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`micronaut.server.host`=`127.0.0.1`（默认绑 loopback，红线 20）、`micronaut.server.port`=`8080`。`data/twinkle.db` 为运行期产物不入仓。
 
+**Micronaut 注解处理器增量编译坑**：改动 Repository / bean 接口后若报 `NonUniqueBeanException`（残留旧 `$MyBatisFlexFactory$XxxRepositoryN$Definition` 类），用 `mvn clean verify` 重来。改 Repository 接口须同步更新测试桩（`LoginServiceTest` / `AiAgentTest` / `AiFacadeBillingTest`）。
+
+### Web 控制台（在 `twinkle-web/` 下执行）
+
+Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.0.1:8080`（需后端先起）。
+
+- **开发**：`npm run dev`（正式预览打开 Vite 地址；`demo.html` 只是旧书签兼容，不是入口）
+- **构建**：`npm run build`（= `tsc -b && vite build`）；**类型检查**：`npm run typecheck`；**Lint**：`npm run lint`
+- **测试**：`npm test`（vitest run）；**单文件**：`npx vitest run src/api/admin.test.ts`
+
 ## 能力面与外部 agent（twish）
 
 twinkle 服务端 = **能力面（主）+ 可选 agent 宿主（辅）**。对外能力统一经 `/api/v1` 暴露，鉴权走 **API-key（Bearer）+ scope 授权 + 审计**（`api_request_audit`/`tool_execution_audit` 落库）；客户端不可信，危险操作一律服务端执行后回传结果，不直踩游戏内存。
 
 - **twish**：外部 agent 客户端，独立仓库（契约真值在 twish 仓库 `docs/server-tasks/`，twinkle 侧接入说明见 `docs/archived/twish-capability-api.md`）。只读闭环：`identity/me → capabilities → tool-executions → auditRef`，首批 Tool 为 `server.health.read@1.0.0` 与 `player.online.list@1.0.0`。
 - **服务端 agent 宿主**（`ai/` 模块）：保留但不默认装配，`twinkle.ai.enabled=true` 显式启用（2C2G 红线）。覆盖"玩家触发游戏事件 / 日志突变"等外部 agent 覆盖不了的服务端主动场景。`LocalRuleChatModel` 为自研规则路由，换真实 LLM 只换 `ChatModel` bean（`TWINKLE_LLM_API_KEY` env）。
+- **AI 计费唯一挂载点 = `AiFacade.investigate`**（2026-08-19 收敛）：AI 入口有三条（能力面 `server.agent.investigate` / `/api/v1/ai/chat` / 游戏内 `@gm`），计费与准入走 core 契约 `AiGovernanceService`（`precheck`/`settle`，实现 `BillingAiGovernance` 在 http-api，`NoopAiGovernanceService` 兜底）。**新增 AI 入口不要各自接计费**，也不要在 `ToolExecutionService` 里恢复扣费（会双扣）。模型标识统一 descriptor（`provider/modelName`），与 `model_rate.model_key` 同口径。
 - **生产身份配置**（必配）：`TWINKLE_SERVER_ID` / `TWINKLE_SERVER_NAME` / `TWINKLE_SERVER_ENVIRONMENT` / `TWINKLE_CURSOR_SIGNING_KEY`（≥32 字节 HMAC）；首次签发用 loopback-only 的 `TWINKLE_API_BOOTSTRAP_KEY`。
 - 管理侧/能力面不得依赖 `domain-game`（红线 3）；数据三路：查 DB（data repository）/ 经 `AdminService` core 契约 / 事件快照只读镜像（`OnlinePlayerMirror`）。
 
@@ -86,6 +101,20 @@ twinkle 服务端 = **能力面（主）+ 可选 agent 宿主（辅）**。对�
 ### 技术选型
 
 Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM JS，全速无需 EnableJVMCI）、Netty 4（v83 协议字节级不动）、自研迁移器（Flyway 不引入）、log4j2、Bucket4j（限流）、LangChain4j（AI）、WZ/脚本数据源定位（配置直接指定路径、单份数据、读不到报错，见 ARCHITECTURE 6.4）、Web 控制台（JavaFX 明确移除）。
+
+### Web 控制台结构（`twinkle-web/src`）
+
+React 19 + Vite + Tailwind CSS v4 + shadcn（视觉基准固定 `radix-nova` 官方风格，不用 Notion 仿制主题；纪律见 `docs/archived/design/design-system.md`）。TanStack Query 管服务端状态，react-router-dom 管路由。
+
+- `api/` — 后端调用唯一出口：`admin.ts`（`/admin/v1`）、`billing.ts`、`capability.ts`（`/api/v1`）、`admin-auth.ts`（登录/会话）。`admin.ts`/`billing.ts` 自动带 Bearer token，401 跳登录。**页面不直接 fetch，一律走 api 层**。
+- `auth/` — `AdminAuthProvider` 持会话 + 路由守卫；`credential-provider` 管能力面 API Key。
+- `pages/` — 一页一文件（`overview` / `channels` / `players` / `accounts` / `config` / `operations` / `api-keys` / `audits` / `tasks` / `billing` / `roles` / `login`）。
+- `components/` — `app-shell`（可折叠分组菜单）、`page-header`、`query-state`（加载/错误统一态）、`confirmation-dialog`（**写操作确认 + `X-Admin-Reason` 输入**，后端缺 reason 直接 400）、`ui/`（shadcn 生成物）。
+- `i18n/index.tsx` — 界面语言 `zh-CN`/`en-US`，与后端 `twinkle.service.language` **独立持久化**（前端选择不影响后台语言）。
+
+### 文档归档纪律
+
+`docs/` 按生命周期分三层：`planned/`（已立项未开工）→ `in-progress/`（正在推进）→ `archived/`（完成/废止，只读）。规则：单一来源不跨目录重复；跨目录移动用 `git mv` 保历史；移动后同步更新 CLAUDE.md / ARCHITECTURE.md / README.md 中的引用路径。详见 `docs/README.md`。
 
 ## 硬性编码约束（红线摘录）
 

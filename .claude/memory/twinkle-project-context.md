@@ -77,7 +77,7 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 **积分计费系统 + 前端重构完成（2026-08-13）**：账号层积分额度 + 模型倍率 + plan 三档限额 + 充值/签到 + 联网搜索 + API Key 批量，配套文档归档与菜单分组。
 - **计费模型**：积分挂 `account_records.id`（账号层共享）；AI 调用扣 `ceil(inputTokens×inputRate + outputTokens×outputRate)/1e4`，`model_rate` 按模型倍率（local-rule 倍率 0 免费）；`subscription_plan` 月/周/5h 三档滚动限额（limit>0 生效，0=不限制），无 plan 纯余额扣；`*` scope 管理员 key 免计费，普通 key 无 `ownerAccountId` 调 AI 拒绝。
 - **数据层**：V12__point_billing.sql（三方言）+ V13__point_billing_seed.sql（common）——`point_account`/`model_rate`/`subscription_plan`/`point_transaction` 四表 + `ai_usage_log` 补 model/input_tokens/output_tokens/points_cost/account_id 五列；实体/Repo/Mapper 全套 + `MyBatisFlexFactory` 注册（18 Mapper）。
-- **计费服务**：`BillingService`（http-api `org.gms.httpapi.billing`）precheck/charge/adjust/signin/purchase/balance/setPlan；挂 `ToolExecutionService.investigateWithAgent`（唯一 AI 入口）——调用前 precheck（超额 429），调用后 charge（token+websearch 扣分，扣费失败不阻断已返回结果）。
+- **计费服务**：`BillingService`（http-api `org.gms.httpapi.billing`）precheck/charge/adjust/signin/purchase/balance/setPlan——调用前 precheck（超额 429），调用后 charge（token+websearch 扣分，扣费失败不阻断已返回结果）。**计费点位置见下方 2026-08-19 修正**（原挂在 `ToolExecutionService.investigateWithAgent`，已下沉）。
 - **联网搜索**：`WebSearchTool`（ai `@Tool(name="web_search")`，接 Tavily REST，`twinkle.ai.websearch.provider=off|tavily`，off 不注册进 tools；按次扣 `twinkle.billing.websearch.cost` 默认 1 积分）。
 - **管理 API**：`BillingAdminController`（/admin/v1/billing/*：账号额度/调账/设 plan/流水/plan CRUD/倍率 CRUD）+ `AccountAdminController`（/admin/v1/accounts 账号搜索）+ `AccountRepository.findById/findByNameLike`。
 - **API Key**：签发 dialog 改账号搜索多选（批量签发，1 key : 1 账号，`IssuedKey` 加 ownerAccountId）；列表 checkbox 批量禁用/吊销；余额列（读 billing 账号额度）。
@@ -98,3 +98,14 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **前端**：登录页 + `AdminAuthProvider` 会话 + 路由守卫 + 退出；`admin.ts`/`billing.ts` 自动带 Bearer，401 跳登录；`ConfirmationDialog` 加 reason 输入；`roles-page`（角色 CRUD + 账号搜索分配）。
 - **迁移**：V15__admin_rbac / V16__admin_session / V17__admin_operation_audit / V18__admin_rbac_seed（`AccountRepository` 加 insert，测试桩 LoginServiceTest/AiAgentTest/AiFacadeBillingTest 同步）。
 - **诚实标注**：审计 best-effort + 强日志（非 fail-closed，管理操作非 DB 事务无法原子）；before/after 摘要字段建表未填充；`/internal/v1` 不加鉴权；管理员密码与游戏密码同源；session 集群失效广播未做。
+
+**AI 计费两处存量缺陷修复（2026-08-19）**：4.2「AI 权限与预算」开工前的止血，两个缺陷都已在漏。
+- **缺陷 1 模型 key 口径不匹配**：`charge` 传的是 `AiModelBundle.descriptor()`（`provider/modelName`，如 `deepseek/deepseek-chat`），而 `model_rate.model_key` 的 V13 seed 是裸 `deepseek-chat`；`computePoints` 的 `findByModelKey` 查不到就 `return 0` → **外部模型一路静默免费**。`local-rule` 同样匹配不上，但其 rate 本就是 0，结果碰巧正确，所以本地开发永远看不出问题。修复：`V19__model_rate_descriptor_fix.sql`（common，UPDATE 既有行，不改已冻结的 V13）。**local-rule 的 descriptor 是 `local-rule/deterministic`**（`AiModelFactory` 把 modelName 硬编码为 `deterministic`），不是 `local-rule/local-rule`。
+- **缺陷 2 `/api/v1/ai/chat` 完全不计费**：`AiController.chat` 直接调 `AiFacade.investigate`，不经过能力面，既不 precheck 也不 charge —— 持 `ai:use` 的 key 走这条即无限免费。游戏内 `@gm` 是第三条同样漏的入口。
+- **修复形态（重要，后续改动别踩回去）**：计费下沉为 core 契约 `org.gms.service.agent.AiGovernanceService`（precheck/settle/GovernanceTicket）+ `AiGovernanceException` + `NoopAiGovernanceService` 兜底（bootstrap `AgentBridgeConfig` 按 `@Requires(missingBeans)` 装配）；实现 `BillingAiGovernance` 在 http-api。**唯一计费点 = `AiFacade.investigate` 内部**，三条入口自动全覆盖；**`ToolExecutionService` 的 precheck/charge 已删除**（否则双重扣费），只保留把 `AiGovernanceException` 映射成 429。`AiController.chat` 同样 catch 该异常返回 429。
+- **为什么单测没拦住**：`BillingServiceTest` 自己 seed 裸 key、自己用裸 key 调 charge，与生产口径脱节，恒绿。已改为 descriptor 常量并加 `charge_裸模型名不命中倍率_口径已统一为descriptor` 固化。
+- **真正的锁是 E2E**：`AiBillingE2ETest`（bootstrap）用绑账号、余额 0 的普通 key 打两条入口，断言都 429。已验证摘掉计费点即红（200）、恢复即绿。
+- **`ApiKeyRepository` 加 `findByCredentialId`**（治理契约只拿得到 subjectId/credentialId，需反查 scope 与计费账号；`*` scope 与查不到记录的 bootstrap/内部凭据免计费）。改这个接口须同步 `ApiKeyServiceTest.InMemoryApiKeyRepository` 桩。
+- **诚实标注**：`local-rule` 不上报 TokenUsage，token 恒 0、扣减恒 0，所以 E2E 只能锁「入口是否受额度约束」，金额口径的回归由单测覆盖；`ai_usage_log` 的 `points_cost`/`account_id` 仍未填充；旧库里运维手工加的其它裸 key 需人工对账。
+- **下一轮 4.2 的前置问题**：当前所有 API key 的 `subjectId` 都继承签发者（bootstrap 签发的是 `subject_owner`），没有独立 Subject 签发入口。此时把策略挂 subjectId 会塌缩成「全体一份」——4.2 开工前要先决定补独立 Subject 签发还是改挂账号维度。
+- **顺带暴露的既有测试隔离缺陷（写 E2E 必读）**：`MybatisFlexBootstrap.start()` 注册的是**全局默认 DataSource**，同一 JVM 内先启动的 `ApplicationContext` 会被后续测试类共享——即使各测试用不同的临时 SQLite 路径，**后跑的测试类读到的仍是先跑那个的库**。因此 E2E 里**禁止对表做绝对计数断言**（`count() == 1`），必须记基线算增量。新增 `AiBillingE2ETest`（字母序在 `HttpApiE2ETest` 之前）后，`HttpApiE2ETest` 的 `toolAudits.count()==1` 立刻变成 6；同文件 :310 的 `isGreaterThanOrEqualTo(7)` 说明前人早已踩过但只局部妥协。已把该测试四处绝对计数改为增量断言。根治（每类 fork 新 JVM / DataSource 隔离）未做。
