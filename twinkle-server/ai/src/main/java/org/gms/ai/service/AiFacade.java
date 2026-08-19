@@ -9,6 +9,7 @@ import org.gms.ai.model.tool.AgentToolAudit;
 import org.gms.data.entity.AiUsageEntity;
 import org.gms.data.repo.AiUsageRepository;
 import org.gms.i18n.I18n;
+import org.gms.service.agent.AiGovernanceService;
 import org.gms.service.agent.ServerAgentService;
 
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,7 @@ public final class AiFacade implements ServerAgentService {
     private final AiAssistant assistant;
     private final AiUsageRepository usageRepository;
     private final AiModelBundle model;
+    private final AiGovernanceService governance;
     private final int maxConversations;
     private final AtomicLong callCount = new AtomicLong();
     private final Object[] conversationLocks = new Object[64];
@@ -48,10 +50,11 @@ public final class AiFacade implements ServerAgentService {
     private final ConcurrentHashMap<String, AtomicInteger> activeConversations = new ConcurrentHashMap<>();
 
     public AiFacade(AiAssistant assistant, AiUsageRepository usageRepository,
-                    AiModelBundle model, int maxConversations) {
+                    AiModelBundle model, AiGovernanceService governance, int maxConversations) {
         this.assistant = assistant;
         this.usageRepository = usageRepository;
         this.model = model;
+        this.governance = governance;
         this.maxConversations = Math.max(1, maxConversations);
         for (int i = 0; i < conversationLocks.length; i++) {
             conversationLocks[i] = new Object();
@@ -64,6 +67,10 @@ public final class AiFacade implements ServerAgentService {
         String safeConversationId = validatedConversationId(conversationId);
         String safeMessage = validatedMessage(message);
         String safeSubjectId = blankDefault(subjectId, "server-agent");
+        String safeCredentialId = blankDefault(credentialId, "internal-agent");
+        // 唯一计费点：能力面 tool-executions、/api/v1/ai/chat、游戏内 @gm 三条入口都汇聚到这里，
+        // 新增入口无需各自接线，也就不会再出现某条入口漏计费的情况。
+        AiGovernanceService.GovernanceTicket ticket = governance.precheck(safeSubjectId, safeCredentialId);
         String memoryId = conversationMemoryId(safeConversationId, safeSubjectId);
         long start = System.nanoTime();
         AtomicInteger active = activeConversations.computeIfAbsent(memoryId, ignored -> new AtomicInteger());
@@ -74,7 +81,7 @@ public final class AiFacade implements ServerAgentService {
                         "conversationId", safeConversationId,
                         "requestId", blankDefault(requestId, UUID.randomUUID().toString()),
                         "subjectId", safeSubjectId,
-                        "credentialId", blankDefault(credentialId, "internal-agent"),
+                        "credentialId", safeCredentialId,
                         "source", blankDefault(source, "server-agent")));
                 Result<String> result = assistant.investigate(memoryId, safeMessage, parameters);
                 String reply = result.content();
@@ -84,6 +91,8 @@ public final class AiFacade implements ServerAgentService {
                 TokenUsage usage = result.tokenUsage();
                 AgentReply agentReply = new AgentReply(safeConversationId, reply, model.descriptor(),
                         executedTools, auditRefs, tokenCount(usage, true), tokenCount(usage, false));
+                governance.settle(ticket, agentReply.model(), agentReply.inputTokens(),
+                        agentReply.outputTokens(), agentReply.executedTools());
                 record("agent:" + model.descriptor(), safeMessage, reply, start,
                         model.descriptor(), agentReply.inputTokens(), agentReply.outputTokens());
                 touchConversation(memoryId);

@@ -24,6 +24,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** BillingService 计费核心逻辑：倍率扣费、plan 限额、签到每日限、免计费模型。 */
 class BillingServiceTest {
 
+    /** 与 AiModelBundle.descriptor() 口径一致（provider/modelName），生产实际传入的就是这种值。 */
+    private static final String DEEPSEEK_MODEL = "deepseek/deepseek-chat";
+    private static final String LOCAL_RULE_MODEL = "local-rule/deterministic";
+
     private MemoryPointAccountRepository pointAccountRepository;
     private MemoryModelRateRepository modelRateRepository;
     private MemoryPlanRepository planRepository;
@@ -40,14 +44,16 @@ class BillingServiceTest {
         configFacade = new MemoryConfigFacade();
         billingService = new BillingService(pointAccountRepository, modelRateRepository,
                 planRepository, transactionRepository, configFacade);
-        modelRateRepository.insert(rate(1L, "deepseek-chat", 10000, 10000));
-        modelRateRepository.insert(rate(2L, "local-rule", 0, 0));
+        // 倍率键必须与生产传入的 AiModelBundle.descriptor()（provider/modelName）一致：
+        // 此前 seed 用裸 modelName，与生产口径脱节，导致外部模型 findByModelKey 落空、静默免费。
+        modelRateRepository.insert(rate(1L, DEEPSEEK_MODEL, 10000, 10000));
+        modelRateRepository.insert(rate(2L, LOCAL_RULE_MODEL, 0, 0));
     }
 
     @Test
     void charge_按模型倍率扣积分() {
         billingService.adjust(1L, 1000L, "admin_adjust");
-        long points = billingService.charge(1L, "deepseek-chat", 100, 100, 0);
+        long points = billingService.charge(1L, DEEPSEEK_MODEL,100, 100, 0);
         assertThat(points).isEqualTo(200);
         assertThat(billingService.balance(1L).balance()).isEqualTo(800);
     }
@@ -55,7 +61,7 @@ class BillingServiceTest {
     @Test
     void charge_本地规则模型免计费() {
         billingService.adjust(1L, 1000L, "admin_adjust");
-        long points = billingService.charge(1L, "local-rule", 100, 100, 0);
+        long points = billingService.charge(1L, LOCAL_RULE_MODEL,100, 100, 0);
         assertThat(points).isZero();
         assertThat(billingService.balance(1L).balance()).isEqualTo(1000);
     }
@@ -63,7 +69,7 @@ class BillingServiceTest {
     @Test
     void charge_联网搜索按次额外扣分() {
         billingService.adjust(1L, 1000L, "admin_adjust");
-        long points = billingService.charge(1L, "deepseek-chat", 0, 0, 3);
+        long points = billingService.charge(1L, DEEPSEEK_MODEL,0, 0, 3);
         assertThat(points).isEqualTo(3);
         assertThat(billingService.balance(1L).balance()).isEqualTo(997);
     }
@@ -72,7 +78,7 @@ class BillingServiceTest {
     void charge_联网搜索成本从配置中心读取() {
         configFacade.put("billing.websearch.cost", "5");
         billingService.adjust(1L, 1000L, "admin_adjust");
-        long points = billingService.charge(1L, "deepseek-chat", 0, 0, 3);
+        long points = billingService.charge(1L, DEEPSEEK_MODEL,0, 0, 3);
         assertThat(points).isEqualTo(15);
         assertThat(billingService.balance(1L).balance()).isEqualTo(985);
     }
@@ -90,7 +96,7 @@ class BillingServiceTest {
         planRepository.insert(plan(1L, "pro", 100L, 0L, 0L));
         billingService.adjust(1L, 1000L, "admin_adjust");
         billingService.setPlan(1L, 1L);
-        billingService.charge(1L, "deepseek-chat", 50, 50, 0); // 消耗 100 积分，触达月限额
+        billingService.charge(1L, DEEPSEEK_MODEL,50, 50, 0); // 消耗 100 积分，触达月限额
         assertThatThrownBy(() -> billingService.precheck(1L))
                 .isInstanceOf(BillingException.class)
                 .satisfies(error -> assertThat(((BillingException) error).code())
@@ -117,10 +123,21 @@ class BillingServiceTest {
     @Test
     void charge_落一条负流水() {
         billingService.adjust(1L, 1000L, "admin_adjust");
-        billingService.charge(1L, "deepseek-chat", 10, 10, 0);
+        billingService.charge(1L, DEEPSEEK_MODEL,10, 10, 0);
         assertThat(transactionRepository.records).hasSize(2);
         assertThat(transactionRepository.records.get(1).getReason()).isEqualTo("ai_consume");
         assertThat(transactionRepository.records.get(1).getChangeAmount()).isEqualTo(-20L);
+    }
+
+    @Test
+    void charge_裸模型名不命中倍率_口径已统一为descriptor() {
+        billingService.adjust(1L, 1000L, "admin_adjust");
+        // 生产传入的是 descriptor（provider/modelName），裸 modelName 属于"未知模型"：
+        // findByModelKey 落空 → computePoints 返回 0 → 静默不扣分。
+        // 这正是外部模型此前一路免费的原因；本用例固化口径，倍率表被改回裸 key 时会在此变红。
+        long points = billingService.charge(1L, "deepseek-chat", 100, 100, 0);
+        assertThat(points).isZero();
+        assertThat(billingService.balance(1L).balance()).isEqualTo(1000);
     }
 
     private static ModelRate rate(Long id, String key, int input, int output) {

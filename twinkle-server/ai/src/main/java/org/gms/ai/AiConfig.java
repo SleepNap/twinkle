@@ -23,6 +23,7 @@ import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.observability.Metrics;
 import org.gms.role.AiEnabledCondition;
 import org.gms.service.admin.AdminService;
+import org.gms.service.agent.AiGovernanceService;
 import org.gms.task.BackgroundTaskRegistry;
 
 /**
@@ -114,10 +115,10 @@ public class AiConfig {
     @Bean
     @Singleton
     public AiFacade aiFacade(AiAssistant assistant, AiUsageRepository usageRepository,
-                             AiModelBundle model,
+                             AiModelBundle model, AiGovernanceService governance,
                              @Property(name = "twinkle.ai.memory.max-conversations", defaultValue = "100")
                              int maxConversations) {
-        return new AiFacade(assistant, usageRepository, model, maxConversations);
+        return new AiFacade(assistant, usageRepository, model, governance, maxConversations);
     }
 
     /** 玩家聊天入口的异步适配器；独立小线程池隔离外部模型延迟。 */

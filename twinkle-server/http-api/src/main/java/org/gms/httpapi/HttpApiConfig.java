@@ -28,6 +28,7 @@ import org.gms.httpapi.admin.AdminSessionService;
 import org.gms.httpapi.auth.ApiAccessPolicy;
 import org.gms.httpapi.auth.ApiAuditService;
 import org.gms.httpapi.auth.ApiKeyService;
+import org.gms.httpapi.billing.BillingAiGovernance;
 import org.gms.httpapi.billing.BillingService;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
 import org.gms.httpapi.service.AdminApiService;
@@ -37,6 +38,7 @@ import org.gms.httpapi.execution.OnlinePlayerPageService;
 import org.gms.httpapi.execution.PlayerInventoryTool;
 import org.gms.httpapi.execution.ServerHealthTool;
 import org.gms.httpapi.execution.ToolExecutionService;
+import org.gms.service.agent.AiGovernanceService;
 import org.gms.service.agent.ServerAgentService;
 import org.gms.observability.Metrics;
 import org.gms.observability.HealthRegistry;
@@ -121,6 +123,14 @@ public class HttpApiConfig {
                 transactionRepository, configFacade);
     }
 
+    /** AI 计费治理实现：覆盖 core 兜底，让 AI 门面成为唯一计费点。 */
+    @Bean
+    @Singleton
+    public AiGovernanceService billingAiGovernance(BillingService billingService,
+                                                   ApiKeyRepository apiKeyRepository) {
+        return new BillingAiGovernance(billingService, apiKeyRepository);
+    }
+
     @Bean
     @Singleton
     public ApiAuditService apiAuditService(ApiRequestAuditRepository repository) {
@@ -170,11 +180,9 @@ public class HttpApiConfig {
             OnlinePlayerPageService onlineTool, PlayerInventoryTool inventoryTool,
             ToolExecutionAuditRepository auditRepository,
             ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity,
-            ServerAgentService serverAgentService, BillingService billingService,
-            ApiKeyRepository apiKeyRepository) {
+            ServerAgentService serverAgentService) {
         return new ToolExecutionService(catalogService, healthTool, onlineTool, inventoryTool,
-                auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService,
-                billingService, apiKeyRepository);
+                auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService);
     }
 
     @Bean

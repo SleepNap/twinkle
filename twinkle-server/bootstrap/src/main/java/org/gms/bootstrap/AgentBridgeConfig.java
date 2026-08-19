@@ -4,6 +4,8 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
+import org.gms.service.agent.AiGovernanceService;
+import org.gms.service.agent.NoopAiGovernanceService;
 import org.gms.service.agent.PlayerSupportAgent;
 import org.gms.service.agent.UnavailablePlayerSupportAgent;
 import org.gms.service.agent.ServerAgentService;
@@ -25,5 +27,13 @@ public final class AgentBridgeConfig {
     @Requires(missingBeans = ServerAgentService.class)
     public ServerAgentService unavailableServerAgentService() {
         return new UnavailableServerAgentService();
+    }
+
+    /** 未装配计费实现（如纯频道进程）时放行 AI 调用，不做扣费。 */
+    @Bean
+    @Singleton
+    @Requires(missingBeans = AiGovernanceService.class)
+    public AiGovernanceService noopAiGovernanceService() {
+        return new NoopAiGovernanceService();
     }
 }

@@ -128,6 +128,13 @@ public final class ApiKeyServiceTest {
         }
 
         @Override
+        public Optional<ApiKeyRecord> findByCredentialId(String credentialId) {
+            return records.stream()
+                    .filter(record -> credentialId.equals(record.getCredentialId()))
+                    .findFirst();
+        }
+
+        @Override
         public List<ApiKeyRecord> findAll() {
             return List.copyOf(records);
         }

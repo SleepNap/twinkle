@@ -2,6 +2,8 @@ package org.gms.ai.controller;
 
 import io.micronaut.http.MediaType;
 import io.micronaut.http.HttpRequest;
+import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
@@ -12,6 +14,7 @@ import io.micronaut.http.annotation.Produces;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import org.gms.ai.service.AiFacade;
+import org.gms.service.agent.AiGovernanceException;
 
 import java.util.Map;
 import java.util.UUID;
@@ -33,16 +36,22 @@ public final class AiController {
         this.aiFacade = aiFacade;
     }
 
-    /** 对话（阻塞，返回最终文本；工具自动循环）。 */
+    /** 对话（阻塞，返回最终文本；工具自动循环）。计费由 AiFacade 内的唯一计费点执行。 */
     @Post("/chat")
-    public AiFacade.AgentReply chat(HttpRequest<?> request, @Body AgentChatRequest body) {
+    public HttpResponse<?> chat(HttpRequest<?> request, @Body AgentChatRequest body) {
         String conversationId = body.conversationId() == null || body.conversationId().isBlank()
                 ? "conv-" + UUID.randomUUID() : body.conversationId();
-        return aiFacade.investigate(conversationId, body.message(),
-                attribute(request, "twinkle.api.request-id", UUID.randomUUID().toString()),
-                attribute(request, "twinkle.api.subject-id", "api-agent"),
-                attribute(request, "twinkle.api.credential-id", "api-key"),
-                "api");
+        try {
+            return HttpResponse.ok(aiFacade.investigate(conversationId, body.message(),
+                    attribute(request, "twinkle.api.request-id", UUID.randomUUID().toString()),
+                    attribute(request, "twinkle.api.subject-id", "api-agent"),
+                    attribute(request, "twinkle.api.credential-id", "api-key"),
+                    "api"));
+        } catch (AiGovernanceException e) {
+            // 与能力面 tool-executions 的额度拒绝保持同一响应形态（429 + error 码）。
+            return HttpResponse.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", e.code(), "message", e.getMessage()));
+        }
     }
 
     /** 主动结束会话并释放上下文。 */

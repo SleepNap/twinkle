@@ -18,6 +18,7 @@ import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.observability.Metrics;
 import org.gms.observability.NoopMetrics;
 import org.gms.service.admin.AdminService;
+import org.gms.service.agent.NoopAiGovernanceService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -176,7 +177,8 @@ class AiFacadeBillingTest {
                 .tools(tool)
                 .build();
         return new AiFacade(assistant, usageRepo,
-                new AiModelBundle(model, model, "local-rule", "deterministic", false), 10);
+                new AiModelBundle(model, model, "local-rule", "deterministic", false),
+                new NoopAiGovernanceService(), 10);
     }
 
     @Test

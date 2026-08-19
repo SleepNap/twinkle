@@ -386,7 +386,11 @@ class HttpApiE2ETest {
 
             ToolExecutionAuditRepository toolAudits = ctx.getBean(ToolExecutionAuditRepository.class);
             assertThat(toolAudits.findByAuditRef(healthAuditRef)).isPresent();
-            assertThat(toolAudits.count()).isEqualTo(1);
+            // 用增量而非绝对计数：MybatisFlexBootstrap.start() 注册的是全局默认 DataSource，
+            // 同一 JVM 内先启动的 ApplicationContext 会被后续测试类共享，绝对计数并不稳定
+            // （同文件 :310 早已因此改用 isGreaterThanOrEqualTo）。这里真正要断言的是"新增了几条"。
+            long auditBaseline = toolAudits.count() - 1;
+            assertThat(toolAudits.count() - auditBaseline).isEqualTo(1);
 
             HttpResponse<String> duplicate = client.send(
                     bearer(base + "/api/v1/tool-executions", token)
@@ -396,7 +400,7 @@ class HttpApiE2ETest {
                     HttpResponse.BodyHandlers.ofString());
             assertThat(duplicate.statusCode()).isEqualTo(200);
             assertThat(jsonString(duplicate.body(), "executionId")).isEqualTo(healthExecutionId);
-            assertThat(toolAudits.count()).isEqualTo(1);
+            assertThat(toolAudits.count() - auditBaseline).isEqualTo(1);
 
             HttpResponse<String> queried = client.send(
                     bearer(base + "/api/v1/tool-executions/" + healthExecutionId, token).GET().build(),
@@ -429,7 +433,7 @@ class HttpApiE2ETest {
                     .doesNotContain("ownerAccountId").doesNotContain("ipAddress");
             String cursor = jsonString(online.body(), "nextCursor");
             assertThat(cursor).isNotBlank();
-            assertThat(toolAudits.count()).isEqualTo(2);
+            assertThat(toolAudits.count() - auditBaseline).isEqualTo(2);
 
             Character inventoryCharacter = new Character(1L);
             inventoryCharacter.setId(42L);
@@ -455,7 +459,7 @@ class HttpApiE2ETest {
                     .contains("InventoryHero").contains("\"itemType\":\"pet\"")
                     .contains("\"petId\":\"9001\"").contains("小黑")
                     .contains("\"closeness\":3456");
-            assertThat(toolAudits.count()).isEqualTo(3);
+            assertThat(toolAudits.count() - auditBaseline).isEqualTo(3);
 
             eventBus.send(OnlinePlayerEvents.TARGET,
                     new OnlinePlayerEvents.PlayerOnline(40L, "Forty", 100000040, 40, 400));
