@@ -52,6 +52,14 @@ class AiFacadeBillingTest {
         public long count() {
             return records.size();
         }
+
+        @Override
+        public List<AiUsageEntity> findByRange(String from, String to, Long accountId, int limit) {
+            return records.stream()
+                    .filter(record -> accountId == null || accountId.equals(record.getAccountId()))
+                    .limit(limit)
+                    .toList();
+        }
     }
 
     private static final class FakeAdmin implements AdminService {

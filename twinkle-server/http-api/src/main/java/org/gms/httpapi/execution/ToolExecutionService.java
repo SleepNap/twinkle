@@ -1,5 +1,6 @@
 package org.gms.httpapi.execution;
 
+import io.micronaut.http.HttpStatus;
 import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.ToolExecutionAudit;
 import org.gms.data.repo.ToolExecutionAuditRepository;
@@ -18,6 +19,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -327,16 +329,25 @@ public final class ToolExecutionService {
                 "evicted", serverAgent.closeConversation(conversationId, principal.subjectId()));
     }
 
+    /**
+     * 治理拒绝 → HTTP 状态：策略类不可重试（重试多少次都不会通过），额度类与整体关闭可重试。
+     */
     private static ToolProtocolException governanceError(AiGovernanceException e, String requestId) {
-        return new ToolProtocolException(io.micronaut.http.HttpStatus.TOO_MANY_REQUESTS,
-                e.code(), e.getMessage(), true, null, requestId, Map.of());
+        HttpStatus status = switch (e.kind()) {
+            case POLICY -> HttpStatus.FORBIDDEN;
+            case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case QUOTA -> HttpStatus.TOO_MANY_REQUESTS;
+        };
+        boolean retryable = e.kind() != AiGovernanceException.Kind.POLICY;
+        return new ToolProtocolException(status, e.code(), e.getMessage(), retryable,
+                null, requestId, Map.of());
     }
 
     private static String shortHash(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(value.getBytes(StandardCharsets.UTF_8));
-            return java.util.HexFormat.of().formatHex(digest, 0, 12);
+            return HexFormat.of().formatHex(digest, 0, 12);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "SHA-256"), e);
         }

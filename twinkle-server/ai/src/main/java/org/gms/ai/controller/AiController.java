@@ -48,8 +48,8 @@ public final class AiController {
                     attribute(request, "twinkle.api.credential-id", "api-key"),
                     "api"));
         } catch (AiGovernanceException e) {
-            // 与能力面 tool-executions 的额度拒绝保持同一响应形态（429 + error 码）。
-            return HttpResponse.status(HttpStatus.TOO_MANY_REQUESTS)
+            // 与能力面 tool-executions 的治理拒绝保持同一响应形态与状态码分流。
+            return HttpResponse.status(governanceStatus(e))
                     .body(Map.of("error", e.code(), "message", e.getMessage()));
         }
     }
@@ -80,6 +80,15 @@ public final class AiController {
 
     private static String attribute(HttpRequest<?> request, String name, String fallback) {
         return request.getAttribute(name, String.class).orElse(fallback);
+    }
+
+    /** 策略类拒绝重试也不会通过，用 403；整体关闭是服务不可用，用 503；额度类维持 429。 */
+    private static HttpStatus governanceStatus(AiGovernanceException e) {
+        return switch (e.kind()) {
+            case POLICY -> HttpStatus.FORBIDDEN;
+            case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case QUOTA -> HttpStatus.TOO_MANY_REQUESTS;
+        };
     }
 
     /** Agent 对话请求；conversationId 省略时由服务端创建。 */

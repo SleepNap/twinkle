@@ -9,12 +9,14 @@ import org.gms.ai.model.tool.AgentToolAudit;
 import org.gms.data.entity.AiUsageEntity;
 import org.gms.data.repo.AiUsageRepository;
 import org.gms.i18n.I18n;
+import org.gms.service.agent.AgentStatusService;
 import org.gms.service.agent.AiGovernanceService;
 import org.gms.service.agent.ServerAgentService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -24,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * AI 服务门面（架构 M3-2：AI 请求编排 + 计费/观测落 SQLite）。
@@ -35,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>本类不加 @Singleton——由 bootstrap 装配。
  */
 @Log4j2
-public final class AiFacade implements ServerAgentService {
+public final class AiFacade implements ServerAgentService, AgentStatusService {
 
 
 
@@ -45,6 +48,9 @@ public final class AiFacade implements ServerAgentService {
     private final AiGovernanceService governance;
     private final int maxConversations;
     private final AtomicLong callCount = new AtomicLong();
+    private final AtomicInteger consecutiveFailures = new AtomicInteger();
+    private final AtomicReference<String> lastError = new AtomicReference<>("");
+    private final AtomicReference<String> lastErrorAt = new AtomicReference<>("");
     private final Object[] conversationLocks = new Object[64];
     private final Map<String, Long> conversationAccess = new LinkedHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> activeConversations = new ConcurrentHashMap<>();
@@ -68,9 +74,11 @@ public final class AiFacade implements ServerAgentService {
         String safeMessage = validatedMessage(message);
         String safeSubjectId = blankDefault(subjectId, "server-agent");
         String safeCredentialId = blankDefault(credentialId, "internal-agent");
-        // 唯一计费点：能力面 tool-executions、/api/v1/ai/chat、游戏内 @gm 三条入口都汇聚到这里，
-        // 新增入口无需各自接线，也就不会再出现某条入口漏计费的情况。
-        AiGovernanceService.GovernanceTicket ticket = governance.precheck(safeSubjectId, safeCredentialId);
+        // 唯一治理点：能力面 tool-executions、/api/v1/ai/chat、游戏内 @gm 三条入口都汇聚到这里，
+        // 新增入口无需各自接线，也就不会再出现某条入口漏计费或绕过策略的情况。
+        // 传入模型 descriptor 供白名单判定——治理实现在 http-api，拿不到 AI 模块的模型 bean。
+        AiGovernanceService.GovernanceTicket ticket =
+                governance.precheck(safeSubjectId, safeCredentialId, model.descriptor());
         String memoryId = conversationMemoryId(safeConversationId, safeSubjectId);
         long start = System.nanoTime();
         AtomicInteger active = activeConversations.computeIfAbsent(memoryId, ignored -> new AtomicInteger());
@@ -91,14 +99,18 @@ public final class AiFacade implements ServerAgentService {
                 TokenUsage usage = result.tokenUsage();
                 AgentReply agentReply = new AgentReply(safeConversationId, reply, model.descriptor(),
                         executedTools, auditRefs, tokenCount(usage, true), tokenCount(usage, false));
-                governance.settle(ticket, agentReply.model(), agentReply.inputTokens(),
+                long points = governance.settle(ticket, agentReply.model(), agentReply.inputTokens(),
                         agentReply.outputTokens(), agentReply.executedTools());
                 record("agent:" + model.descriptor(), safeMessage, reply, start,
-                        model.descriptor(), agentReply.inputTokens(), agentReply.outputTokens());
+                        model.descriptor(), agentReply.inputTokens(), agentReply.outputTokens(),
+                        points, ticket == null ? null : ticket.accountId());
                 touchConversation(memoryId);
+                markSuccess();
                 return agentReply;
             }
         } catch (RuntimeException e) {
+            // 治理拒绝在 try 之前抛出，不会落到这里——lastError 只反映模型侧故障。
+            markFailure(e);
             log.error(I18n.message("log.ai.investigation_error"), safeConversationId, e);
             throw e;
         } finally {
@@ -131,20 +143,24 @@ public final class AiFacade implements ServerAgentService {
     public OnlineReport onlineReport() {
         long start = System.nanoTime();
         OnlineReport report = assistant.onlineReport("在线统计");
+        // 内部报表不经治理，无计费主体。
         record("online_report", "在线统计", String.valueOf(report.getOnlineCount()), start,
-                model.descriptor(), 0, 0);
+                model.descriptor(), 0, 0, 0L, null);
         return report;
     }
 
     /** 累计调用次数（观测）。 */
+    @Override
     public long callCount() {
         return callCount.get();
     }
 
+    @Override
     public String modelDescriptor() {
         return model.descriptor();
     }
 
+    @Override
     public boolean externalModel() {
         return model.external();
     }
@@ -152,6 +168,21 @@ public final class AiFacade implements ServerAgentService {
     @Override
     public boolean available() {
         return true;
+    }
+
+    @Override
+    public int consecutiveFailures() {
+        return consecutiveFailures.get();
+    }
+
+    @Override
+    public String lastError() {
+        return lastError.get();
+    }
+
+    @Override
+    public String lastErrorAt() {
+        return lastErrorAt.get();
     }
 
     @Override
@@ -176,7 +207,8 @@ public final class AiFacade implements ServerAgentService {
     }
 
     private void record(String toolName, String request, String reply, long startNanos,
-                        String modelDescriptor, int inputTokens, int outputTokens) {
+                        String modelDescriptor, int inputTokens, int outputTokens,
+                        long pointsCost, Long accountId) {
         callCount.incrementAndGet();
         AiUsageEntity usage = new AiUsageEntity();
         usage.setToolName(toolName.length() > 100 ? toolName.substring(0, 100) : toolName);
@@ -187,11 +219,30 @@ public final class AiFacade implements ServerAgentService {
         usage.setModel(modelDescriptor);
         usage.setInputTokens(inputTokens);
         usage.setOutputTokens(outputTokens);
+        // 列是 INTEGER：单次调用扣分远小于 2^31，强转安全，避免为此做跨方言 BIGINT 迁移。
+        usage.setPointsCost((int) Math.min(pointsCost, Integer.MAX_VALUE));
+        usage.setAccountId(accountId);
+        // 显式写 ISO-8601：DB 默认值在 SQLite 是空格分隔的 "yyyy-MM-dd HH:mm:ss"，
+        // 与管理面按 ISO 传入的 from/to 做字典序比较会错开。
+        usage.setCreatedAt(Instant.now().toString());
         try {
             usageRepository.insert(usage);
         } catch (RuntimeException e) {
             log.warn(I18n.message("log.ai.usage_record_failed"), e);
         }
+    }
+
+    private void markSuccess() {
+        consecutiveFailures.set(0);
+    }
+
+    private void markFailure(RuntimeException error) {
+        consecutiveFailures.incrementAndGet();
+        String summary = error.getClass().getSimpleName()
+                + (error.getMessage() == null ? "" : ": " + error.getMessage());
+        // 异常消息可能带上游返回体，截断防止管理面被灌爆；不含密钥与提示词原文。
+        lastError.set(summary.length() > 300 ? summary.substring(0, 300) : summary);
+        lastErrorAt.set(Instant.now().toString());
     }
 
     private Object lockFor(String conversationId) {

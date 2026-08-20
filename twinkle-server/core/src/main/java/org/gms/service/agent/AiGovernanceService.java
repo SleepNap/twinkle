@@ -15,19 +15,25 @@ import java.util.List;
 public interface AiGovernanceService {
 
     /**
-     * 调用模型前的准入与额度预检。
+     * 调用模型前的准入、策略与额度预检。
      *
-     * @throws AiGovernanceException 额度不足或调用方不具备计费主体时抛出
+     * <p>{@code modelDescriptor} 是即将使用的模型标识（{@code provider/modelName}，与
+     * {@code model_rate.model_key} 同口径）。模型白名单要在调用前判定，而实现方在 http-api
+     * 拿不到 AI 模块的模型 bean，故由调用方传入。
+     *
+     * @throws AiGovernanceException 策略拒绝、额度不足或调用方不具备计费主体时抛出
      */
-    public GovernanceTicket precheck(String subjectId, String credentialId);
+    public GovernanceTicket precheck(String subjectId, String credentialId, String modelDescriptor);
 
     /**
-     * 调用模型后结算扣费。
+     * 调用模型后结算扣费并累计用量。
      *
      * <p>实现内部吞掉异常并记录日志：模型结果已经产出，扣费失败不应连带失败整个请求
      * （沿用既有计费语义，非事务性扣费）。
+     *
+     * @return 实际扣除的积分数；0 表示免计费或扣费失败。调用方用它回填 {@code ai_usage_log}
      */
-    public void settle(GovernanceTicket ticket, String model, int inputTokens,
+    public long settle(GovernanceTicket ticket, String model, int inputTokens,
                        int outputTokens, List<String> executedTools);
 
     /** 结算凭据；{@code billable=false} 表示内部调用或管理员凭据，免计费。 */

@@ -4,11 +4,13 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
+import org.gms.service.agent.AgentStatusService;
 import org.gms.service.agent.AiGovernanceService;
 import org.gms.service.agent.NoopAiGovernanceService;
 import org.gms.service.agent.PlayerSupportAgent;
 import org.gms.service.agent.UnavailablePlayerSupportAgent;
 import org.gms.service.agent.ServerAgentService;
+import org.gms.service.agent.UnavailableAgentStatusService;
 import org.gms.service.agent.UnavailableServerAgentService;
 
 /** 玩家值班 GM 的拓扑兜底装配：AI 关闭或纯频道进程中保持聊天 handler 可用。 */
@@ -35,5 +37,13 @@ public final class AgentBridgeConfig {
     @Requires(missingBeans = AiGovernanceService.class)
     public AiGovernanceService noopAiGovernanceService() {
         return new NoopAiGovernanceService();
+    }
+
+    /** 未装配 AI 模块时，管理面仍能查到"AI 不可用"而不是报 bean 缺失。 */
+    @Bean
+    @Singleton
+    @Requires(missingBeans = AgentStatusService.class)
+    public AgentStatusService unavailableAgentStatusService() {
+        return new UnavailableAgentStatusService();
     }
 }

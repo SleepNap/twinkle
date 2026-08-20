@@ -15,6 +15,9 @@ public interface ApiKeyRepository {
 
     public List<ApiKeyRecord> findAll();
 
+    /** 按计费账号反查名下所有凭据；AI 策略变更后需刷新它们的 permissionVersion。 */
+    public List<ApiKeyRecord> findByOwnerAccountId(Long ownerAccountId);
+
     public void insert(ApiKeyRecord record);
 
     public void update(ApiKeyRecord record);

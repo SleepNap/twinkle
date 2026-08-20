@@ -13,6 +13,7 @@ import org.gms.data.repo.AdminOperationAuditRepository;
 import org.gms.data.repo.AdminRoleRepository;
 import org.gms.data.repo.AdminSessionRepository;
 import org.gms.data.repo.ApiKeyRepository;
+import org.gms.data.repo.AiUsagePolicyRepository;
 import org.gms.data.repo.ModelRateRepository;
 import org.gms.data.repo.PointAccountRepository;
 import org.gms.data.repo.PointTransactionRepository;
@@ -28,6 +29,7 @@ import org.gms.httpapi.admin.AdminSessionService;
 import org.gms.httpapi.auth.ApiAccessPolicy;
 import org.gms.httpapi.auth.ApiAuditService;
 import org.gms.httpapi.auth.ApiKeyService;
+import org.gms.httpapi.billing.AiPolicyService;
 import org.gms.httpapi.billing.BillingAiGovernance;
 import org.gms.httpapi.billing.BillingService;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
@@ -123,12 +125,21 @@ public class HttpApiConfig {
                 transactionRepository, configFacade);
     }
 
-    /** AI 计费治理实现：覆盖 core 兜底，让 AI 门面成为唯一计费点。 */
+    /** AI 权限与预算策略（全局开关 + 模型白名单 + 账号日用量上限）。 */
+    @Bean
+    @Singleton
+    public AiPolicyService aiPolicyService(AiUsagePolicyRepository policyRepository,
+                                           ConfigFacade configFacade) {
+        return new AiPolicyService(policyRepository, configFacade);
+    }
+
+    /** AI 治理实现：覆盖 core 兜底，让 AI 门面成为唯一策略与计费点。 */
     @Bean
     @Singleton
     public AiGovernanceService billingAiGovernance(BillingService billingService,
+                                                   AiPolicyService aiPolicyService,
                                                    ApiKeyRepository apiKeyRepository) {
-        return new BillingAiGovernance(billingService, apiKeyRepository);
+        return new BillingAiGovernance(billingService, aiPolicyService, apiKeyRepository);
     }
 
     @Bean

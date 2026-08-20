@@ -140,6 +140,14 @@ public final class ApiKeyServiceTest {
         }
 
         @Override
+        public List<ApiKeyRecord> findByOwnerAccountId(Long ownerAccountId) {
+            return records.stream()
+                    .filter(record -> ownerAccountId != null
+                            && ownerAccountId.equals(record.getOwnerAccountId()))
+                    .toList();
+        }
+
+        @Override
         public void insert(ApiKeyRecord record) {
             record.setId(++sequence);
             records.add(record);

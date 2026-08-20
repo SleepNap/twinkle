@@ -42,6 +42,7 @@ const PERMISSION_OPTIONS: { value: string; key: MessageKey }[] = [
   { value: "admin.task:manage", key: "roles.perm.task" },
   { value: "admin.billing:manage", key: "roles.perm.billing" },
   { value: "admin.role:manage", key: "roles.perm.role" },
+  { value: "admin.ai:manage", key: "roles.perm.ai" },
 ]
 
 interface RoleDraft {

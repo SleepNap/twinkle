@@ -12,6 +12,7 @@ import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.AccountAdminRoleMapper;
 import org.gms.data.mapper.AdminOperationAuditMapper;
+import org.gms.data.mapper.AiUsagePolicyMapper;
 import org.gms.data.mapper.AdminRoleMapper;
 import org.gms.data.mapper.AdminSessionMapper;
 import org.gms.data.mapper.ApiKeyMapper;
@@ -34,6 +35,7 @@ import org.gms.data.mapper.SubscriptionPlanMapper;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AccountAdminRoleRepository;
 import org.gms.data.repo.AdminOperationAuditRepository;
+import org.gms.data.repo.AiUsagePolicyRepository;
 import org.gms.data.repo.AdminRoleRepository;
 import org.gms.data.repo.AdminSessionRepository;
 import org.gms.data.repo.ApiKeyRepository;
@@ -45,6 +47,7 @@ import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexAccountAdminRoleRepository;
 import org.gms.data.repo.FlexAdminOperationAuditRepository;
+import org.gms.data.repo.FlexAiUsagePolicyRepository;
 import org.gms.data.repo.FlexAdminRoleRepository;
 import org.gms.data.repo.FlexAdminSessionRepository;
 import org.gms.data.repo.FlexApiKeyRepository;
@@ -126,6 +129,7 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(AccountAdminRoleMapper.class);
         bootstrap.addMapper(AdminSessionMapper.class);
         bootstrap.addMapper(AdminOperationAuditMapper.class);
+        bootstrap.addMapper(AiUsagePolicyMapper.class);
         bootstrap.start();
         log.info(I18n.message("log.data.mybatis_flex_ready"));
         return bootstrap;
@@ -265,6 +269,12 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public AiUsagePolicyMapper aiUsagePolicyMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(AiUsagePolicyMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -393,5 +403,11 @@ public class MyBatisFlexFactory {
     @Singleton
     public AdminOperationAuditRepository adminOperationAuditRepository(AdminOperationAuditMapper mapper) {
         return new FlexAdminOperationAuditRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public AiUsagePolicyRepository aiUsagePolicyRepository(AiUsagePolicyMapper mapper) {
+        return new FlexAiUsagePolicyRepository(mapper);
     }
 }

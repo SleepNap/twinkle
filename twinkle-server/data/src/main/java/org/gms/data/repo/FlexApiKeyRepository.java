@@ -35,6 +35,13 @@ public final class FlexApiKeyRepository implements ApiKeyRepository {
     }
 
     @Override
+    public List<ApiKeyRecord> findByOwnerAccountId(Long ownerAccountId) {
+        return mapper.selectListByQuery(QueryWrapper.create()
+                .where(ApiKeyRecord::getOwnerAccountId).eq(ownerAccountId)
+                .orderBy(ApiKeyRecord::getId, false));
+    }
+
+    @Override
     public void insert(ApiKeyRecord record) {
         mapper.insertSelective(record);
     }

@@ -11,13 +11,14 @@ import java.util.List;
 public final class NoopAiGovernanceService implements AiGovernanceService {
 
     @Override
-    public GovernanceTicket precheck(String subjectId, String credentialId) {
+    public GovernanceTicket precheck(String subjectId, String credentialId, String modelDescriptor) {
         return GovernanceTicket.free();
     }
 
     @Override
-    public void settle(GovernanceTicket ticket, String model, int inputTokens,
+    public long settle(GovernanceTicket ticket, String model, int inputTokens,
                        int outputTokens, List<String> executedTools) {
         // 无计费实现，不结算。
+        return 0L;
     }
 }

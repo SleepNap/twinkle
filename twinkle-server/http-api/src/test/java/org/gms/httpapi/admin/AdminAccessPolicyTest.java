@@ -64,4 +64,19 @@ class AdminAccessPolicyTest {
         AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/tasks/abc/retry");
         assertThat(p.requiredPermission()).isEqualTo(AdminPermission.TASK_MANAGE);
     }
+
+    @Test
+    void aiPolicyWrite_requiresAiManage() {
+        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.PUT, "/admin/v1/ai/policies/7");
+        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.AI_MANAGE);
+    }
+
+    /** AI 的读端点必须落在通用只读权限上，别被写分支吃掉——审计员也要能看运行态。 */
+    @Test
+    void aiStatusRead_requiresAdminRead() {
+        assertThat(policy.resolve(HttpMethod.GET, "/admin/v1/ai/status").requiredPermission())
+                .isEqualTo(AdminPermission.READ);
+        assertThat(policy.resolve(HttpMethod.GET, "/admin/v1/ai/usage").requiredPermission())
+                .isEqualTo(AdminPermission.READ);
+    }
 }

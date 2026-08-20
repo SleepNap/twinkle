@@ -108,4 +108,17 @@ twinkle 是**热更新、扩展性好的冒险岛后台**（MapleStory v83 服�
 - **`ApiKeyRepository` 加 `findByCredentialId`**（治理契约只拿得到 subjectId/credentialId，需反查 scope 与计费账号；`*` scope 与查不到记录的 bootstrap/内部凭据免计费）。改这个接口须同步 `ApiKeyServiceTest.InMemoryApiKeyRepository` 桩。
 - **诚实标注**：`local-rule` 不上报 TokenUsage，token 恒 0、扣减恒 0，所以 E2E 只能锁「入口是否受额度约束」，金额口径的回归由单测覆盖；`ai_usage_log` 的 `points_cost`/`account_id` 仍未填充；旧库里运维手工加的其它裸 key 需人工对账。
 - **下一轮 4.2 的前置问题**：当前所有 API key 的 `subjectId` 都继承签发者（bootstrap 签发的是 `subject_owner`），没有独立 Subject 签发入口。此时把策略挂 subjectId 会塌缩成「全体一份」——4.2 开工前要先决定补独立 Subject 签发还是改挂账号维度。
+**控制台 4.2「AI 权限与预算」完成（2026-08-19）**：策略维度定案 + 分层判定 + 运行态可见。
+- **策略挂账号维度**（`account_records.id`，与 `point_account` 同口径），不挂 subjectId。理由：`api_key_records.subject_id` 在 `ApiKeyService.persistNewKey` 里 `setSubjectId(issuer.subjectId())` 原样继承签发者，而控制台唯一签发者是 bootstrap principal（subjectId 是常量 `subject_owner`），挂上去所有 key 共享一条策略。现有计费也早已是账号维度（`BillingAiGovernance` 完全忽略 subjectId）。roadmap 原写的 `PUT /admin/v1/ai/policies/{subjectId}` 已改为 `{accountId}`。
+- **判定顺序是安全语义，不能重排**：`AiPolicyService.checkGlobal`（运行期开关 + 全局白名单）**必须在 `resolveBillingAccount` 之前**。管理员凭据（scope `*`）在解析处 `return free()` 短路，顺序反了全局策略对它完全失效 —— 管理员 key 泄漏即无限免费调外部模型。E2E 已锁（摘掉 checkGlobal 立刻红）。
+- **两个开关别混**：`twinkle.ai.enabled` 是 Micronaut `AiEnabledCondition` 装配期条件，运行期改不了；`ai.runtime.enabled`（ConfigFacade / 配置中心）才是运行期软开关，关闭后 AI bean 仍装配、只是治理层拒绝。
+- **限额语义**沿用 subscription_plan：`>0` 生效、`0` 不限制；**无策略行 = 不限制**（新表上线不锁死存量账号）。日窗口 24h 滚动，计数器走 `AiUsagePolicyMapper` 的 `@Update` 原子自增 SQL（项目里唯一的注解 SQL，因为读-改-写并发会丢计数）。
+- **模型白名单的真实语义**：模型是装配期单例 `AiModelBundle`，白名单是"当前模型是否放行"，不是多模型路由选型。descriptor = `provider/modelName`（本地是 `local-rule/deterministic`）。
+- **拒绝码按性质分流**（此前两处硬编码 429）：`AiGovernanceException.Kind` = QUOTA→429 可重试 / UNAVAILABLE→503 / POLICY→403 不可重试。映射点两处：`ToolExecutionService.governanceError` 与 `AiController.chat`。
+- **`AgentStatusService` 是新 core 契约**（不是扩 `ServerAgentService`）：http-api 只依赖 core+data、不依赖 ai（已核对 pom），运行态必须经 core 契约。拆开也避免动 `UnavailableServerAgentService` 与 `ToolCatalogServiceTest.AvailableAgent` 两个桩。
+- **`permissionVersion` 刷新不是生效机制**：治理层每次实时查库，写库即生效；刷新只让客户端 catalog etag 失效 + 审计带新 policyVersion。别当成保障。
+- **顺带修的既有缺陷**：`ai_usage_log` 的 `points_cost`/`account_id` 回填（此前恒 0，靠 `settle` 返回值）；该表自 V4 建表起无任何索引，补了 `(account_id, created_at)`；`record()` 显式写 ISO-8601 `created_at`（DB 默认在 SQLite 是空格分隔，与按 ISO 传的 from/to 做字典序比较会错开，存量行仍是旧格式）。
+- **诚实标注**：`local-rule` 不上报 TokenUsage，token/扣分恒 0，token 维度日预算只能靠单测锁；管理员用量 `account_id` 落 0（列 NOT NULL DEFAULT 0）；日限额因 precheck/settle 两阶段有窗口，是近似值非硬上限；预算是账号粒度，per-Credential 未做。
+- **已知遗留（非本次引入）**：`twinkle-web/src/pages/roles-page.tsx:130` 有 `react-hooks/set-state-in-effect` lint error，上一轮 RBAC 前端提交引入，`npm run lint` 因它失败（已用 git stash 验证与 4.2 改动无关）。
+
 - **顺带暴露的既有测试隔离缺陷（写 E2E 必读）**：`MybatisFlexBootstrap.start()` 注册的是**全局默认 DataSource**，同一 JVM 内先启动的 `ApplicationContext` 会被后续测试类共享——即使各测试用不同的临时 SQLite 路径，**后跑的测试类读到的仍是先跑那个的库**。因此 E2E 里**禁止对表做绝对计数断言**（`count() == 1`），必须记基线算增量。新增 `AiBillingE2ETest`（字母序在 `HttpApiE2ETest` 之前）后，`HttpApiE2ETest` 的 `toolAudits.count()==1` 立刻变成 6；同文件 :310 的 `isGreaterThanOrEqualTo(7)` 说明前人早已踩过但只局部妥协。已把该测试四处绝对计数改为增量断言。根治（每类 fork 新 JVM / DataSource 隔离）未做。

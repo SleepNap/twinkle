@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, Coins, FileSearch, Globe2, KeyRound, ListTodo, LogOut, Radio, Server, Settings2, ShieldCheck, UserRoundSearch, Users, Wrench } from "lucide-react"
+import { Activity, Bot, ChevronDown, Coins, FileSearch, Globe2, KeyRound, ListTodo, LogOut, Radio, Server, Settings2, ShieldCheck, UserRoundSearch, Users, Wrench } from "lucide-react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { Suspense, useState } from "react"
 
@@ -56,6 +56,7 @@ const navigationGroups: NavGroup[] = [
     label: "nav.group.security",
     items: [
       { to: "/api-keys", label: "nav.apiKeys", icon: KeyRound },
+      { to: "/ai-policies", label: "nav.aiPolicies", icon: Bot },
       { to: "/roles", label: "nav.roles", icon: ShieldCheck },
       { to: "/audits", label: "nav.audits", icon: FileSearch },
     ],

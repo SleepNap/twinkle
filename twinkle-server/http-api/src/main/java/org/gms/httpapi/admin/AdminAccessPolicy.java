@@ -35,6 +35,10 @@ public final class AdminAccessPolicy {
             if (path.startsWith("/admin/v1/billing")) {
                 return new Policy(false, AdminPermission.BILLING_MANAGE);
             }
+            // 只拦写操作；GET /admin/v1/ai/status 与 /usage 落末尾的 admin:read。
+            if (path.startsWith("/admin/v1/ai")) {
+                return new Policy(false, AdminPermission.AI_MANAGE);
+            }
             if (path.startsWith("/admin/v1/roles")
                     || (path.startsWith("/admin/v1/accounts/") && path.endsWith("/roles"))) {
                 return new Policy(false, AdminPermission.ROLE_MANAGE);
