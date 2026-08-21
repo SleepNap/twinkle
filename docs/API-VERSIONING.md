@@ -5,6 +5,7 @@
 - 公共 API：`/api/vN`。
 - Web 控制台 API：`/admin/vN`。
 - 内部 API：`/internal/vN`。
+- `/api/vN` 与 `/internal/vN` 统一使用 API Key + Scope + 审计；`/admin/vN` 使用管理员会话 + RBAC + 审计。网络位置不能替代应用层鉴权。
 - 历史版本的路由、DTO、状态码和错误语义在退役前保持可用，调用方可以同时使用不同主版本。
 - 新主版本只分叉发生增删改的端点；未变化端点复用同一 Handler/use-case。
 - 每个已发布主版本都提供完整、机器可读的 OpenAPI，不单独维护 Markdown 接口清单。

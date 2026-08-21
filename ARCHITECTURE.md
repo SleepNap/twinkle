@@ -56,6 +56,7 @@
 - **JDK 锁定 GraalVM CE for JDK 21**：原生内置 JVMCI 与 GraalVM JS，**选定即自带「全速」前提**，不再依赖 `-XX:+EnableJVMCI` 或外部挂载 `org.graalvm.compiler`；GraalVM JS 以独立 Maven 库（`org.graalvm.js:js`）形式引入，仅作版本管理。内存调优走 HotSpot 侧（GraalVM CE 基于 HotSpot）：AppCDS + SerialGC + 收紧堆。
 - **SQLite 规模验证（搜索核证）**：WAL 下实测 70K reads/s + 3.6K writes/s，读吞吐 2 倍于 MySQL、p99 读延迟低 19 倍；极限是"持续 >10 并发写/秒"而非"人数"——本架构低频批量写天然避开。**三件套做对即稳**：WAL + 单写连接 + busy_timeout。
 - **框架选定 Micronaut 4**：轻量 + 中间件全主流。Vert.x 因响应式风格与命令式游戏逻辑割裂被否。
+- **虚拟线程只承载独立阻塞任务**：`core` 的进程级 `ThreadManager` 使用 JDK 21 命名虚拟线程逐任务执行，统一暴露提交、运行、成功、失败和拒绝计数；后台/定时任务经 `BackgroundTaskRegistry` 记录状态、排队耗时和执行耗时。Netty EventLoop、游戏 Tick、定时调度器和 DB 单写队列继续使用专用平台线程，禁止为追求“全虚拟线程”破坏线程亲和性与顺序语义。
 - **Java 后台语言由服务端配置统一决定**：`twinkle.service.language` 使用 BCP 47（首批 `zh-CN`、`en-US`），日志、异常、HTTP 消息和系统文案统一经 `I18nService` 解析；客户端请求与账号不得覆盖。Web 控制台有独立 UI locale。错误码、opcode、字段 ID、JSON key 等机器契约保持稳定。WZ/脚本不参与该机制，继续按显式路径加载。完整规范见 `docs/archived/i18n.md`。
 - **前端框架选定 React 19 + Vite + TypeScript + shadcn**：运维后台统一使用 shadcn Registry 组件，固定 `radix-nova` preset、Radix、Lucide、CSS Variables 与 Tailwind CSS v4。视觉以 shadcn 官方组件、variant、密度和 neutral 浅深主题为准，不再模仿其他品牌设计系统；页面只在业务组合与布局层扩展，避免重复实现基础组件。前端为独立工程 `twinkle-web/`，与 Java 服务端通过版本化 `http-api` 解耦，迁移期间允许不同功能分别调用受支持的 `/admin/vN`；浏览器端不受 2C2G 红线约束。详细纪律见 `docs/archived/design/design-system.md`。
 
@@ -156,7 +157,7 @@ twinkle.jar --profile=split-realm      # 按大区拆：coordinator + 每大区 
 
 **2C2G 强制单进程**：多 JVM 常驻开销每多开一个整体翻倍，2G 预算只够一个 JVM。"大区/频道独立进程"仅限大内存机器 / 多机。
 
-**网络平面收敛**（安全门槛 M0 / 红线 20）：admin、运维 API、`/internal/vN` 等内部接口默认绑定 **loopback / 内网**，不对公网暴露；仅客户端端口（Netty）与受控 `/api/vN` 按部署需对外。装配配置显式指定绑定地址，禁止默认 `0.0.0.0`。
+**网络平面鉴权**（安全门槛 M0 / 红线 20）：HTTP 默认监听所有网卡，不把绑定地址当作身份边界；`/api/vN` 与 `/internal/vN` 必须统一经过 API Key 认证、最小 Scope 授权、限流与审计，`/admin/vN` 必须经过管理员会话、RBAC 与写操作审计。生产入口仍须配置 TLS、反向代理和防火墙；新增路由不得因“仅供内网使用”而跳过应用层鉴权。客户端 Netty 端口默认监听所有网卡，登录服下发给客户端的频道 IPv4 与监听地址是两个概念。
 
 ### 4.3 拓扑
 

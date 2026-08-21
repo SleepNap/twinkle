@@ -8,11 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **M0-M6 全部完成**（2026-08-09）：16 个 Maven 模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
 
-**Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、能力目录、审计日志、任务监控和 API 文档入口；配置热改、踢下线、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。HTTP 路由由 `micronaut-openapi` 生成机器契约和 Swagger UI，第三方公共契约另按主版本冻结。统一 `BackgroundTaskRegistry` 已提供有界执行历史、调度启停、立即运行与失败重试。完整范围见 `docs/in-progress/console-roadmap.md`。**控制台强鉴权 + RBAC + 不可抵赖审计已落地**：所有 `/admin/vN` 由 `AdminAuthFilter` 统一保护（账号 BCrypt 登录 + DB session token），可配置角色表 + 写操作 reason 审计。
+**Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、能力目录、审计日志、任务监控和 API 文档入口；配置热改、踢下线、按在线角色临时监听封包、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。封包监听支持收发方向、include/exclude opcode 过滤和实时启停，使用频道会话内 4 MiB 有界环形窗口，不写日志/数据库，凭证类 opcode 强制不采集，独立权限为 `admin.packet:trace`。HTTP 路由由 `micronaut-openapi` 生成机器契约和 Swagger UI，第三方公共契约另按主版本冻结。进程级 `ThreadManager` 统一使用命名虚拟线程执行独立后台任务并提供执行器计数快照；`BackgroundTaskRegistry` 提供有界执行历史、真实异步运行、排队/执行耗时、调度启停、立即运行与失败重试，监控 API 已预留后续持久化和集群聚合字段。完整范围见 `docs/in-progress/console-roadmap.md`。**控制台强鉴权 + RBAC + 不可抵赖审计已落地**：所有 `/admin/vN` 由 `AdminAuthFilter` 统一保护（账号 BCrypt 登录 + DB session token），可配置角色表 + 写操作 reason 审计。
 
 **内置自研 Agent 已删除**（2026-08-21）：删除 `ai` Maven 模块、游戏内 `@gm`、服务端 Agent Tool、AI 策略/模型计费代码与控制台页面。未来 Agent 只允许以 DeepSeek Harness 套壳插件接入；核心仓库只提供版本化 API、插件 SPI、最小 Scope 和审计，不实现模型编排、会话记忆或提示词逻辑。
 
-**控制台 4.1「账号与角色管理」账号管控与只读详情已完成**（2026-08-21）：`/admin/v1/accounts` 使用管理员会话，支持账号分页/模糊搜索/状态筛选、账号详情与跨世界角色快照、封禁/解封、禁言/解禁、账号级强制下线和 `logged_in` 修复；角色详情聚合基础属性、位置、公会/队伍关联、货币、背包/装备、任务、技能和好友持久化快照。写操作使用独立权限 `admin.account:manage`，强制 reason，并由 `AdminAuthFilter` 记录变更前后摘要与 requestId。前端 `/accounts` 保持 shadcn `radix-nova` 风格，不依赖能力面 API Key。角色修复、传送、发放物品/货币和完整公会资料仍属后续阶段；`temp_ban` 在登录链路真正执行前不得暴露为控制台能力。
+**控制台 4.1「账号与角色管理」账号管控与只读详情已完成**（2026-08-21）：`/admin/v1/accounts` 使用管理员会话，支持账号分页/模糊搜索/状态筛选、账号详情与跨世界角色快照、封禁/解封、禁言/解禁、账号级强制下线和 `logged_in` 修复，以及不覆盖玩家原密码、限时且成功登录后立即失效的一次性临时密码；角色详情聚合基础属性、位置、公会/队伍关联、货币、背包/装备、任务、技能和好友持久化快照。写操作使用独立权限 `admin.account:manage`，强制 reason，并由 `AdminAuthFilter` 记录变更前后摘要与 requestId。前端 `/accounts` 保持 shadcn `radix-nova` 风格，不依赖能力面 API Key。角色修复、传送、发放物品/货币和完整公会资料仍属后续阶段；`temp_ban` 在登录链路真正执行前不得暴露为控制台能力。
 
 **全局 i18n 全量完成**（2026-08-12 基座，2026-08-13 迁移完成）：`twinkle.service.language` 是 Java 后台唯一语言配置，HTTP 用 `Content-Language` 声明实际语言；Web 控制台首批支持 `zh-CN`/`en-US` 并独立持久化界面选择。存量 Java 日志/异常/游戏内玩家提示中文硬编码已全部迁入 i18n key（约 300 处，跨 12 模块），`en-US` 配置下后台文案全英文。统一入口：`I18nService`（`@Singleton`，可注入）+ 静态门面 `org.gms.i18n.I18n`（无法 DI 的代码用，bootstrap `I18nInitializer` 启动注入）。key 前缀：`log.*`（日志，`{}` 占位）/ `error.*`（异常，`{0}`）/ `game.*`（游戏内提示，`{0}`）。编码规则：协议层固定 GBK（`InPacket.DEFAULT_CHARSET`，GBK 兼容 ASCII），语言只改文案内容不改编码，HTTP 固定 UTF-8。WZ/脚本不受服务端语言控制，只读 `twinkle.wz.path` / `twinkle.script.path` 显式目录。规范见 `docs/archived/i18n.md`。
 
@@ -31,9 +31,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **只编译不测**：`mvn -B -DskipTests compile`
 - **启动（single 档）**：`./scripts/start.sh`（前置：`mvn -B verify` 产物作 `target/twinkle-server.jar`；默认 `--profile=single`）
 - **split 多进程 / 滚动重启 / 回滚**：`./scripts/split-start.sh` / `./scripts/rolling-restart.sh [频道号]` / `./scripts/rollback.sh`（见 `docs/archived/ops/split-deployment.md`、`docs/archived/ops/switch-to-production.md`）
-- **启动自检**：`curl http://127.0.0.1:8080/admin/v1/health`、`/admin/v1/channels`、`/internal/v1/health`
+- **启动自检**：`curl http://127.0.0.1:8080/admin/v1/health`、`/admin/v1/channels`；`/internal/v1/health` 需携带具有 `server.health:read` Scope 的 API Key。
 
-关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`micronaut.server.host`=`127.0.0.1`（默认绑 loopback，红线 20）、`micronaut.server.port`=`8080`。`data/twinkle.db` 为运行期产物不入仓。
+关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`twinkle.net.channel.host`=`127.0.0.1`（登录服下发给客户端连接频道的 IPv4，不是监听地址）、`micronaut.server.port`=`8080`。HTTP 与客户端 Netty 端口默认监听所有网卡，安全边界由 API Key Scope、管理员 RBAC、TLS/反向代理和防火墙共同承担。`data/twinkle.db` 为运行期产物不入仓。
 
 **Micronaut 注解处理器增量编译坑**：改动 Repository / bean 接口后若报 `NonUniqueBeanException`（残留旧 `$MyBatisFlexFactory$XxxRepositoryN$Definition` 类），用 `mvn clean verify` 重来。改 Repository 接口须同步更新相关测试桩。
 
