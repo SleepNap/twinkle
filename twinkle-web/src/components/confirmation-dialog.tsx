@@ -27,6 +27,7 @@ export function ConfirmationDialog({
   onOpenChange,
   onConfirm,
   requireReason = false,
+  confirmationText,
 }: {
   trigger?: ReactNode
   title: string
@@ -38,15 +39,24 @@ export function ConfirmationDialog({
   onOpenChange?: (open: boolean) => void
   onConfirm: (reason: string) => void
   requireReason?: boolean
+  confirmationText?: { label: string; expected: string }
 }) {
   const { t } = useI18n()
   const [reason, setReason] = useState("")
-  const canConfirm = !requireReason || reason.trim().length > 0
+  const [confirmation, setConfirmation] = useState("")
+  const canConfirm = (!requireReason || reason.trim().length > 0)
+    && (!confirmationText || confirmation === confirmationText.expected)
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!pending || nextOpen) onOpenChange?.(nextOpen)
+        if (!pending || nextOpen) {
+          if (!nextOpen) {
+            setReason("")
+            setConfirmation("")
+          }
+          onOpenChange?.(nextOpen)
+        }
       }}
     >
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
@@ -63,6 +73,17 @@ export function ConfirmationDialog({
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder={t("auth.reasonPlaceholder")}
+            />
+          </div>
+        )}
+        {confirmationText && (
+          <div className="grid gap-2">
+            <Label htmlFor="confirm-text">{confirmationText.label}</Label>
+            <Input
+              id="confirm-text"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              autoComplete="off"
             />
           </div>
         )}

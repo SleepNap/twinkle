@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
@@ -255,15 +256,18 @@ function PlanSelect({ account, plans, onSelect }: {
 }) {
   const { t } = useI18n()
   return (
-    <select
-      className="rounded-md border bg-background px-2 py-1 text-xs text-foreground"
-      value={account.planId ?? ""}
-      onChange={(event) => onSelect(event.target.value ? Number(event.target.value) : null)}
-      aria-label={t("billing.setPlan")}
+    <Select
+      value={account.planId == null ? "none" : String(account.planId)}
+      onValueChange={(value) => onSelect(value === "none" ? null : Number(value))}
     >
-      <option value="">{t("billing.noPlan")}</option>
-      {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.displayName}</option>)}
-    </select>
+      <SelectTrigger size="sm" className="min-w-28" aria-label={t("billing.setPlan")}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
+        <SelectItem value="none">{t("billing.noPlan")}</SelectItem>
+        {plans.map((plan) => <SelectItem key={plan.id} value={String(plan.id)}>{plan.displayName}</SelectItem>)}
+      </SelectContent>
+    </Select>
   )
 }
 

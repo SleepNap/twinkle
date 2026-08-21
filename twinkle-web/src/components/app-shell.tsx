@@ -6,6 +6,7 @@ import { useAdminAuth } from "@/auth/use-admin-auth"
 import { useCredential } from "@/auth/use-credential"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -86,20 +87,23 @@ export function AppShell() {
           <Badge variant={token ? "secondary" : "outline"} className="ml-auto hidden font-normal sm:flex">
             {token ? t("api.connected") : t("api.disconnected")}
           </Badge>
-          <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-3">
+          <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-3">
             <Globe2 className="hidden size-3.5 sm:block" />
             <span className="sr-only">{t("language.label")}</span>
-            <select
+            <Select
               value={locale}
-              onChange={(event) => setLocale(event.target.value as typeof locale)}
-              className="rounded-md border bg-background px-2 py-1 text-xs text-foreground"
-              aria-label={t("language.label")}
+              onValueChange={(value) => setLocale(value as typeof locale)}
             >
-              {supportedLocales.map((item) => (
-                <option key={item} value={item}>{item === "zh-CN" ? "简体中文" : "English"}</option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger size="sm" className="w-24 text-xs" aria-label={t("language.label")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {supportedLocales.map((item) => (
+                  <SelectItem key={item} value={item}>{item === "zh-CN" ? "简体中文" : "English"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {identity && (
             <button
               type="button"

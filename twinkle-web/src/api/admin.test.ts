@@ -119,6 +119,60 @@ describe("adminApi", () => {
     }))
   })
 
+  it("创建账号时提交初始密码并携带审计原因", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      id: 19,
+      name: "new_player",
+      banned: false,
+      muted: false,
+      loggedIn: false,
+    }, { status: 201 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.createAccount({
+      name: "new_player",
+      password: "secret-123",
+      email: "player@example.com",
+      characterSlots: 6,
+    }, "新玩家开户")
+
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/accounts", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        name: "new_player",
+        password: "secret-123",
+        email: "player@example.com",
+        characterSlots: 6,
+      }),
+      headers: expect.objectContaining({ "X-Admin-Reason": "新玩家开户" }),
+    }))
+  })
+
+  it("修改和删除账号都携带审计原因", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 19, name: "new_player" }))
+      .mockResolvedValueOnce(jsonResponse({
+        deleted: true,
+        accountId: 19,
+        characters: 2,
+        relatedRows: 12,
+      }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.updateAccount(19, { nick: "新昵称", language: 3 }, "修正资料")
+    await adminApi.deleteAccount(19, "测试账号清理")
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/v1/accounts/19", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ nick: "新昵称", language: 3 }),
+      headers: expect.objectContaining({ "X-Admin-Reason": "修正资料" }),
+    }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/admin/v1/accounts/19", expect.objectContaining({
+      method: "DELETE",
+      headers: expect.objectContaining({ "X-Admin-Reason": "测试账号清理" }),
+    }))
+  })
+
   it("按角色启停带过滤条件的封包监听", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ configured: true, enabled: true, events: [] }))

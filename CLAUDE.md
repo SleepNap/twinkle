@@ -111,6 +111,8 @@ Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM 
 
 React 19 + Vite + Tailwind CSS v4 + shadcn（视觉基准固定 `radix-nova` 官方风格，不用 Notion 仿制主题；纪律见 `docs/archived/design/design-system.md`）。TanStack Query 管服务端状态，react-router-dom 管路由。
 
+**前端组件硬约束**：凡 shadcn 已提供对应组件，必须使用 `components/ui/` 中的 shadcn 实现，禁止直接使用浏览器原生交互控件替代（包括但不限于 `select`、日期选择器、checkbox、dialog、popover）。只有 shadcn 确实没有对应能力时才允许使用原生控件，并须在代码注释中说明原因；新增通用交互应先补齐 shadcn 组件封装，再由页面复用。
+
 - `api/` — 后端调用唯一出口：`admin.ts`（`/admin/v1`）、`billing.ts`、`capability.ts`（`/api/v1`）、`admin-auth.ts`（登录/会话）。`admin.ts`/`billing.ts` 自动带 Bearer token，401 跳登录。**页面不直接 fetch，一律走 api 层**。
 - `auth/` — `AdminAuthProvider` 持会话 + 路由守卫；`credential-provider` 管能力面 API Key。
 - `pages/` — 一页一文件（`overview` / `channels` / `players` / `accounts` / `config` / `operations` / `api-keys` / `audits` / `tasks` / `billing` / `roles` / `login`）。

@@ -78,7 +78,7 @@ export const navigationGroups: NavigationGroup[] = [
   {
     key: "player-business",
     label: "nav.group.playerBusiness",
-    routePaths: ["/players", "/accounts", "/billing"],
+    routePaths: ["/accounts", "/players"],
   },
   {
     key: "system-operations",
@@ -88,7 +88,7 @@ export const navigationGroups: NavigationGroup[] = [
   {
     key: "security",
     label: "nav.group.securityAudit",
-    routePaths: ["/roles", "/api-keys", "/audits"],
+    routePaths: ["/roles", "/api-keys", "/billing", "/audits"],
   },
   {
     key: "developer",

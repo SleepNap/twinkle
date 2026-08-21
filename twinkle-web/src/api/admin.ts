@@ -148,8 +148,50 @@ export interface AdminAccount extends AccountOption {
   tempBan: string
   characterSlots: number
   gender: number
+  nick: string
+  email: string
+  birthday: string
+  language: number
+  tosAccepted: boolean
+  nxCredit: number
+  maplePoint: number
+  nxPrepaid: number
+  rewardPoints: number
+  votePoints: number
+  pinConfigured: boolean
+  picConfigured: boolean
   temporaryPasswordActive: boolean
   temporaryPasswordExpiresAt: string
+}
+
+export interface CreateAccountInput {
+  name: string
+  password: string
+  nick?: string
+  email?: string
+  birthday?: string
+  pin?: string
+  pic?: string
+  characterSlots?: number
+  gender?: number
+  language?: number
+  tosAccepted?: boolean
+  nxCredit?: number
+  maplePoint?: number
+  nxPrepaid?: number
+  rewardPoints?: number
+  votePoints?: number
+}
+
+export type UpdateAccountInput = Omit<CreateAccountInput, "name" | "password"> & {
+  password?: string
+}
+
+export interface DeleteAccountResponse {
+  deleted: true
+  accountId: number
+  characters: number
+  relatedRows: number
 }
 
 export interface TemporaryPasswordResponse {
@@ -492,6 +534,11 @@ function humanizeApiError(error?: string) {
     config_not_found: translate("api.configNotFound"),
     character_not_online: translate("api.characterNotOnline"),
     account_not_found: translate("api.accountNotFound"),
+    account_name_exists: translate("api.accountNameExists"),
+    invalid_account_name: translate("api.invalidAccountName"),
+    invalid_account_password: translate("api.invalidAccountPassword"),
+    invalid_account_profile: translate("api.invalidAccountProfile"),
+    account_still_online: translate("api.accountStillOnline"),
     character_not_found: translate("api.characterNotFound"),
     invalid_packet_trace_filter: translate("api.invalidPacketTraceFilter"),
   }
@@ -582,6 +629,23 @@ export const adminApi = {
     request<{ accounts: AccountOption[] }>(`/accounts?query=${encodeURIComponent(query)}&limit=${limit}`, { signal }),
   accounts: (query: string, status: "all" | "active" | "banned", offset: number, limit = 20, signal?: AbortSignal) =>
     request<AccountsPageResponse>(`/accounts?query=${encodeURIComponent(query)}&status=${status}&offset=${offset}&limit=${limit}`, { signal }),
+  createAccount: (account: CreateAccountInput, reason: string) =>
+    request<AdminAccount>("/accounts", {
+      method: "POST",
+      body: JSON.stringify(account),
+      headers: { "X-Admin-Reason": reason },
+    }),
+  updateAccount: (accountId: number, account: UpdateAccountInput, reason: string) =>
+    request<AdminAccount>(`/accounts/${accountId}`, {
+      method: "PUT",
+      body: JSON.stringify(account),
+      headers: { "X-Admin-Reason": reason },
+    }),
+  deleteAccount: (accountId: number, reason: string) =>
+    request<DeleteAccountResponse>(`/accounts/${accountId}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Reason": reason },
+    }),
   account: (accountId: number, signal?: AbortSignal) =>
     request<AccountDetailResponse>(`/accounts/${accountId}`, { signal }),
   character: (accountId: number, characterId: number, signal?: AbortSignal) =>

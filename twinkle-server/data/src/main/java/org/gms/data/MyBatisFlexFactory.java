@@ -29,6 +29,7 @@ import org.gms.data.mapper.PointAccountMapper;
 import org.gms.data.mapper.PointTransactionMapper;
 import org.gms.data.mapper.SubscriptionPlanMapper;
 import org.gms.data.repo.AccountRepository;
+import org.gms.data.repo.AccountDeletionRepository;
 import org.gms.data.repo.AccountAdminRoleRepository;
 import org.gms.data.repo.AdminOperationAuditRepository;
 import org.gms.data.repo.AdminRoleRepository;
@@ -39,6 +40,7 @@ import org.gms.data.repo.BuddyListRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.data.repo.FlexAccountRepository;
+import org.gms.data.repo.FlexAccountDeletionRepository;
 import org.gms.data.repo.FlexAccountAdminRoleRepository;
 import org.gms.data.repo.FlexAdminOperationAuditRepository;
 import org.gms.data.repo.FlexAdminRoleRepository;
@@ -250,6 +252,27 @@ public class MyBatisFlexFactory {
     @Singleton
     public AccountRepository accountRepository(AccountMapper mapper) {
         return new FlexAccountRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public AccountDeletionRepository accountDeletionRepository(
+            AccountMapper accountMapper,
+            CharacterMapper characterMapper,
+            InventoryItemMapper inventoryItemMapper,
+            QuestStatusMapper questStatusMapper,
+            QuestProgressMapper questProgressMapper,
+            SkillMapper skillMapper,
+            BuddyListMapper buddyListMapper,
+            PointAccountMapper pointAccountMapper,
+            PointTransactionMapper pointTransactionMapper,
+            AccountAdminRoleMapper accountAdminRoleMapper,
+            AdminSessionMapper adminSessionMapper,
+            ApiKeyMapper apiKeyMapper) {
+        return new FlexAccountDeletionRepository(
+                accountMapper, characterMapper, inventoryItemMapper, questStatusMapper,
+                questProgressMapper, skillMapper, buddyListMapper, pointAccountMapper,
+                pointTransactionMapper, accountAdminRoleMapper, adminSessionMapper, apiKeyMapper);
     }
 
     @Bean

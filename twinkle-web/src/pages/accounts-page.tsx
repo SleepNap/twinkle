@@ -1,6 +1,7 @@
-import { Ban, Copy, Eye, KeyRound, LogOut, RefreshCw, Search, ShieldOff, Volume2, VolumeX } from "lucide-react"
+import { Ban, CalendarDays, ChevronDown, Copy, Eye, KeyRound, LogOut, Pencil, Plus, RefreshCw, Search, ShieldOff, Trash2, Volume2, VolumeX } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import { enUS, zhCN } from "react-day-picker/locale"
 import { toast } from "sonner"
 
 import { adminApi, adminQueryKeys, type AdminAccount, type TemporaryPasswordResponse } from "@/api/admin"
@@ -9,8 +10,13 @@ import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
@@ -33,8 +39,12 @@ import {
 import { useI18n } from "@/i18n"
 
 const PAGE_SIZE = 20
+const BIRTHDAY_YEARS = Array.from(
+  { length: new Date().getFullYear() - 1899 },
+  (_, index) => String(new Date().getFullYear() - index),
+)
 type AccountStatus = "all" | "active" | "banned"
-type ActionType = "ban" | "unban" | "mute" | "unmute" | "offline" | "temporaryPassword"
+type ActionType = "ban" | "unban" | "mute" | "unmute" | "offline" | "temporaryPassword" | "delete"
 interface PendingAction { type: ActionType; account: AdminAccount }
 interface IssuedTemporaryPassword extends TemporaryPasswordResponse { accountName: string }
 
@@ -49,6 +59,29 @@ export function AccountsPage() {
   const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [issuedTemporaryPassword, setIssuedTemporaryPassword] = useState<IssuedTemporaryPassword | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<AdminAccount | null>(null)
+  const [createName, setCreateName] = useState("")
+  const [createPassword, setCreatePassword] = useState("")
+  const [createPasswordConfirm, setCreatePasswordConfirm] = useState("")
+  const [createReason, setCreateReason] = useState("")
+  const [createAdvancedOpen, setCreateAdvancedOpen] = useState(false)
+  const [createNick, setCreateNick] = useState("")
+  const [createEmail, setCreateEmail] = useState("")
+  const [createBirthday, setCreateBirthday] = useState("2005-05-11")
+  const [createBirthdayOpen, setCreateBirthdayOpen] = useState(false)
+  const [createBirthdayMonth, setCreateBirthdayMonth] = useState(() => new Date(2005, 4, 1))
+  const [createPin, setCreatePin] = useState("")
+  const [createPic, setCreatePic] = useState("")
+  const [createCharacterSlots, setCreateCharacterSlots] = useState("3")
+  const [createGender, setCreateGender] = useState("0")
+  const [createLanguage, setCreateLanguage] = useState("3")
+  const [createTosAccepted, setCreateTosAccepted] = useState(true)
+  const [createNxCredit, setCreateNxCredit] = useState("0")
+  const [createMaplePoint, setCreateMaplePoint] = useState("0")
+  const [createNxPrepaid, setCreateNxPrepaid] = useState("0")
+  const [createRewardPoints, setCreateRewardPoints] = useState("0")
+  const [createVotePoints, setCreateVotePoints] = useState("0")
 
   const accountsQuery = useQuery({
     queryKey: adminQueryKeys.accounts(submittedSearch, status, offset),
@@ -87,11 +120,20 @@ export function AccountsPage() {
       if (type === "temporaryPassword") {
         return adminApi.generateTemporaryPassword(account.id, reason)
       }
+      if (type === "delete") {
+        return adminApi.deleteAccount(account.id, reason)
+      }
       await adminApi.forceAccountOffline(account.id, reason)
     },
     onSuccess: (result, { action }) => {
-      if (action.type === "temporaryPassword" && result) {
+      if (action.type === "temporaryPassword" && result && "temporaryPassword" in result) {
         setIssuedTemporaryPassword({ ...result, accountName: action.account.name })
+      }
+      if (action.type === "delete") {
+        if (selectedAccountId === action.account.id) {
+          setSelectedAccountId(null)
+          setSelectedCharacterId(null)
+        }
       }
       toast.success(t("accounts.actionSucceeded"), {
         description: t("accounts.actionSucceededDescription", { name: action.account.name }),
@@ -102,6 +144,53 @@ export function AccountsPage() {
       void queryClient.invalidateQueries({ queryKey: adminQueryKeys.online })
     },
     onError: (error) => toast.error(t("accounts.actionFailed"), { description: error.message }),
+  })
+  const createMutation = useMutation({
+    mutationFn: () => {
+      const profile = {
+        nick: createNick.trim(),
+        email: createEmail.trim(),
+        birthday: createBirthday,
+        characterSlots: Number(createCharacterSlots),
+        gender: Number(createGender),
+        language: Number(createLanguage),
+        tosAccepted: createTosAccepted,
+        nxCredit: Number(createNxCredit),
+        maplePoint: Number(createMaplePoint),
+        nxPrepaid: Number(createNxPrepaid),
+        rewardPoints: Number(createRewardPoints),
+        votePoints: Number(createVotePoints),
+      }
+      if (editTarget) {
+        return adminApi.updateAccount(editTarget.id, {
+          ...profile,
+          ...(createPassword ? { password: createPassword } : {}),
+          ...(createPin.trim() ? { pin: createPin.trim() } : {}),
+          ...(createPic.trim() ? { pic: createPic.trim() } : {}),
+        }, createReason.trim())
+      }
+      return adminApi.createAccount({
+        ...profile,
+        name: createName.trim(),
+        password: createPassword,
+        pin: createPin.trim(),
+        pic: createPic.trim(),
+      }, createReason.trim())
+    },
+    onSuccess: (account) => {
+      toast.success(t(editTarget ? "accounts.updated" : "accounts.created"), { description: account.name })
+      setCreateOpen(false)
+      resetCreateForm()
+      if (!editTarget) {
+        setSearch(account.name)
+        setSubmittedSearch(account.name)
+        setStatus("all")
+        setOffset(0)
+      }
+      void queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] })
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.account(account.id) })
+    },
+    onError: (error) => toast.error(t(editTarget ? "accounts.updateFailed" : "accounts.createFailed"), { description: error.message }),
   })
 
   function submitSearch() {
@@ -119,22 +208,96 @@ export function AccountsPage() {
     setSelectedCharacterId(null)
   }
 
+  function resetCreateForm() {
+    setEditTarget(null)
+    setCreateName("")
+    setCreatePassword("")
+    setCreatePasswordConfirm("")
+    setCreateReason("")
+    setCreateAdvancedOpen(false)
+    setCreateNick("")
+    setCreateEmail("")
+    setCreateBirthday("2005-05-11")
+    setCreateBirthdayOpen(false)
+    setCreateBirthdayMonth(new Date(2005, 4, 1))
+    setCreatePin("")
+    setCreatePic("")
+    setCreateCharacterSlots("3")
+    setCreateGender("0")
+    setCreateLanguage("3")
+    setCreateTosAccepted(true)
+    setCreateNxCredit("0")
+    setCreateMaplePoint("0")
+    setCreateNxPrepaid("0")
+    setCreateRewardPoints("0")
+    setCreateVotePoints("0")
+  }
+
+  function openCreateForm() {
+    resetCreateForm()
+    setCreateOpen(true)
+  }
+
+  function openEditForm(account: AdminAccount) {
+    setEditTarget(account)
+    setCreateName(account.name)
+    setCreatePassword("")
+    setCreatePasswordConfirm("")
+    setCreateReason("")
+    setCreateAdvancedOpen(true)
+    setCreateNick(account.nick)
+    setCreateEmail(account.email)
+    setCreateBirthday(account.birthday || "2005-05-11")
+    setCreateBirthdayOpen(false)
+    setCreateBirthdayMonth(dateFromIso(account.birthday || "2005-05-11") ?? new Date(2005, 4, 1))
+    setCreatePin("")
+    setCreatePic("")
+    setCreateCharacterSlots(String(account.characterSlots))
+    setCreateGender(String(account.gender))
+    setCreateLanguage(String(account.language))
+    setCreateTosAccepted(account.tosAccepted)
+    setCreateNxCredit(String(account.nxCredit))
+    setCreateMaplePoint(String(account.maplePoint))
+    setCreateNxPrepaid(String(account.nxPrepaid))
+    setCreateRewardPoints(String(account.rewardPoints))
+    setCreateVotePoints(String(account.votePoints))
+    setCreateOpen(true)
+  }
+
   const actionLabel = pendingAction ? t(`accounts.action.${pendingAction.type}`) : ""
   const total = accountsQuery.data?.total ?? 0
   const pageStart = total === 0 ? 0 : offset + 1
   const pageEnd = Math.min(offset + PAGE_SIZE, total)
+  const createNameValid = /^[A-Za-z0-9_]{3,13}$/.test(createName.trim())
+  const createPasswordValid = (editTarget !== null && createPassword === "")
+    || (createPassword.length >= 6 && createPassword.length <= 12)
+  const createPasswordMatches = createPassword === createPasswordConfirm
+  const createEmailValid = createEmail.trim() === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createEmail.trim())
+  const createPinValid = createPin === "" || /^\d{4}$/.test(createPin)
+  const createPicValid = createPic === "" || /^\d{6}$/.test(createPic)
+  const createSlotsValid = integerInRange(createCharacterSlots, 1, 15)
+  const createLanguageValid = createLanguage === "2" || createLanguage === "3"
+  const createPointsValid = [createNxCredit, createMaplePoint, createNxPrepaid, createRewardPoints, createVotePoints]
+    .every((value) => integerInRange(value, 0, 2_147_483_647))
+  const createValid = createNameValid && createPasswordValid && createPasswordMatches
+    && createReason.trim() !== "" && createEmailValid && createPinValid && createPicValid && createSlotsValid
+    && createLanguageValid && createPointsValid
 
   return (
     <div className="grid gap-6">
       <PageHeader
         title={t("accounts.title")}
         description={t("accounts.description")}
-        action={
+        action={<div className="flex gap-2">
+          <Button size="sm" onClick={openCreateForm}>
+            <Plus data-icon="inline-start" />
+            {t("accounts.create")}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void accountsQuery.refetch()} disabled={accountsQuery.isFetching}>
             <RefreshCw data-icon="inline-start" className={accountsQuery.isFetching ? "animate-spin" : undefined} />
             {t("common.refresh")}
           </Button>
-        }
+        </div>}
       />
 
       <Card>
@@ -154,16 +317,19 @@ export function AccountsPage() {
               aria-label={t("accounts.searchLabel")}
             />
           </div>
-          <select
+          <Select
             value={status}
-            onChange={(event) => changeStatus(event.target.value as AccountStatus)}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
-            aria-label={t("accounts.statusFilter")}
+            onValueChange={(value) => changeStatus(value as AccountStatus)}
           >
-            <option value="all">{t("accounts.status.all")}</option>
-            <option value="active">{t("accounts.status.active")}</option>
-            <option value="banned">{t("accounts.status.banned")}</option>
-          </select>
+            <SelectTrigger className="h-9 w-36" aria-label={t("accounts.statusFilter")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("accounts.status.all")}</SelectItem>
+              <SelectItem value="active">{t("accounts.status.active")}</SelectItem>
+              <SelectItem value="banned">{t("accounts.status.banned")}</SelectItem>
+            </SelectContent>
+          </Select>
           <Button onClick={submitSearch}>{t("accounts.search")}</Button>
         </CardContent>
       </Card>
@@ -190,7 +356,7 @@ export function AccountsPage() {
                     <TableHead>{t("accounts.restrictions")}</TableHead>
                     <TableHead>{t("accounts.loginState")}</TableHead>
                     <TableHead>{t("accounts.lastLogin")}</TableHead>
-                    <TableHead className="w-52 text-right">{t("common.operation")}</TableHead>
+                    <TableHead className="w-[34rem] text-right">{t("common.operation")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -198,6 +364,7 @@ export function AccountsPage() {
                     <TableRow key={account.id} data-state={selectedAccountId === account.id ? "selected" : undefined}>
                       <TableCell>
                         <div className="font-medium">{account.name}</div>
+                        {account.nick && <div className="text-xs text-muted-foreground">{account.nick}</div>}
                         <div className="font-mono text-xs text-muted-foreground">ID {account.id}</div>
                       </TableCell>
                       <TableCell>
@@ -216,22 +383,30 @@ export function AccountsPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{account.lastLogin || "—"}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon-sm" aria-label={t("accounts.view")} onClick={() => selectAccount(account.id)}><Eye /></Button>
-                          <Button variant="ghost" size="icon-sm" aria-label={account.banned ? t("accounts.action.unban") : t("accounts.action.ban")} onClick={() => setPendingAction({ type: account.banned ? "unban" : "ban", account })}>
-                            {account.banned ? <ShieldOff /> : <Ban />}
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => selectAccount(account.id)}><Eye data-icon="inline-start" />{t("accounts.view")}</Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEditForm(account)}><Pencil data-icon="inline-start" />{t("accounts.edit")}</Button>
+                          <Button variant="ghost" size="sm" onClick={() => setPendingAction({ type: account.banned ? "unban" : "ban", account })}>
+                            {account.banned ? <ShieldOff data-icon="inline-start" /> : <Ban data-icon="inline-start" />}
+                            {account.banned ? t("accounts.action.unban") : t("accounts.action.ban")}
                           </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label={account.muted ? t("accounts.action.unmute") : t("accounts.action.mute")} onClick={() => setPendingAction({ type: account.muted ? "unmute" : "mute", account })}>
-                            {account.muted ? <Volume2 /> : <VolumeX />}
+                          <Button variant="ghost" size="sm" onClick={() => setPendingAction({ type: account.muted ? "unmute" : "mute", account })}>
+                            {account.muted ? <Volume2 data-icon="inline-start" /> : <VolumeX data-icon="inline-start" />}
+                            {account.muted ? t("accounts.action.unmute") : t("accounts.action.mute")}
                           </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label={t("accounts.action.offline")} onClick={() => setPendingAction({ type: "offline", account })}><LogOut /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => setPendingAction({ type: "offline", account })}><LogOut data-icon="inline-start" />{t("accounts.action.offline")}</Button>
                           <Button
                             variant="ghost"
-                            size="icon-sm"
-                            aria-label={t("accounts.action.temporaryPassword")}
+                            size="sm"
                             disabled={account.banned}
                             onClick={() => setPendingAction({ type: "temporaryPassword", account })}
-                          ><KeyRound /></Button>
+                          ><KeyRound data-icon="inline-start" />{t("accounts.action.temporaryPassword")}</Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setPendingAction({ type: "delete", account })}
+                          ><Trash2 data-icon="inline-start" />{t("accounts.action.delete")}</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -401,15 +576,243 @@ export function AccountsPage() {
         </Card>
       )}
 
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (createMutation.isPending) return
+          setCreateOpen(open)
+          if (!open) resetCreateForm()
+        }}
+      >
+        <DialogContent showCloseButton={!createMutation.isPending} className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (createValid) createMutation.mutate()
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t(editTarget ? "accounts.editTitle" : "accounts.createTitle")}</DialogTitle>
+              <DialogDescription>{t(editTarget ? "accounts.editDescription" : "accounts.createDescription")}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <Label htmlFor="create-account-name">{t("accounts.createName")}</Label>
+              <Input
+                id="create-account-name"
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                disabled={editTarget !== null}
+                minLength={3}
+                maxLength={13}
+                autoComplete="off"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">{t("accounts.createNameHint")}</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="create-account-password">{t(editTarget ? "accounts.editPassword" : "accounts.createPassword")}</Label>
+              <Input
+                id="create-account-password"
+                type="password"
+                value={createPassword}
+                onChange={(event) => setCreatePassword(event.target.value)}
+                minLength={editTarget ? undefined : 6}
+                maxLength={12}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">{t(editTarget ? "accounts.editPasswordHint" : "accounts.createPasswordHint")}</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="create-account-password-confirm">{t("accounts.createPasswordConfirm")}</Label>
+              <Input
+                id="create-account-password-confirm"
+                type="password"
+                value={createPasswordConfirm}
+                onChange={(event) => setCreatePasswordConfirm(event.target.value)}
+                maxLength={12}
+                autoComplete="new-password"
+                aria-invalid={createPasswordConfirm !== "" && !createPasswordMatches}
+              />
+              {createPasswordConfirm !== "" && !createPasswordMatches && (
+                <p className="text-xs text-destructive">{t("accounts.createPasswordMismatch")}</p>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto min-h-14 w-full justify-between px-4 py-3 text-left"
+              aria-expanded={createAdvancedOpen}
+              onClick={() => setCreateAdvancedOpen((open) => !open)}
+            >
+              <span className="grid min-w-0 gap-1 pr-4">
+                <span className="leading-none">{t("accounts.moreSettings")}</span>
+                <span className="whitespace-normal text-xs font-normal leading-relaxed text-muted-foreground">{t("accounts.moreSettingsDescription")}</span>
+              </span>
+              <ChevronDown className={createAdvancedOpen ? "rotate-180 transition-transform" : "transition-transform"} />
+            </Button>
+            {createAdvancedOpen && (
+              <div className="grid gap-5 rounded-lg border bg-muted/20 p-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-account-nick">{t("accounts.nickname")}</Label>
+                    <Input id="create-account-nick" value={createNick} maxLength={20} onChange={(event) => setCreateNick(event.target.value)} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-account-email">{t("accounts.email")}</Label>
+                    <Input
+                      id="create-account-email"
+                      type="email"
+                      value={createEmail}
+                      maxLength={45}
+                      aria-invalid={!createEmailValid}
+                      onChange={(event) => setCreateEmail(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-account-birthday">{t("accounts.birthday")}</Label>
+                    <Popover open={createBirthdayOpen} onOpenChange={setCreateBirthdayOpen}>
+                      <PopoverTrigger asChild>
+                        <Button id="create-account-birthday" type="button" variant="outline" className="w-full justify-start font-normal">
+                          <CalendarDays data-icon="inline-start" />
+                          {formatBirthday(createBirthday, locale)}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-auto p-0">
+                        <div className="flex gap-2 border-b p-3">
+                          <Select
+                            value={String(createBirthdayMonth.getMonth())}
+                            onValueChange={(value) => setCreateBirthdayMonth(new Date(
+                              createBirthdayMonth.getFullYear(), Number(value), 1,
+                            ))}
+                          >
+                            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 12 }, (_, month) => (
+                                <SelectItem key={month} value={String(month)}>
+                                  {new Intl.DateTimeFormat(locale, { month: "long" }).format(new Date(2020, month, 1))}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={String(createBirthdayMonth.getFullYear())}
+                            onValueChange={(value) => setCreateBirthdayMonth(new Date(
+                              Number(value), createBirthdayMonth.getMonth(), 1,
+                            ))}
+                          >
+                            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                            <SelectContent className="max-h-64">
+                              {BIRTHDAY_YEARS.map((year) => <SelectItem key={year} value={year}>{year}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Calendar
+                          mode="single"
+                          selected={dateFromIso(createBirthday)}
+                          month={createBirthdayMonth}
+                          onMonthChange={setCreateBirthdayMonth}
+                          hideNavigation
+                          disabled={{ after: new Date() }}
+                          locale={locale === "zh-CN" ? zhCN : enUS}
+                          classNames={{ month_caption: "sr-only" }}
+                          onSelect={(date) => {
+                            if (!date) return
+                            setCreateBirthday(dateToIso(date))
+                            setCreateBirthdayMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+                            setCreateBirthdayOpen(false)
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{t("accounts.genderSetting")}</Label>
+                    <Select value={createGender} onValueChange={setCreateGender}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">{t("accounts.genderMale")}</SelectItem>
+                        <SelectItem value="1">{t("accounts.genderFemale")}</SelectItem>
+                        <SelectItem value="10">{t("accounts.genderUnset")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-account-slots">{t("accounts.characterSlots")}</Label>
+                    <Input id="create-account-slots" type="number" min={1} max={15} value={createCharacterSlots} onChange={(event) => setCreateCharacterSlots(event.target.value)} />
+                    <p className="text-xs text-muted-foreground">{t("accounts.characterSlotsHint")}</p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{t("accounts.language")}</Label>
+                    <Select value={createLanguage} onValueChange={setCreateLanguage}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">{t("accounts.languageChinese")}</SelectItem>
+                        <SelectItem value="2">{t("accounts.languageEnglish")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-account-pin">{t("accounts.pin")}</Label>
+                    <Input id="create-account-pin" type="password" inputMode="numeric" value={createPin} maxLength={4} autoComplete="new-password" placeholder={editTarget ? t("accounts.secretKeepHint") : undefined} onChange={(event) => setCreatePin(event.target.value.replace(/\D/g, ""))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-account-pic">{t("accounts.pic")}</Label>
+                    <Input id="create-account-pic" type="password" inputMode="numeric" value={createPic} maxLength={6} autoComplete="new-password" placeholder={editTarget ? t("accounts.secretKeepHint") : undefined} onChange={(event) => setCreatePic(event.target.value.replace(/\D/g, ""))} />
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={createTosAccepted} onCheckedChange={(checked) => setCreateTosAccepted(checked === true)} />
+                  {t("accounts.tosAccepted")}
+                </label>
+
+                <div className="grid gap-3">
+                  <Label>{t("accounts.initialValues")}</Label>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <NumberField id="create-account-nx-credit" label={t("accounts.nxCredit")} value={createNxCredit} onChange={setCreateNxCredit} />
+                    <NumberField id="create-account-maple-point" label={t("accounts.maplePoint")} value={createMaplePoint} onChange={setCreateMaplePoint} />
+                    <NumberField id="create-account-nx-prepaid" label={t("accounts.nxPrepaid")} value={createNxPrepaid} onChange={setCreateNxPrepaid} />
+                    <NumberField id="create-account-reward-points" label={t("accounts.rewardPoints")} value={createRewardPoints} onChange={setCreateRewardPoints} />
+                    <NumberField id="create-account-vote-points" label={t("accounts.votePoints")} value={createVotePoints} onChange={setCreateVotePoints} />
+                  </div>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">{t("accounts.systemManagedFields")}</p>
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="create-account-reason">{t(editTarget ? "auth.reasonLabel" : "accounts.createReason")}</Label>
+              <Input
+                id="create-account-reason"
+                value={createReason}
+                onChange={(event) => setCreateReason(event.target.value)}
+                maxLength={256}
+                placeholder={t(editTarget ? "auth.reasonPlaceholder" : "accounts.createReasonPlaceholder")}
+              />
+            </div>
+            <DialogFooter>
+              {!createMutation.isPending && <DialogClose asChild><Button type="button" variant="outline">{t("common.cancel")}</Button></DialogClose>}
+              <Button type="submit" disabled={createMutation.isPending || !createValid}>
+                {t(editTarget ? "accounts.saveChanges" : "accounts.createConfirm")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmationDialog
         open={pendingAction !== null}
         onOpenChange={(open) => !open && setPendingAction(null)}
         title={t("accounts.actionTitle", { action: actionLabel, name: pendingAction?.account.name ?? "" })}
-        description={t("accounts.actionDescription")}
+        description={pendingAction?.type === "delete" ? t("accounts.deleteDescription") : t("accounts.actionDescription")}
         confirmLabel={actionLabel}
-        destructive={pendingAction?.type === "ban" || pendingAction?.type === "offline"}
+        destructive={pendingAction?.type === "ban" || pendingAction?.type === "offline" || pendingAction?.type === "delete"}
         pending={actionMutation.isPending}
         requireReason
+        confirmationText={pendingAction?.type === "delete" ? {
+          label: t("accounts.deleteConfirmName", { name: pendingAction.account.name }),
+          expected: pendingAction.account.name,
+        } : undefined}
         onConfirm={(reason) => pendingAction && actionMutation.mutate({ action: pendingAction, reason })}
       />
 
@@ -490,4 +893,52 @@ function equipmentStats(item: { strStat: number; dexStat: number; intStat: numbe
     ["WATK", item.wAtk], ["MATK", item.mAtk],
   ].filter(([, value]) => value !== 0)
   return stats.length > 0 ? stats.map(([name, value]) => `${name} ${value}`).join(" · ") : "—"
+}
+
+function dateFromIso(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return undefined
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return date.getFullYear() === Number(match[1])
+    && date.getMonth() === Number(match[2]) - 1
+    && date.getDate() === Number(match[3]) ? date : undefined
+}
+
+function dateToIso(date: Date) {
+  const year = String(date.getFullYear()).padStart(4, "0")
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function formatBirthday(value: string, locale: string) {
+  const date = dateFromIso(value)
+  return date ? new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(date) : "—"
+}
+
+function integerInRange(value: string, min: number, max: number) {
+  if (value.trim() === "") return false
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max
+}
+
+function NumberField({ id, label, value, onChange }: {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id} className="text-xs font-normal text-muted-foreground">{label}</Label>
+      <Input
+        id={id}
+        type="number"
+        min={0}
+        max={2_147_483_647}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  )
 }
