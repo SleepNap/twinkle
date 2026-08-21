@@ -9,6 +9,7 @@ import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
 import org.gms.dialect.DbDialectRegistry;
 import org.gms.i18n.I18n;
+import org.gms.i18n.I18nBootstrap;
 
 import javax.sql.DataSource;
 import java.io.IOException;
@@ -46,11 +47,15 @@ public class DataSourceFactory {
             @Property(name = "twinkle.db.url") String url,
             @Property(name = "twinkle.db.user", defaultValue = "") String user,
             @Property(name = "twinkle.db.password", defaultValue = "") String password,
-            DbDialectRegistry dialectRegistry) {
+            DbDialectRegistry dialectRegistry,
+            I18nBootstrap i18nBootstrap) {
+        // i18nBootstrap 是显式启动依赖：进入方法前已安装 I18n 静态门面。
         log.info(I18n.message("log.data.init"), maskCredentials(url));
         if (url.startsWith("jdbc:sqlite:") && !url.contains(":memory:")) {
             ensureSqliteDir(url);
         }
+        // MySQL/PG 的正式 URL 必须带库名，因此先连接系统库检查并创建目标库，再创建正式数据源。
+        DatabaseProvisioner.ensureDatabaseExists(url, user, password);
         SimpleDriverDataSource ds = new SimpleDriverDataSource(url, user, password);
         if (url.startsWith("jdbc:sqlite")) {
             applySqlitePragmas(ds);

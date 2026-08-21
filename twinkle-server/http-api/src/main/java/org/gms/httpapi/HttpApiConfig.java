@@ -197,14 +197,10 @@ public class HttpApiConfig {
             AccountAdminRoleRepository accountAdminRoleRepository,
             AdminSessionRepository adminSessionRepository,
             @Property(name = "twinkle.http.admin.session-ttl-seconds", defaultValue = "86400")
-            long sessionTtlSeconds,
-            @Property(name = "twinkle.http.admin.bootstrap-account", defaultValue = "")
-            String bootstrapAccount,
-            @Property(name = "twinkle.http.admin.bootstrap-password", defaultValue = "")
-            String bootstrapPassword) {
+            long sessionTtlSeconds) {
         AdminSessionService service = new AdminSessionService(accountRepository, adminRoleRepository,
                 accountAdminRoleRepository, adminSessionRepository, sessionTtlSeconds);
-        service.bootstrapAdmin(bootstrapAccount, bootstrapPassword);
+        service.initializeBuiltInAdmin();
         return service;
     }
 }

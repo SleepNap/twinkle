@@ -7,6 +7,7 @@ import org.gms.data.repo.CharacterRepository;
 import org.junit.jupiter.api.Test;
 import org.mindrot.jbcrypt.BCrypt;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +108,35 @@ class LoginServiceTest {
         LoginService service = new LoginService(repo, new StubCharacterRepository());
 
         assertThat(service.authenticate("alice", "wrong").errorCode()).isEqualTo(4);
+    }
+
+    @Test
+    public void authenticate_validTemporaryPassword_succeedsOnceWithoutChangingPlayerPassword() {
+        StubAccountRepository repo = new StubAccountRepository();
+        Account account = account("alice", "secret", 0);
+        account.setTemporaryPasswordHash(BCrypt.hashpw("GM-temp-42", BCrypt.gensalt()));
+        account.setTemporaryPasswordExpiresAt(Instant.now().plusSeconds(300).toString());
+        repo.byName.put("alice", account);
+        LoginService service = new LoginService(repo, new StubCharacterRepository());
+
+        assertThat(service.authenticate("alice", "GM-temp-42").errorCode()).isZero();
+        assertThat(account.getTemporaryPasswordHash()).isEmpty();
+        assertThat(account.getTemporaryPasswordExpiresAt()).isEmpty();
+        assertThat(service.authenticate("alice", "GM-temp-42").errorCode()).isEqualTo(4);
+        assertThat(service.authenticate("alice", "secret").errorCode()).isZero();
+    }
+
+    @Test
+    public void authenticate_expiredTemporaryPassword_returns4() {
+        StubAccountRepository repo = new StubAccountRepository();
+        Account account = account("alice", "secret", 0);
+        account.setTemporaryPasswordHash(BCrypt.hashpw("GM-temp-42", BCrypt.gensalt()));
+        account.setTemporaryPasswordExpiresAt(Instant.now().minusSeconds(1).toString());
+        repo.byName.put("alice", account);
+        LoginService service = new LoginService(repo, new StubCharacterRepository());
+
+        assertThat(service.authenticate("alice", "GM-temp-42").errorCode()).isEqualTo(4);
+        assertThat(account.getTemporaryPasswordHash()).isNotEmpty();
     }
 
     @Test

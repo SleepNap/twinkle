@@ -27,6 +27,10 @@ public class Account {
     private Long id;
     private String name;
     private String password;
+    /** 一次性临时登录口令的 BCrypt 摘要；明文永不落库。 */
+    private String temporaryPasswordHash;
+    /** ISO-8601 UTC 过期时间；空值表示没有临时口令。 */
+    private String temporaryPasswordExpiresAt;
     private String pin;
     private String pic;
     private int loggedIn;
@@ -43,7 +47,6 @@ public class Account {
     private int characterSlots;
     private int gender;
     private String tempBan;
-    private int greason;
     private int tos;
     private String siteLogged;
     private Integer webAdmin;

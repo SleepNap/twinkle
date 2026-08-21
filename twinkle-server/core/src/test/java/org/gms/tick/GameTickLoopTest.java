@@ -124,4 +124,14 @@ class GameTickLoopTest {
         assertThat(loop.tickCount()).isEqualTo(3);
         assertThat(max.get()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("业务周期按基础周期向上换算，不提前执行")
+    void ticksForRoundsUpUsingConfiguredInterval() {
+        GameTickLoop loop = new GameTickLoop(250);
+
+        assertThat(loop.intervalMillis()).isEqualTo(250);
+        assertThat(loop.ticksFor(1_000)).isEqualTo(4);
+        assertThat(loop.ticksFor(1_001)).isEqualTo(5);
+    }
 }

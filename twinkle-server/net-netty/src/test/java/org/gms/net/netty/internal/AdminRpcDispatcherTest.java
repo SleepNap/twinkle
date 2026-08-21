@@ -1,10 +1,12 @@
 package org.gms.net.netty.internal;
 
+import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.service.admin.AdminService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,6 +31,32 @@ public final class AdminRpcDispatcherTest {
         });
     }
 
+    @Test
+    public void dispatchesWzReloadResult() {
+        InternalProtocol.RpcResponse response = new AdminRpcDispatcher(admin())
+                .dispatch("reloadWz", new String[0]);
+
+        assertThat(response.ok()).isTrue();
+        AdminService.WzReloadResult decoded = JsonCodec.decode(
+                response.value(), AdminService.WzReloadResult.class.getName());
+        assertThat(decoded.version()).isEqualTo(2);
+    }
+
+    @Test
+    public void dispatchesPacketTraceConfigurationAsStableDto() {
+        PacketTrace.Config config = new PacketTrace.Config(PacketTrace.FilterMode.EXCLUDE,
+                Set.of(PacketTrace.Direction.INBOUND), Set.of("MOVE_LIFE"), 4096);
+
+        InternalProtocol.RpcResponse response = new AdminRpcDispatcher(admin()).dispatch(
+                "startPacketTrace", new String[]{JsonCodec.encode(42L), JsonCodec.encode(config)});
+
+        assertThat(response.ok()).isTrue();
+        PacketTrace.Snapshot decoded = JsonCodec.decode(
+                response.value(), PacketTrace.Snapshot.class.getName());
+        assertThat(decoded.enabled()).isTrue();
+        assertThat(decoded.config().opcodeNames()).containsExactly("MOVE_LIFE");
+    }
+
     private static AdminService admin() {
         return new AdminService() {
             @Override
@@ -51,8 +79,18 @@ public final class AdminRpcDispatcherTest {
             }
 
             @Override
+            public PacketTrace.Snapshot startPacketTrace(long characterId, PacketTrace.Config config) {
+                return new PacketTrace.Snapshot(true, true, config, 0, 0, List.of());
+            }
+
+            @Override
             public int reloadScripts() {
                 return 0;
+            }
+
+            @Override
+            public WzReloadResult reloadWz() {
+                return new WzReloadResult(2, java.util.Map.of(), java.util.Map.of());
             }
 
             @Override

@@ -4,6 +4,7 @@ import org.gms.httpapi.version.ApiRoutes;
 
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
@@ -19,7 +20,12 @@ import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.httpapi.admin.AdminAuthFilter;
 import org.gms.service.admin.AdminService;
+import org.mindrot.jbcrypt.BCrypt;
 
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +36,14 @@ import java.util.stream.Collectors;
 @Controller(ApiRoutes.ADMIN_V1 + "/accounts")
 @Produces(MediaType.APPLICATION_JSON)
 public final class AccountAdminController {
+
+    private static final int DEFAULT_TEMPORARY_PASSWORD_MINUTES = 30;
+    private static final int MIN_TEMPORARY_PASSWORD_MINUTES = 5;
+    private static final int MAX_TEMPORARY_PASSWORD_MINUTES = 120;
+    private static final int TEMPORARY_PASSWORD_LENGTH = 12;
+    private static final char[] TEMPORARY_PASSWORD_ALPHABET =
+            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789".toCharArray();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final AccountRepository accountRepository;
     private final CharacterRepository characterRepository;
@@ -145,6 +159,50 @@ public final class AccountAdminController {
                 "disconnected", disconnected));
     }
 
+    /**
+     * 生成一次性临时登录密码。重新生成会立即替换旧临时密码，玩家原密码不会改变。
+     * 明文只在本响应中出现一次，响应显式禁止缓存。
+     */
+    @Post("/{accountId}/temporary-password")
+    public HttpResponse<?> generateTemporaryPassword(HttpRequest<?> request,
+                                                     @PathVariable long accountId,
+                                                     @Body Map<String, Object> body) {
+        Account account = accountRepository.findById(accountId).orElse(null);
+        if (account == null) {
+            return HttpResponse.notFound(Map.of("error", "account_not_found"));
+        }
+        Integer durationMinutes = integerField(body, "durationMinutes");
+        if (durationMinutes == null) {
+            durationMinutes = DEFAULT_TEMPORARY_PASSWORD_MINUTES;
+        }
+        if (durationMinutes < MIN_TEMPORARY_PASSWORD_MINUTES
+                || durationMinutes > MAX_TEMPORARY_PASSWORD_MINUTES) {
+            return HttpResponse.badRequest(Map.of("error", "invalid_temporary_password_duration"));
+        }
+
+        String temporaryPassword = generateTemporaryPassword();
+        String expiresAt = Instant.now().plus(Duration.ofMinutes(durationMinutes)).toString();
+        boolean replaced = temporaryPasswordActive(account);
+        account.setTemporaryPasswordHash(BCrypt.hashpw(temporaryPassword, BCrypt.gensalt()));
+        account.setTemporaryPasswordExpiresAt(expiresAt);
+        accountRepository.update(account);
+
+        request.setAttribute(AdminAuthFilter.BEFORE_SUMMARY_ATTRIBUTE,
+                "accountId=" + accountId + ",temporaryPasswordActive=" + replaced);
+        request.setAttribute(AdminAuthFilter.AFTER_SUMMARY_ATTRIBUTE,
+                "accountId=" + accountId + ",temporaryPasswordActive=true,expiresAt=" + expiresAt);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("generated", true);
+        result.put("accountId", accountId);
+        result.put("temporaryPassword", temporaryPassword);
+        result.put("expiresAt", expiresAt);
+        result.put("oneTime", true);
+        return HttpResponse.ok(result)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("Pragma", "no-cache");
+    }
+
     private int disconnectAccount(long accountId) {
         int disconnected = 0;
         for (Character character : characterRepository.findByAccount(accountId)) {
@@ -176,6 +234,9 @@ public final class AccountAdminController {
         result.put("tempBan", safeString(account.getTempBan(), 64));
         result.put("characterSlots", account.getCharacterSlots());
         result.put("gender", account.getGender());
+        result.put("temporaryPasswordActive", temporaryPasswordActive(account));
+        result.put("temporaryPasswordExpiresAt",
+                temporaryPasswordActive(account) ? safeString(account.getTemporaryPasswordExpiresAt(), 64) : "");
         return result;
     }
 
@@ -213,6 +274,43 @@ public final class AccountAdminController {
             return false;
         }
         return null;
+    }
+
+    private static Integer integerField(Map<String, Object> body, String field) {
+        if (body == null || !body.containsKey(field)) {
+            return null;
+        }
+        Object value = body.get(field);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return Integer.MIN_VALUE;
+        }
+    }
+
+    private static boolean temporaryPasswordActive(Account account) {
+        String hash = account.getTemporaryPasswordHash();
+        String expiresAt = account.getTemporaryPasswordExpiresAt();
+        if (hash == null || hash.isBlank() || expiresAt == null || expiresAt.isBlank()) {
+            return false;
+        }
+        try {
+            return Instant.parse(expiresAt).isAfter(Instant.now());
+        } catch (DateTimeParseException ignored) {
+            return false;
+        }
+    }
+
+    private static String generateTemporaryPassword() {
+        StringBuilder result = new StringBuilder(TEMPORARY_PASSWORD_LENGTH);
+        for (int i = 0; i < TEMPORARY_PASSWORD_LENGTH; i++) {
+            result.append(TEMPORARY_PASSWORD_ALPHABET[
+                    SECURE_RANDOM.nextInt(TEMPORARY_PASSWORD_ALPHABET.length)]);
+        }
+        return result.toString();
     }
 
     private static String restrictionSummary(Account account) {

@@ -3,6 +3,7 @@ package org.gms.replaceable;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.item.ItemData;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.hotreload.versioned.VersionGate;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +22,7 @@ class ItemSystemTest {
     private final Map<Integer, ItemData> itemData = Map.of(
             2_000_000, item(2_000_000, 100),
             2_000_001, item(2_000_001, 5));
-    private final ItemSystem system = new ItemSystem(versionGate, itemData);
+    private final ItemSystem system = new ItemSystem(versionGate, GameDataProvider.fixed(itemData, Map.of()));
 
     private static ItemData item(int id, int slotMax) {
         ItemData d = new ItemData(id);

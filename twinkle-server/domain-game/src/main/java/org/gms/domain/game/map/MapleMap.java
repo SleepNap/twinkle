@@ -27,45 +27,45 @@ public class MapleMap {
 
     // ---------- 静态属性（WZ 加载填充，红线 1 字节级兼容） ----------
 
-    private int mapId;
+    private volatile int mapId;
     /** 死亡回城地图。 */
-    private int returnMapId;
-    private int forcedReturnMap;
-    private String mapName;
-    private String streetName;
+    private volatile int returnMapId;
+    private volatile int forcedReturnMap;
+    private volatile String mapName;
+    private volatile String streetName;
     /** 是否城镇（安全区）。 */
-    private boolean town;
+    private volatile boolean town;
     /** 地图限制位掩码（禁飞/禁药/禁召唤等，v83 语义）。 */
-    private int fieldLimit;
+    private volatile int fieldLimit;
     /** 刷怪倍率。 */
-    private int monsterRate;
+    private volatile int monsterRate;
     /** 怪物容量上限。 */
-    private int mobCapacity;
+    private volatile int mobCapacity;
     /** 每秒掉血（玩家进入即扣）。 */
-    private int decHp;
+    private volatile int decHp;
     /** 回复（坐下恢复等）。 */
-    private int recovery;
+    private volatile int recovery;
     /** 保护物品 id。 */
-    private int protectItem;
+    private volatile int protectItem;
     /** 进入时触发脚本名（L2 脚本用）。 */
-    private String onUserEnter;
+    private volatile String onUserEnter;
     /** 首次进入触发脚本名。 */
-    private String onFirstUserEnter;
+    private volatile String onFirstUserEnter;
     /** 限时地图秒数（0 = 不限时）。 */
-    private int timeLimit;
+    private volatile int timeLimit;
     /** 是否显示时钟。 */
-    private boolean clock;
+    private volatile boolean clock;
 
     // ---------- 运行时容器（自定义方法） ----------
 
     @Getter(AccessLevel.NONE)
-    private final Map<Integer, Portal> portals = new HashMap<>();
+    private volatile Map<Integer, Portal> portals = new HashMap<>();
 
     @Getter(AccessLevel.NONE)
-    private final List<SpawnPoint> spawnPoints = new ArrayList<>();
+    private volatile List<SpawnPoint> spawnPoints = new ArrayList<>();
 
     @Getter(AccessLevel.NONE)
-    private final List<MapleFoothold> footholds = new ArrayList<>();
+    private volatile List<MapleFoothold> footholds = new ArrayList<>();
 
     @Getter(AccessLevel.NONE)
     private final List<CharacterState> characters = new ArrayList<>();
@@ -110,6 +110,29 @@ public class MapleMap {
 
     public List<MapleFoothold> footholds() {
         return List.copyOf(footholds);
+    }
+
+    /** 原子替换 WZ 静态投影；运行态玩家、怪物和对象 id 序列保持不变。 */
+    public synchronized void replaceWzData(MapleMap source) {
+        this.mapId = source.mapId;
+        this.returnMapId = source.returnMapId;
+        this.forcedReturnMap = source.forcedReturnMap;
+        this.mapName = source.mapName;
+        this.streetName = source.streetName;
+        this.town = source.town;
+        this.fieldLimit = source.fieldLimit;
+        this.monsterRate = source.monsterRate;
+        this.mobCapacity = source.mobCapacity;
+        this.decHp = source.decHp;
+        this.recovery = source.recovery;
+        this.protectItem = source.protectItem;
+        this.onUserEnter = source.onUserEnter;
+        this.onFirstUserEnter = source.onFirstUserEnter;
+        this.timeLimit = source.timeLimit;
+        this.clock = source.clock;
+        this.portals = new HashMap<>(source.portals);
+        this.spawnPoints = new ArrayList<>(source.spawnPoints);
+        this.footholds = new ArrayList<>(source.footholds);
     }
 
     /**

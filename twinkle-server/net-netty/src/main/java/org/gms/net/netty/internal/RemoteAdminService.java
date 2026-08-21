@@ -1,6 +1,7 @@
 package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
@@ -69,6 +70,31 @@ public final class RemoteAdminService implements AdminService {
     }
 
     @Override
+    public PacketTrace.Catalog packetTraceCatalog() {
+        InternalProtocol.RpcResponse response = rpc("packetTraceCatalog");
+        if (response == null || !response.ok()) {
+            return AdminService.super.packetTraceCatalog();
+        }
+        PacketTrace.Catalog catalog = JsonCodec.decode(response.value(), PacketTrace.Catalog.class.getName());
+        return catalog == null ? AdminService.super.packetTraceCatalog() : catalog;
+    }
+
+    @Override
+    public PacketTrace.Snapshot startPacketTrace(long characterId, PacketTrace.Config config) {
+        return traceSnapshot(rpc("startPacketTrace", characterId, config));
+    }
+
+    @Override
+    public PacketTrace.Snapshot packetTraceSnapshot(long characterId, long afterSequence, int limit) {
+        return traceSnapshot(rpc("packetTraceSnapshot", characterId, afterSequence, limit));
+    }
+
+    @Override
+    public PacketTrace.Snapshot stopPacketTrace(long characterId) {
+        return traceSnapshot(rpc("stopPacketTrace", characterId));
+    }
+
+    @Override
     public int reloadScripts() {
         InternalProtocol.RpcResponse resp = rpc("reloadScripts");
         if (resp == null || !resp.ok()) {
@@ -76,6 +102,16 @@ public final class RemoteAdminService implements AdminService {
         }
         Integer n = JsonCodec.decode(resp.value(), Integer.class.getName());
         return n == null ? 0 : n;
+    }
+
+    @Override
+    public WzReloadResult reloadWz() {
+        InternalProtocol.RpcResponse resp = rpc("reloadWz");
+        if (resp == null || !resp.ok()) {
+            return new WzReloadResult(0, java.util.Map.of(), java.util.Map.of());
+        }
+        WzReloadResult result = JsonCodec.decode(resp.value(), WzReloadResult.class.getName());
+        return result == null ? new WzReloadResult(0, java.util.Map.of(), java.util.Map.of()) : result;
     }
 
     @Override
@@ -97,6 +133,13 @@ public final class RemoteAdminService implements AdminService {
 
     private void rpcVoid(String method, Object... args) {
         rpc(method, args);
+    }
+
+    private static PacketTrace.Snapshot traceSnapshot(InternalProtocol.RpcResponse response) {
+        if (response == null || !response.ok() || "null".equals(response.value())) {
+            return null;
+        }
+        return JsonCodec.decode(response.value(), PacketTrace.Snapshot.class.getName());
     }
 
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {

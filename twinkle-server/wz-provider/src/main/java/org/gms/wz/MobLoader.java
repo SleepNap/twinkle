@@ -1,6 +1,5 @@
 package org.gms.wz;
 
-import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.mob.MobData;
 import org.gms.i18n.I18n;
 
@@ -17,7 +16,6 @@ import java.util.Objects;
  * <p>遍历 {@code Mob.wz} 下所有 {@code *.img.xml}（一个文件一个怪物），
  * 填 {@link MobData} 的 info 字段（v83 字段名：maxHP/PADamage/PDDamage 等）。
  */
-@Log4j2
 public final class MobLoader {
 
 
@@ -40,7 +38,6 @@ public final class MobLoader {
         } catch (IOException e) {
             throw new IllegalStateException(I18n.message("error.wz.mob_walk_failed", mobWz), e);
         }
-        log.info(I18n.message("log.wz.mob_loaded"), mobs.size(), wzRoot);
         return mobs;
     }
 

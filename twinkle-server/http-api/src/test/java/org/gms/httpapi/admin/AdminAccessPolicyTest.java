@@ -42,6 +42,26 @@ class AdminAccessPolicyTest {
     }
 
     @Test
+    public void packetTraceWriteRequiresDedicatedPermission() {
+        AdminAccessPolicy.Policy start = policy.resolve(
+                HttpMethod.PUT, "/admin/v1/packet-traces/42");
+        AdminAccessPolicy.Policy stop = policy.resolve(
+                HttpMethod.DELETE, "/admin/v1/packet-traces/42");
+        AdminAccessPolicy.Policy read = policy.resolve(
+                HttpMethod.GET, "/admin/v1/packet-traces/42");
+
+        assertThat(start.requiredPermission()).isEqualTo(AdminPermission.PACKET_TRACE);
+        assertThat(stop.requiredPermission()).isEqualTo(AdminPermission.PACKET_TRACE);
+        assertThat(read.requiredPermission()).isEqualTo(AdminPermission.PACKET_TRACE);
+    }
+
+    @Test
+    void wzReload_requiresDedicatedPermission() {
+        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/reload/wz");
+        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.RELOAD_WZ);
+    }
+
+    @Test
     void billingWrite_requiresBillingManage() {
         AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/billing/accounts/1/adjust");
         assertThat(p.requiredPermission()).isEqualTo(AdminPermission.BILLING_MANAGE);

@@ -12,7 +12,7 @@
 
     <artifactId>twinkle-wz-provider</artifactId>
     <name>twinkle-wz-provider</name>
-    <description>WZ 解析 + 预编译磁盘缓存（重开免重解析）</description>
+    <description>WZ 解析、按需目录缓存与原子热重载注册中心</description>
 
     <dependencies>
         <!-- 填充目标：domain-game 的 MapleMap/Portal/SpawnPoint 数据模型 -->

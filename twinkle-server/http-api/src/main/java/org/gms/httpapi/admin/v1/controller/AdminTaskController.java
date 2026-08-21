@@ -22,7 +22,7 @@ import org.gms.task.BackgroundTaskRegistry;
 
 import java.util.Map;
 
-/** Admin projection for bounded background-task history and registered schedules. */
+/** 后台任务和定时任务的有界监控投影。 */
 @Controller(ApiRoutes.ADMIN_V1)
 @Produces(MediaType.APPLICATION_JSON)
 @ExecuteOn(TaskExecutors.BLOCKING)
@@ -40,7 +40,8 @@ public final class AdminTaskController {
     @Get("/tasks{?limit}")
     public Map<String, Object> tasks(@QueryValue(defaultValue = "50") int limit) {
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
-        return Map.of("limit", safeLimit, "tasks", registry.recent(safeLimit));
+        return Map.of("limit", safeLimit, "tasks", registry.recent(safeLimit),
+                "metrics", registry.metrics());
     }
 
     @Get("/tasks/{taskId}")

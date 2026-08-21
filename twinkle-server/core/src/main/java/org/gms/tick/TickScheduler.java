@@ -11,27 +11,38 @@ package org.gms.tick;
  */
 public interface TickScheduler {
 
+    /** 基础调度周期（毫秒）。 */
+    public long intervalMillis();
+
+    /** 把业务周期换算成 tick 数；不能整除时向上取整，避免任务提前执行。 */
+    public default long ticksFor(long periodMillis) {
+        if (periodMillis <= 0) {
+            throw new IllegalArgumentException("periodMillis must be positive");
+        }
+        return Math.max(1L, Math.ceilDiv(periodMillis, intervalMillis()));
+    }
+
     /** 注册 tick handler（换代时可先 unregister 旧再 register 新）。 */
-    void register(TickHandler handler);
+    public void register(TickHandler handler);
 
-    void unregister(TickHandler handler);
+    public void unregister(TickHandler handler);
 
-    int handlerCount();
+    public int handlerCount();
 
     /** 启动循环线程。 */
-    void start();
+    public void start();
 
     /** 停止循环线程。 */
-    void stop();
+    public void stop();
 
     /** 暂停在安全点（热重载/停服用）。 */
-    void pause();
+    public void pause();
 
     /** 恢复 tick。 */
-    void resume();
+    public void resume();
 
-    boolean isPaused();
+    public boolean isPaused();
 
     /** 已执行的 tick 数（从 1 起）。 */
-    long tickCount();
+    public long tickCount();
 }

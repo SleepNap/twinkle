@@ -516,7 +516,7 @@ components:
           minItems: 1
           uniqueItems: true
           items:
-            enum: [server.health:read, player.online:read, player.inventory:read, game:read, game:write, keys:manage]
+            enum: [server.health:read, player.online:read, player.inventory:read, server.reload:read, server.reload:write, server.config:write, game:read, game:write, keys:manage, events:read, events:write]
         expiresAt: {type: [string, 'null'], format: date-time}
     UpdateScopesRequest:
       type: object
@@ -527,7 +527,7 @@ components:
           minItems: 1
           uniqueItems: true
           items:
-            enum: [server.health:read, player.online:read, player.inventory:read, game:read, game:write, keys:manage]
+            enum: [server.health:read, player.online:read, player.inventory:read, server.reload:read, server.reload:write, server.config:write, game:read, game:write, keys:manage, events:read, events:write]
     IssuedKey:
       type: object
       required: [credentialId, keyPrefix, token, displayName, subjectId, scopes, serverId, createdAt]

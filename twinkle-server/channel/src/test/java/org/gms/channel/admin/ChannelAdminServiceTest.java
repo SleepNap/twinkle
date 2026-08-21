@@ -1,6 +1,7 @@
 package org.gms.channel.admin;
 
 import org.gms.channel.CharacterLoader;
+import org.gms.channel.ChannelMapManager;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.persist.CharacterSaveQueue;
@@ -23,12 +24,18 @@ import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.packet.PacketSession;
 import org.gms.service.admin.AdminService;
 import org.gms.tick.GameTickLoop;
+import org.gms.wz.WzResourceRegistry;
+import org.gms.wz.WzReloadCoordinator;
+import org.gms.wz.resource.ItemResourceLoader;
+import org.gms.wz.resource.MapResourceLoader;
+import org.gms.wz.resource.MobResourceLoader;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -71,7 +78,11 @@ class ChannelAdminServiceTest {
         ScriptManager scriptManager = new ScriptManager(new ScriptEngine(), new ScriptRepository(Path.of(scriptDir)));
 
         PlayerSessionRegistry sessions = new PlayerSessionRegistry();
-        return new ChannelAdminService(players, sessions, 1, scriptManager, restartService, restartCoordinator,
+        WzResourceRegistry wzResources = emptyWzResources();
+        ChannelMapManager mapManager = new ChannelMapManager(wzResources);
+        WzReloadCoordinator wzCoordinator = new WzReloadCoordinator(wzResources, List.of(mapManager));
+        return new ChannelAdminService(players, sessions, 1, scriptManager, wzCoordinator,
+                restartService, restartCoordinator,
                 () -> { /* mock restart：测试不真退出 */ });
     }
 
@@ -217,7 +228,25 @@ class ChannelAdminServiceTest {
         String scriptDir = Files.createTempDirectory("twinkle-chadmin2-script").toString();
         ScriptManager scriptManager = new ScriptManager(new ScriptEngine(), new ScriptRepository(Path.of(scriptDir)));
 
-        return new ChannelAdminService(players, sessions, 1, scriptManager, restartService, restartCoordinator,
+        WzResourceRegistry wzResources = emptyWzResources();
+        ChannelMapManager mapManager = new ChannelMapManager(wzResources);
+        WzReloadCoordinator wzCoordinator = new WzReloadCoordinator(wzResources, List.of(mapManager));
+        return new ChannelAdminService(players, sessions, 1, scriptManager, wzCoordinator,
+                restartService, restartCoordinator,
                 () -> { /* mock restart：测试不真退出 */ });
+    }
+
+    @Test
+    void reloadWzPublishesNewVersionWithoutRestart() throws Exception {
+        AdminService.WzReloadResult result = buildAdmin().reloadWz();
+
+        assertThat(result.version()).isEqualTo(2);
+        assertThat(result.runtimeObjects()).containsEntry("channel-maps", 0);
+        assertThat(result.resources()).containsKeys("items", "mobs", "maps");
+    }
+
+    private static WzResourceRegistry emptyWzResources() throws Exception {
+        return new WzResourceRegistry(Files.createTempDirectory("twinkle-chadmin-wz"),
+                List.of(new ItemResourceLoader(), new MobResourceLoader(), new MapResourceLoader()), Runnable::run);
     }
 }

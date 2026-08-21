@@ -12,6 +12,8 @@ twinkle:
   # ============== 数据库（架构 6.2：按需三档） ==============
   # 默认：SQLite（低配 standalone，路径相对运行目录）
   # 大服 PostgreSQL：-Dtwinkle.db.url=jdbc:postgresql://host:5432/dbname
+  # MySQL/PG：目标库不存在时会先连接 mysql/postgres 系统库自动创建；账号需有 CREATE DATABASE 权限。
+  # 自动建库继承数据库服务器默认字符集、排序规则/区域设置，不在应用内硬编码。
   # 注意：Micronaut @Property 默认值（代码内）处理 jdbc: 前缀的安全；此处只留纯值
   db:
     url: jdbc:sqlite:./data/twinkle.db
@@ -28,6 +30,8 @@ twinkle:
     # 频道服端口（M2 进图：选角后客户端重连；单进程默认与登录服错开）
     # split 档每频道进程独占一个端口（如 8584 / 8585 / ...），经 TWINKLE_CHANNEL_PORT 指定
     channel:
+      # 登录服通过 v83 SERVER_IP 回包告诉客户端连接频道时使用的 IPv4；不是监听地址。
+      # 登录服和频道服的 Netty 端口均默认监听所有网卡；公网部署时这里填写客户端可达的公网 IPv4。
       host: ${TWINKLE_CHANNEL_HOST:127.0.0.1}
       port: ${TWINKLE_CHANNEL_PORT:8584}
       # 频道 id（split 档每频道进程 1 / 2 / ...；single 档恒 1）
@@ -53,7 +57,7 @@ twinkle:
   script:
     path: ${TWINKLE_SCRIPT_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\scripts}
 
-  # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
+  # ============== API Key 与限流（/api、/internal 统一认证、Scope 授权和审计） ==============
   http:
     api:
       # 首次签发管理密钥的根凭据。必须由环境变量注入；留空时除 OpenAPI 外全部拒绝。
@@ -70,22 +74,17 @@ twinkle:
     admin:
       # 会话有效期（秒），默认 24h
       session-ttl-seconds: ${TWINKLE_ADMIN_SESSION_TTL_SECONDS:86400}
-      # 首个管理员 bootstrap：账号不存在则用该密码创建并授 super_admin；存在则仅补授角色
-      bootstrap-account: ${TWINKLE_ADMIN_BOOTSTRAP_ACCOUNT:}
-      bootstrap-password: ${TWINKLE_ADMIN_BOOTSTRAP_PASSWORD:}
 
 # ============== log4j2 ==============
 log4j2:
   configurationFile: log4j2.xml
 
-# ============== Micronaut HTTP（管理进程用，默认启用） ==============
-# 单进程档下管理进程内嵌，HTTP 端口 8080 默认；可由 -Dmicronaut.server.port=8080 改
-# 网络平面收敛（红线 20）：管理 HTTP 默认绑定 loopback，禁止默认 0.0.0.0——admin/运维 API
-# 只在 loopback/内网可达；对外暴露仅客户端端口（Netty）与受控 /api/v1（按部署需显式配 host）。
+# ============== Micronaut HTTP（管理进程用，默认监听所有网卡） ==============
+# 不配置 host 时 Micronaut/Netty 按端口绑定所有本机地址；/api 与 /internal 统一走 API Key，
+# /admin 走管理员会话 + RBAC。部署侧仍应使用 TLS、反向代理和防火墙控制入口。
 micronaut:
   server:
-    host: ${TWINKLE_HTTP_HOST:127.0.0.1}
-    port: ${TWINKLE_HTTP_PORT:8080}
+    port: ${TWINKLE_HTTP_PORT:8686}
   router:
     static-resources:
       openapi:

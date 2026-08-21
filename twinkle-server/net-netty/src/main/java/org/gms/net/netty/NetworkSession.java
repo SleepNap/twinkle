@@ -7,6 +7,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import lombok.extern.log4j.Log4j2;
+import org.gms.diagnostics.PacketTrace;
 import org.gms.i18n.I18n;
 import org.gms.net.encryption.CipherPair;
 import org.gms.net.opcodes.RecvOpcode;
@@ -55,6 +56,8 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     private volatile Channel channel;
     private volatile SessionStage stage = SessionStage.HANDSHAKE;
+    /** null=从未开启；非 null 且 disabled=已停止但保留窗口。 */
+    private volatile PacketTraceBuffer packetTrace;
 
     public NetworkSession(HandlerRegistry registry, CipherPair ciphers) {
         this(registry, ciphers, null, HeartbeatConfig.defaults());
@@ -138,6 +141,10 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof InPacket packet) {
+            PacketTraceBuffer trace = packetTrace;
+            if (trace != null && trace.enabled()) {
+                trace.capture(PacketTrace.Direction.INBOUND, packet.getBytes());
+            }
             int opcode = packet.readUnsignedShort();
             if (opcode == RecvOpcode.PONG.getValue()) {
                 // 传输心跳响应：PONG 在分发前拦截，不进 HandlerRegistry（各阶段共享稳定贡献点）
@@ -189,8 +196,31 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     public void send(OutPacket packet) {
         Channel c = channel;
         if (c != null && c.isActive()) {
+            PacketTraceBuffer trace = packetTrace;
+            if (trace != null && trace.enabled()) {
+                trace.capture(PacketTrace.Direction.OUTBOUND, packet.getBytes());
+            }
             c.writeAndFlush(packet);
         }
+    }
+
+    @Override
+    public PacketTrace.Snapshot startPacketTrace(PacketTrace.Config config) {
+        PacketTraceBuffer next = new PacketTraceBuffer(config);
+        packetTrace = next;
+        return next.snapshot(0, PacketTrace.MAX_PAGE_SIZE);
+    }
+
+    @Override
+    public PacketTrace.Snapshot packetTraceSnapshot(long afterSequence, int limit) {
+        PacketTraceBuffer trace = packetTrace;
+        return trace == null ? PacketTrace.Snapshot.notConfigured() : trace.snapshot(afterSequence, limit);
+    }
+
+    @Override
+    public PacketTrace.Snapshot stopPacketTrace() {
+        PacketTraceBuffer trace = packetTrace;
+        return trace == null ? PacketTrace.Snapshot.notConfigured() : trace.stop();
     }
 
     @Override

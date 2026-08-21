@@ -31,5 +31,6 @@ class ApiVersionCatalogTest {
         ApiErrorContractRegistry errorContracts = new ApiErrorContractRegistry();
         assertThat(catalog.definitions(ApiPlane.PUBLIC))
                 .allMatch(definition -> errorContracts.supports(definition.major()));
+        assertThat(errorContracts.contractVersion("/internal/v1/health")).isEqualTo("0.1");
     }
 }

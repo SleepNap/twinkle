@@ -8,8 +8,10 @@ public final class AdminPermission {
     public static final String READ = "admin:read";
     public static final String CONFIG_WRITE = "admin.config:write";
     public static final String PLAYER_KICK = "admin.player:kick";
+    public static final String PACKET_TRACE = "admin.packet:trace";
     public static final String RELOAD_LOGIC = "admin.reload:logic";
     public static final String RELOAD_SCRIPTS = "admin.reload:scripts";
+    public static final String RELOAD_WZ = "admin.reload:wz";
     public static final String RESTART = "admin.restart";
     public static final String TASK_MANAGE = "admin.task:manage";
     public static final String BILLING_MANAGE = "admin.billing:manage";
@@ -20,7 +22,7 @@ public final class AdminPermission {
     public static final String ALL = "*";
 
     public static final Set<String> SUPPORTED = Set.of(
-            READ, CONFIG_WRITE, PLAYER_KICK, RELOAD_LOGIC, RELOAD_SCRIPTS,
+            READ, CONFIG_WRITE, PLAYER_KICK, PACKET_TRACE, RELOAD_LOGIC, RELOAD_SCRIPTS, RELOAD_WZ,
             RESTART, TASK_MANAGE, BILLING_MANAGE, ROLE_MANAGE, ACCOUNT_MANAGE);
 
     private AdminPermission() {

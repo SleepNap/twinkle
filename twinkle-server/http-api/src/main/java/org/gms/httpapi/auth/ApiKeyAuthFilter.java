@@ -24,8 +24,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** 所有公共 API 主版本共用的 API-key 认证、scope 授权和全链路审计。 */
-@Filter(ApiRoutes.PUBLIC_ROOT + "/**")
+/** 公共 API 与内部 API 共用的 API-key 认证、scope 授权和全链路审计。 */
+@Filter({ApiRoutes.PUBLIC_ROOT + "/**", ApiRoutes.INTERNAL_ROOT + "/**"})
 public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
 
     public static final String PRINCIPAL_ATTRIBUTE = "twinkle.api.principal";

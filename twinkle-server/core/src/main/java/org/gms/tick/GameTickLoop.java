@@ -2,6 +2,7 @@ package org.gms.tick;
 
 
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
@@ -32,6 +33,11 @@ public final class GameTickLoop implements TickScheduler {
             throw new IllegalArgumentException(I18n.message("error.tick.invalid_interval", intervalMillis));
         }
         this.intervalMillis = intervalMillis;
+    }
+
+    @Override
+    public long intervalMillis() {
+        return intervalMillis;
     }
 
     @Override
@@ -92,12 +98,21 @@ public final class GameTickLoop implements TickScheduler {
     }
 
     private void loop() {
+        long intervalNanos = TimeUnit.MILLISECONDS.toNanos(intervalMillis);
+        long nextTickAtNanos = System.nanoTime();
         while (running) {
             try {
                 if (!paused) {
                     tickOnce();
                 }
-                Thread.sleep(intervalMillis);
+                nextTickAtNanos += intervalNanos;
+                long sleepNanos = nextTickAtNanos - System.nanoTime();
+                if (sleepNanos <= 0) {
+                    // 本轮超出预算时不追赶积压，从当前时刻重新建立下一周期。
+                    nextTickAtNanos = System.nanoTime() + intervalNanos;
+                    sleepNanos = intervalNanos;
+                }
+                TimeUnit.NANOSECONDS.sleep(sleepNanos);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break; // stop() 触发

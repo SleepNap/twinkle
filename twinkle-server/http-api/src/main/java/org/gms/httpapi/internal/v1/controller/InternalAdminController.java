@@ -21,10 +21,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 内部 API（架构 M3-1：/internal/v1/*，官网转调，无需限流或弱限流）。
+ * 内部 API（架构 M3-1：/internal/v1/*，官网与内部系统转调）。
  *
- * <p>只暴露运维/健康类只读端点，供官网与内部系统转调。网络平面收敛（红线 20）：
- * 默认绑定 loopback/内网，装配配置显式指定（见 application.yml）。
+ * <p>全部端点经 {@code ApiKeyAuthFilter} 认证、按最小 Scope 授权并写审计；写端点分别要求
+ * {@code server.reload:write} 与 {@code server.config:write}。
  */
 @Controller(ApiRoutes.INTERNAL_V1)
 @Produces(MediaType.APPLICATION_JSON)

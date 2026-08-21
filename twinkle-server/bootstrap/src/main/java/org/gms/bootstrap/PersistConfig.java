@@ -40,8 +40,9 @@ public class PersistConfig {
 
     @Bean
     @Singleton
-    public CharacterFlushTickHandler characterFlushTickHandler(CharacterSaveQueue saveQueue, Metrics metrics) {
-        return new CharacterFlushTickHandler(saveQueue, metrics);
+    public CharacterFlushTickHandler characterFlushTickHandler(CharacterSaveQueue saveQueue, Metrics metrics,
+                                                                TickScheduler tickScheduler) {
+        return new CharacterFlushTickHandler(saveQueue, metrics, tickScheduler.ticksFor(1_000L));
     }
 
     @Bean

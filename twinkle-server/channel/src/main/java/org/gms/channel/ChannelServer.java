@@ -59,7 +59,6 @@ public final class ChannelServer implements AutoCloseable {
                 .channel(NioServerSocketChannel.class)
                 .childHandler(new V83ServerInitializer(registry, disconnectListener, heartbeatConfig));
         serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        log.info(I18n.message("log.channel.server.started"), port);
     }
 
     public int boundPort() {

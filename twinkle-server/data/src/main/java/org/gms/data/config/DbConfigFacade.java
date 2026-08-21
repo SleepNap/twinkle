@@ -1,6 +1,6 @@
 package org.gms.data.config;
 
-import jakarta.inject.Singleton;
+import io.micronaut.context.annotation.Context;
 import lombok.extern.log4j.Log4j2;
 import org.gms.config.ConfigChangeEvent;
 import org.gms.config.ConfigFacade;
@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>依赖 {@link ParamConfRepository}（接口）—— 数据库落地方式（MyBatis-Flex / JDBC / 内存 mock）
  * 不影响 facade 本身的逻辑。架构 1.3：内存态是权威，DB 只是持久化 + 查询层。
  */
-@Singleton
+@Context
 @Log4j2
 public final class DbConfigFacade implements ConfigFacade {
 

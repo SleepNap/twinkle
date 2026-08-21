@@ -1,6 +1,5 @@
 package org.gms.wz;
 
-import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.item.ItemData;
 import org.gms.i18n.I18n;
 
@@ -21,7 +20,6 @@ import java.util.Set;
  *
  * <p>读不到的目录跳过（各发行版解包范围不一），解析失败抛 {@link IllegalStateException}。
  */
-@Log4j2
 public final class ItemLoader {
 
 
@@ -54,7 +52,6 @@ public final class ItemLoader {
                 throw new IllegalStateException(I18n.message("error.wz.item_walk_failed", category, dir), e);
             }
         }
-        log.info(I18n.message("log.wz.item_loaded"), items.size(), wzRoot);
         return items;
     }
 

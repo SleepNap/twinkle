@@ -12,7 +12,7 @@ import lombok.Setter;
 @Setter
 public class MapleMonster {
 
-    private final MobData data;
+    private volatile MobData data;
     /** 地图内对象 id（v83 oid，刷怪时由地图分配，客户端据此寻址）。 */
     private int objectId;
     private int hp;
@@ -25,6 +25,15 @@ public class MapleMonster {
         this.data = data;
         this.hp = data.getMaxHp();
         this.mp = data.getMaxMp();
+    }
+
+    /**
+     * 替换怪物的 WZ 静态属性，保留已发生的战斗状态；新上限降低时收紧当前 HP/MP。
+     */
+    public synchronized void replaceWzData(MobData replacement) {
+        this.data = replacement;
+        this.hp = Math.min(hp, replacement.getMaxHp());
+        this.mp = Math.min(mp, replacement.getMaxMp());
     }
 
     /** 扣血；hp 归零标记死亡（最小值 0）。 */

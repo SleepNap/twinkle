@@ -53,7 +53,6 @@ public final class ScriptRepository {
         }
         this.dirSnapshot = scan();
         this.snapshot = mergedSnapshot(dirSnapshot);
-        log.info(I18n.message("log.script.repository_initialized"), snapshot.size(), root);
     }
 
     /** 扫描目录树，构建新快照（递归所有 *.js，不修改内部状态）。 */

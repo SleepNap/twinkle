@@ -90,6 +90,33 @@ class AdminSessionServiceTest {
         assertThat(p.permits("anything")).isTrue();
     }
 
+    @Test
+    void initializeBuiltInAdmin_createsLoginReadySuperAdmin() {
+        Fixture f = new Fixture();
+        f.role(1L, "super_admin", "*");
+
+        f.service.initializeBuiltInAdmin();
+
+        Account account = f.accounts.findByName("admin").orElseThrow();
+        assertThat(BCrypt.checkpw("admin", account.getPassword())).isTrue();
+        assertThat(f.accountRoles.findByAccountId(account.getId())).hasSize(1);
+        assertThat(f.service.login("admin", "admin", "127.0.0.1")).isPresent();
+    }
+
+    @Test
+    void initializeBuiltInAdmin_isIdempotentAndPreservesExistingPassword() {
+        Fixture f = new Fixture();
+        f.account("admin", "changed-password");
+        f.role(1L, "super_admin", "*");
+
+        f.service.initializeBuiltInAdmin();
+        f.service.initializeBuiltInAdmin();
+
+        Account account = f.accounts.findByName("admin").orElseThrow();
+        assertThat(BCrypt.checkpw("changed-password", account.getPassword())).isTrue();
+        assertThat(f.accountRoles.findByAccountId(account.getId())).hasSize(1);
+    }
+
     private static final class Fixture {
         final StubAccountRepo accounts = new StubAccountRepo();
         final StubRoleRepo roles = new StubRoleRepo();
@@ -140,6 +167,9 @@ class AdminSessionServiceTest {
 
         @Override
         public void insert(Account account) {
+            if (account.getId() == null) {
+                account.setId((long) byName.size() + 1);
+            }
             byName.put(account.getName(), account);
         }
 

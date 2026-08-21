@@ -1,6 +1,7 @@
 package org.gms.net.netty.internal;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
@@ -36,7 +37,16 @@ public final class AdminRpcDispatcher {
                 case "inventorySnapshot" -> InternalProtocol.RpcResponse.ok(
                         JsonCodec.encode(admin.inventorySnapshot(longArg(args, 0))));
                 case "kick" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.kick(longArg(args, 0))));
+                case "packetTraceCatalog" -> InternalProtocol.RpcResponse.ok(
+                        JsonCodec.encode(admin.packetTraceCatalog()));
+                case "startPacketTrace" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
+                        admin.startPacketTrace(longArg(args, 0), configArg(args, 1))));
+                case "packetTraceSnapshot" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
+                        admin.packetTraceSnapshot(longArg(args, 0), longArg(args, 1), intArg(args, 2))));
+                case "stopPacketTrace" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
+                        admin.stopPacketTrace(longArg(args, 0))));
                 case "reloadScripts" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadScripts()));
+                case "reloadWz" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadWz()));
                 case "requestRestart" -> {
                     admin.requestRestart();
                     yield InternalProtocol.RpcResponse.ok("null");
@@ -55,5 +65,14 @@ public final class AdminRpcDispatcher {
 
     private static long longArg(String[] args, int i) {
         return args == null || i >= args.length ? 0L : JsonCodec.decode(args[i], Long.class.getName());
+    }
+
+    private static int intArg(String[] args, int i) {
+        return args == null || i >= args.length ? 0 : JsonCodec.decode(args[i], Integer.class.getName());
+    }
+
+    private static PacketTrace.Config configArg(String[] args, int i) {
+        return args == null || i >= args.length ? null
+                : JsonCodec.decode(args[i], PacketTrace.Config.class.getName());
     }
 }

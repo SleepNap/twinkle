@@ -122,15 +122,15 @@ public class SplitConfig {
             @Property(name = "twinkle.coordinator.host", defaultValue = "127.0.0.1") String host,
             @Property(name = "twinkle.coordinator.port", defaultValue = "8510") int port,
             @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String channelHost,
+            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String advertisedHost,
             @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
         CoordinatorLink link = new CoordinatorLink(new InetSocketAddress(host, port), 1000);
         // 连接建立（含重连）→ 上报频道身份（注册中心，架构 4.6.4）
         link.addConnectListener(conn -> {
             conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
                     conn.nextMessageId(), JsonCodec.encode(
-                    new InternalProtocol.RegisterPayload(channelId, channelHost, channelPort, false, 0))));
-            log.info(I18n.message("log.bootstrap.channel_reported"), channelId, channelHost, channelPort);
+                    new InternalProtocol.RegisterPayload(channelId, advertisedHost, channelPort, false, 0))));
+            log.info(I18n.message("log.bootstrap.channel_reported"), channelId, advertisedHost, channelPort);
         });
         link.start();
         return link;

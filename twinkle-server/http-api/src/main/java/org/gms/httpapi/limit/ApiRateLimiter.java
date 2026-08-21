@@ -8,7 +8,7 @@ import org.gms.observability.Metrics;
 import java.time.Duration;
 
 /**
- * 第三方 API 限流（架构 M3-1：/api/v1 用 Bucket4j，/internal/v1 无需限流或弱限流）。
+ * API 限流（架构 M3-1：/api/v1 与 /internal/v1 共用认证前 Bucket4j）。
  *
  * <p>令牌桶：容量（默认 100），每 refillSeconds 秒补满——即 100 req/s 峰值，
  * 2C2G 档足够（第三方 API 面，非游戏热路径）。参数经 Micronaut {@code @Property}

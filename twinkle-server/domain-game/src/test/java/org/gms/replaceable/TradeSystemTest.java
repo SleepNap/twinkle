@@ -6,6 +6,7 @@ import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.inventory.ItemConstants;
 import org.gms.domain.game.item.ItemData;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.domain.game.trade.Trade;
 import org.gms.domain.game.trade.TradeSide;
 import org.gms.hotreload.versioned.DefaultVersionGate;
@@ -26,7 +27,7 @@ class TradeSystemTest {
 
     private final VersionGate versionGate = new DefaultVersionGate();
     private final Map<Integer, ItemData> itemData = Map.of(2_000_000, item(2_000_000, 100));
-    private final ItemSystem itemSystem = new ItemSystem(versionGate, itemData);
+    private final ItemSystem itemSystem = new ItemSystem(versionGate, GameDataProvider.fixed(itemData, Map.of()));
     private final TradeSystem tradeSystem = new TradeSystem(versionGate, itemSystem);
 
     private static ItemData item(int id, int slotMax) {

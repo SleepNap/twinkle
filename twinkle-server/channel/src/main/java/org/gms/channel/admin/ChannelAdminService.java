@@ -1,8 +1,10 @@
 package org.gms.channel.admin;
 
 import lombok.extern.log4j.Log4j2;
+import org.gms.diagnostics.PacketTrace;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
+import org.gms.channel.ChannelMapManager;
 import org.gms.channel.persist.RestartService;
 import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.Equip;
@@ -13,7 +15,9 @@ import org.gms.domain.script.ScriptManager;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.PacketSession;
+import org.gms.net.packet.PacketTracePolicy;
 import org.gms.service.admin.AdminService;
+import org.gms.wz.WzReloadCoordinator;
 
 /**
  * 频道侧 {@link AdminService} 实现（架构 M3-1 第②路：管理侧经 service 接口访问频道）。
@@ -23,7 +27,7 @@ import org.gms.service.admin.AdminService;
  *
  * <p>M5 运维操作（架构 M5-1）：脚本重载、L4 重启均委托频道侧具体组件执行——管理侧
  * （http-api/admin）不 import 本实现依赖的 ScriptManager/RestartService，只经本接口调用。
- * 重启在守护线程异步执行（不阻塞管理 API 线程），进程关停由 {@code restartProcess}
+ * 重启在独立虚拟线程异步执行（不阻塞管理 API 线程），进程关停由 {@code restartProcess}
  * 承担（bootstrap 注入 {@code System.exit}）。
  *
  * <p>装配由 bootstrap 接线（本类不加 @Singleton，避免与 @Bean 双份）。
@@ -37,17 +41,20 @@ public final class ChannelAdminService implements AdminService {
     private final PlayerSessionRegistry sessions;
     private final long channelId;
     private final ScriptManager scriptManager;
+    private final WzReloadCoordinator wzReloadCoordinator;
     private final RestartService restartService;
     private final RestartCoordinator restartCoordinator;
     private final Runnable restartProcess;
 
     public ChannelAdminService(PlayerStorage players, PlayerSessionRegistry sessions, long channelId,
-                               ScriptManager scriptManager, RestartService restartService,
+                               ScriptManager scriptManager, WzReloadCoordinator wzReloadCoordinator,
+                               RestartService restartService,
                                RestartCoordinator restartCoordinator, Runnable restartProcess) {
         this.players = players;
         this.sessions = sessions;
         this.channelId = channelId;
         this.scriptManager = scriptManager;
+        this.wzReloadCoordinator = wzReloadCoordinator;
         this.restartService = restartService;
         this.restartCoordinator = restartCoordinator;
         this.restartProcess = restartProcess;
@@ -98,6 +105,29 @@ public final class ChannelAdminService implements AdminService {
     }
 
     @Override
+    public PacketTrace.Catalog packetTraceCatalog() {
+        return PacketTracePolicy.catalog();
+    }
+
+    @Override
+    public PacketTrace.Snapshot startPacketTrace(long characterId, PacketTrace.Config config) {
+        PacketSession session = sessions.get(characterId);
+        return session == null ? null : session.startPacketTrace(config);
+    }
+
+    @Override
+    public PacketTrace.Snapshot packetTraceSnapshot(long characterId, long afterSequence, int limit) {
+        PacketSession session = sessions.get(characterId);
+        return session == null ? null : session.packetTraceSnapshot(afterSequence, limit);
+    }
+
+    @Override
+    public PacketTrace.Snapshot stopPacketTrace(long characterId) {
+        PacketSession session = sessions.get(characterId);
+        return session == null ? null : session.stopPacketTrace();
+    }
+
+    @Override
     public int reloadScripts() {
         int changed = scriptManager.reload();
         log.info(I18n.message("log.admin.reload_scripts"), changed);
@@ -105,17 +135,23 @@ public final class ChannelAdminService implements AdminService {
     }
 
     @Override
+    public WzReloadResult reloadWz() {
+        WzReloadCoordinator.ReloadReport report = wzReloadCoordinator.reload();
+        int runtimeObjects = report.runtimeObjects().values().stream().mapToInt(Integer::intValue).sum();
+        log.info(I18n.message("log.admin.reload_wz"), report.version(), runtimeObjects);
+        return new WzReloadResult(report.version(), report.resources(), report.runtimeObjects());
+    }
+
+    @Override
     public void requestRestart() {
         log.info(I18n.message("log.admin.restart_requested"));
-        Thread daemon = new Thread(() -> {
+        Thread.startVirtualThread(() -> {
             try {
                 restartService.restart(restartProcess);
             } catch (Exception e) {
                 log.error(I18n.message("log.admin.restart_error"), e);
             }
-        }, "admin-requested-restart");
-        daemon.setDaemon(true);
-        daemon.start();
+        });
     }
 
     @Override

@@ -9,6 +9,8 @@ import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.InventoryItemRepository;
 import org.mindrot.jbcrypt.BCrypt;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 
@@ -66,11 +68,41 @@ public final class LoginService {
         if (account.getBanned() == 1) {
             return LoginResult.error(3); // 已封禁
         }
-        String stored = account.getPassword();
-        if (stored == null || stored.isEmpty() || !BCrypt.checkpw(password, stored)) {
+        if (matches(password, account.getPassword())) {
+            return LoginResult.ok(account);
+        }
+        if (!temporaryPasswordActive(account) || !matches(password, account.getTemporaryPasswordHash())) {
             return LoginResult.error(4); // 密码错误
         }
+
+        // 临时密码只允许成功登录一次。先清除再返回，玩家原密码始终不受影响。
+        account.setTemporaryPasswordHash("");
+        account.setTemporaryPasswordExpiresAt("");
+        accountRepository.update(account);
         return LoginResult.ok(account);
+    }
+
+    private static boolean temporaryPasswordActive(Account account) {
+        String expiresAt = account.getTemporaryPasswordExpiresAt();
+        if (expiresAt == null || expiresAt.isBlank()) {
+            return false;
+        }
+        try {
+            return Instant.parse(expiresAt).isAfter(Instant.now());
+        } catch (DateTimeParseException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean matches(String rawPassword, String hash) {
+        if (rawPassword == null || hash == null || hash.isBlank()) {
+            return false;
+        }
+        try {
+            return BCrypt.checkpw(rawPassword, hash);
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
     }
 
     /**

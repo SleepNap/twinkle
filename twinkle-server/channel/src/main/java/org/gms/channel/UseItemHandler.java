@@ -5,6 +5,7 @@ import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.item.ItemData;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.i18n.I18n;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
@@ -14,8 +15,6 @@ import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.replaceable.ItemSystem;
-
-import java.util.Map;
 
 /**
  * 物品使用（RecvOpcode.USE_ITEM）。
@@ -33,11 +32,11 @@ public final class UseItemHandler implements PacketHandler {
 
 
     private final ItemSystem itemSystem;
-    private final Map<Integer, ItemData> itemData;
+    private final GameDataProvider gameData;
 
-    public UseItemHandler(ItemSystem itemSystem, Map<Integer, ItemData> itemData) {
+    public UseItemHandler(ItemSystem itemSystem, GameDataProvider gameData) {
         this.itemSystem = itemSystem;
-        this.itemData = itemData;
+        this.gameData = gameData;
     }
 
     @Override
@@ -68,7 +67,7 @@ public final class UseItemHandler implements PacketHandler {
 
     /** 应用 ItemData 效果（hp/mp 恢复，hpr/mpr 按 max 百分比，封顶）。 */
     private void applyEffect(Character chr, int itemId) {
-        ItemData data = itemData.get(itemId);
+        ItemData data = gameData.item(itemId);
         if (data == null) {
             return;
         }

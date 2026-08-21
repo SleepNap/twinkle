@@ -17,20 +17,22 @@ public final class CharacterFlushTickHandler implements TickHandler {
 
 
 
-    /** 每 N tick 刷一次（10 tick × 100ms = 1s）。 */
-    private static final int EVERY_TICKS = 10;
-
     private final CharacterSaveQueue saveQueue;
     private final Metrics metrics;
+    private final long everyTicks;
 
-    public CharacterFlushTickHandler(CharacterSaveQueue saveQueue, Metrics metrics) {
+    public CharacterFlushTickHandler(CharacterSaveQueue saveQueue, Metrics metrics, long everyTicks) {
+        if (everyTicks <= 0) {
+            throw new IllegalArgumentException("everyTicks must be positive");
+        }
         this.saveQueue = saveQueue;
         this.metrics = metrics;
+        this.everyTicks = everyTicks;
     }
 
     @Override
     public void tick(long tickCount) {
-        if (tickCount % EVERY_TICKS == 0) {
+        if (tickCount % everyTicks == 0) {
             int dirty = saveQueue.flushAll();
             if (dirty > 0) {
                 log.debug(I18n.message("log.save.flush_dirty"), dirty);

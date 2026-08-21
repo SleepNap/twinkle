@@ -15,6 +15,10 @@ public final class AdminAccessPolicy {
         if (relativePath.startsWith("/auth/")) {
             return new Policy(false, "");
         }
+        // 封包内容属于高敏诊断数据，读取和启停都要求独立权限。
+        if (relativePath.startsWith("/packet-traces")) {
+            return new Policy(false, AdminPermission.PACKET_TRACE);
+        }
         if (method != HttpMethod.GET && method != HttpMethod.HEAD) {
             if ("/config".equals(relativePath)) {
                 return new Policy(false, AdminPermission.CONFIG_WRITE);
@@ -27,6 +31,9 @@ public final class AdminAccessPolicy {
             }
             if ("/reload/scripts".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RELOAD_SCRIPTS);
+            }
+            if ("/reload/wz".equals(relativePath)) {
+                return new Policy(false, AdminPermission.RELOAD_WZ);
             }
             if ("/restart".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RESTART);

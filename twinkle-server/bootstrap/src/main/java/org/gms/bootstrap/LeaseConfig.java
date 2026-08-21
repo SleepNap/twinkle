@@ -35,15 +35,18 @@ public class LeaseConfig {
     public ControllerLeaseService controllerLeaseService(
             @Property(name = "twinkle.lease.ttlSeconds", defaultValue = "50") long ttlSeconds,
             @Property(name = "twinkle.lease.cooldownSeconds", defaultValue = "15") long cooldownSeconds,
-            @Property(name = "twinkle.lease.sweepIntervalMs", defaultValue = "10000") long sweepIntervalMs) {
-        return new DefaultControllerLeaseService(ttlSeconds, cooldownSeconds, sweepIntervalMs);
+            @Property(name = "twinkle.lease.sweepIntervalMs", defaultValue = "10000") long sweepIntervalMs,
+            TickScheduler tickScheduler) {
+        return new DefaultControllerLeaseService(ttlSeconds, cooldownSeconds, sweepIntervalMs,
+                tickScheduler.intervalMillis());
     }
 
     @Bean
     @Singleton
     public MonsterReassignTickHandler monsterReassignTickHandler(ChannelMapManager mapManager,
-                                                                 MonsterSpawnService spawnService) {
-        return new MonsterReassignTickHandler(mapManager, spawnService);
+                                                                 MonsterSpawnService spawnService,
+                                                                 TickScheduler tickScheduler) {
+        return new MonsterReassignTickHandler(mapManager, spawnService, tickScheduler.ticksFor(10_000L));
     }
 
     /** 启动期注册租约巡检 + 无主怪重分配两个 tick handler 并启动 tick 循环。 */

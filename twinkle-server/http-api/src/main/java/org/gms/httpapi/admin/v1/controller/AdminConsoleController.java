@@ -173,6 +173,12 @@ public final class AdminConsoleController {
         return Map.of("changed", adminService.reloadScripts());
     }
 
+    /** 全量 WZ 热重载；注册资源先全部准备成功，再统一换代。 */
+    @Post("/reload/wz")
+    public AdminService.WzReloadResult reloadWz() {
+        return adminService.reloadWz();
+    }
+
     /** 请求一次主动重启（L4，② AdminService.requestRestart，异步编排）。 */
     @Post("/restart")
     public HttpResponse<?> restart() {

@@ -8,7 +8,9 @@ import org.gms.data.repo.CharacterRepository;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.service.admin.AdminService;
 import org.junit.jupiter.api.Test;
+import org.mindrot.jbcrypt.BCrypt;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +61,44 @@ class AccountAdminControllerTest {
 
         assertThat(controller.forceOffline(HttpRequest.POST("/", ""), 7L).code()).isEqualTo(200);
         assertThat(account.getLoggedIn()).isZero();
+    }
+
+    @Test
+    public void generateTemporaryPasswordStoresOnlyHashAndKeepsPlayerPassword() {
+        Account account = account(7L, "alice");
+        account.setPassword(BCrypt.hashpw("player-secret", BCrypt.gensalt()));
+        String playerPasswordHash = account.getPassword();
+        MemoryAccounts accounts = new MemoryAccounts(account);
+        AccountAdminController controller = new AccountAdminController(
+                accounts, new MemoryCharacters(), new FakeAdmin());
+
+        HttpRequest<?> request = HttpRequest.POST("/", "");
+        var response = controller.generateTemporaryPassword(
+                request, 7L, java.util.Map.of("durationMinutes", 15));
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> body = (java.util.Map<String, Object>) response.body();
+        String temporaryPassword = (String) body.get("temporaryPassword");
+
+        assertThat(response.code()).isEqualTo(200);
+        assertThat(response.getHeaders().get("Cache-Control")).isEqualTo("no-store");
+        assertThat(temporaryPassword).hasSize(12).doesNotContain("player-secret");
+        assertThat(account.getTemporaryPasswordHash()).isNotEqualTo(temporaryPassword);
+        assertThat(BCrypt.checkpw(temporaryPassword, account.getTemporaryPasswordHash())).isTrue();
+        assertThat(Instant.parse(account.getTemporaryPasswordExpiresAt())).isAfter(Instant.now());
+        assertThat(account.getPassword()).isEqualTo(playerPasswordHash);
+        assertThat(request.getAttribute("twinkle.admin.after-summary", String.class).orElseThrow())
+                .contains("accountId=7", "temporaryPasswordActive=true")
+                .doesNotContain(temporaryPassword, account.getTemporaryPasswordHash());
+    }
+
+    @Test
+    public void generateTemporaryPasswordRejectsUnsafeDuration() {
+        AccountAdminController controller = new AccountAdminController(
+                new MemoryAccounts(account(7L, "alice")), new MemoryCharacters(), new FakeAdmin());
+
+        assertThat(controller.generateTemporaryPassword(
+                HttpRequest.POST("/", ""), 7L, java.util.Map.of("durationMinutes", 121)).code())
+                .isEqualTo(400);
     }
 
     private static Account account(long id, String name) {
@@ -157,6 +197,11 @@ class AccountAdminControllerTest {
         @Override
         public int reloadScripts() {
             return 0;
+        }
+
+        @Override
+        public WzReloadResult reloadWz() {
+            return new WzReloadResult(2, java.util.Map.of(), java.util.Map.of());
         }
 
         @Override

@@ -11,7 +11,8 @@ import java.util.Map;
 /**
  * 将认证/限流阶段的错误映射到请求主版本自己的冻结错误契约。
  *
- * <p>登记新的公共 API 主版本时必须在此增加显式映射；禁止把未知版本静默按 v1 返回。
+ * <p>公共与内部 API v1 共用稳定错误信封；登记新的主版本时必须在此增加显式映射，
+ * 禁止把未知版本静默按 v1 返回。
  */
 public final class ApiErrorContractRegistry {
 
@@ -25,18 +26,21 @@ public final class ApiErrorContractRegistry {
         return switch (major(path)) {
             case 1 -> ApiErrorResponses.response(status, requestId, executionId, code,
                     message, retryable, details);
-            default -> throw new IllegalStateException("No public error contract for " + path);
+            default -> throw new IllegalStateException("No API error contract for " + path);
         };
     }
 
     public String contractVersion(String path) {
         return switch (major(path)) {
             case 1 -> ApiContract.VERSION;
-            default -> throw new IllegalStateException("No public contract version for " + path);
+            default -> throw new IllegalStateException("No API contract version for " + path);
         };
     }
 
     private static int major(String path) {
+        if (path != null && path.startsWith(ApiRoutes.INTERNAL_ROOT + "/")) {
+            return ApiRoutes.major(ApiRoutes.INTERNAL_ROOT, path);
+        }
         return ApiRoutes.major(ApiRoutes.PUBLIC_ROOT, path);
     }
 }

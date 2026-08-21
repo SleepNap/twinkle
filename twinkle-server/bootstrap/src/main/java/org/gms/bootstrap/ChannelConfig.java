@@ -32,8 +32,7 @@ import org.gms.channel.PlayerStorage;
 import org.gms.channel.UseItemHandler;
 import org.gms.channel.WhisperHandler;
 import org.gms.data.repo.CharacterRepository;
-import org.gms.domain.game.item.ItemData;
-import org.gms.domain.game.mob.MobData;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.domain.script.ScriptManager;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
@@ -49,10 +48,10 @@ import org.gms.replaceable.TradeSystem;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.service.admin.AdminService;
 import org.gms.service.intercoord.IntercoordService;
-import org.gms.wz.MapLoader;
+import org.gms.wz.WzResourceRegistry;
+import org.gms.wz.WzReloadCoordinator;
+import org.gms.wz.WzReloadParticipant;
 
-import java.nio.file.Path;
-import java.util.Map;
 
 /**
  * 频道服装配（架构 M2 进图 + M3-5 游戏内协议 handler）。
@@ -79,8 +78,15 @@ public class ChannelConfig {
 
     @Bean
     @Singleton
-    public ChannelMapManager channelMapManager(@Property(name = "twinkle.wz.path", defaultValue = "./wz") String wzPath) {
-        return new ChannelMapManager(new MapLoader(Path.of(wzPath)));
+    public ChannelMapManager channelMapManager(WzResourceRegistry resources) {
+        return new ChannelMapManager(resources);
+    }
+
+    @Bean
+    @Singleton
+    public WzReloadCoordinator wzReloadCoordinator(WzResourceRegistry resources,
+                                                   java.util.List<WzReloadParticipant> participants) {
+        return new WzReloadCoordinator(resources, participants);
     }
 
     @Bean
@@ -97,9 +103,9 @@ public class ChannelConfig {
 
     @Bean
     @Singleton
-    public MonsterSpawnService monsterSpawnService(Map<Integer, MobData> mobData, PlayerSessionRegistry sessions,
+    public MonsterSpawnService monsterSpawnService(GameDataProvider gameData, PlayerSessionRegistry sessions,
                                                    org.gms.domain.game.lease.ControllerLeaseService leaseService) {
-        return new MonsterSpawnService(mobData, sessions, leaseService);
+        return new MonsterSpawnService(gameData, sessions, leaseService);
     }
 
     /** @Bean(preDestroy="close")：频道 Netty 服 context close 时优雅关闭释放端口（多测试/多次启动不残留）。 */
@@ -147,6 +153,7 @@ public class ChannelConfig {
     @Singleton
     public AdminService adminService(PlayerStorage playerStorage, PlayerSessionRegistry playerSessionRegistry,
                                      ScriptManager scriptManager,
+                                     WzReloadCoordinator wzReloadCoordinator,
                                      org.gms.channel.persist.RestartService restartService,
                                      org.gms.hotreload.RestartCoordinator restartCoordinator,
                                      @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
@@ -155,7 +162,7 @@ public class ChannelConfig {
         // 测试/开发置 false（只编排不退出，防杀测试 JVM）——进程边界是配置（铁律 1）。
         Runnable restartProcess = exitOnRestart ? () -> System.exit(0) : () -> { };
         return new ChannelAdminService(playerStorage, playerSessionRegistry, channelId,
-                scriptManager, restartService, restartCoordinator, restartProcess);
+                scriptManager, wzReloadCoordinator, restartService, restartCoordinator, restartProcess);
     }
     @Bean
     @Singleton
@@ -173,7 +180,7 @@ public class ChannelConfig {
                                                            ScriptManager scriptManager,
                                                            ChannelEventPublisher eventPublisher,
                                                            EntityReloadCoordinator entityReloadCoordinator,
-                                                           Map<Integer, ItemData> itemData,
+                                                           GameDataProvider gameData,
                                                            EventBus eventBus,
                                                            org.gms.event.ReliableEventBus reliableEventBus,
                                                            IntercoordService intercoordService,
@@ -191,7 +198,7 @@ public class ChannelConfig {
                 new PlayerInteractionHandler(tradeSystem, playerSessionRegistry, entityReloadCoordinator),
                 new NpcTalkHandler(scriptManager, itemSystem, questSystem),
                 new NpcTalkMoreHandler(),
-                new UseItemHandler(itemSystem, itemData),
+                new UseItemHandler(itemSystem, gameData),
                 new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
                 new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry,
                         characterSaveQueue),
@@ -239,18 +246,19 @@ public class ChannelConfig {
      *
      * <p>关键：{@code ChannelRegistry.heartbeat} 用 computeIfPresent，频道必须先 register 才能
      * 心跳续期；此前生产代码无人调 registerChannel，注册表恒空，管理控制台"频道状态"列表拿不到
-     * 任何频道。此 @Context 装配在构造期上报本频道（host 读 twinkle.net.channel.host，端口读
-     * twinkle.net.channel.port），此后 ChannelLocationBinder 心跳即实时续期。
+     * 任何频道。此 @Context 装配在构造期上报本频道（host 是登录服下发给客户端连接频道的
+     * IPv4，读取 twinkle.net.channel.host；端口读取 twinkle.net.channel.port），此后
+     * ChannelLocationBinder 心跳即实时续期。
      */
     @Bean
     @Context
     @Singleton
     public ChannelRegistryRegistrar channelRegistryRegistrar(
             @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String channelHost,
+            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String advertisedHost,
             @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort,
             IntercoordService intercoordService) {
-        return new ChannelRegistryRegistrar(channelId, channelHost, channelPort, intercoordService);
+        return new ChannelRegistryRegistrar(channelId, advertisedHost, channelPort, intercoordService);
     }
 
     /** 频道启动注册（@Context 强制装配：构造期上报 → 心跳可续期）。 */

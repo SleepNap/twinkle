@@ -6,7 +6,6 @@ import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import jakarta.inject.Singleton;
-import lombok.extern.log4j.Log4j2;
 import org.gms.data.config.FlexParamConfRepository;
 import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
@@ -65,7 +64,6 @@ import org.gms.data.repo.FlexPointAccountRepository;
 import org.gms.data.repo.FlexPointTransactionRepository;
 import org.gms.data.repo.FlexSubscriptionPlanRepository;
 import org.gms.event.OutboxRepository;
-import org.gms.i18n.I18n;
 
 import javax.sql.DataSource;
 
@@ -82,7 +80,6 @@ import javax.sql.DataSource;
  * repository 缺依赖在启动期暴露，而非运行期才炸。
  */
 @Factory
-@Log4j2
 public class MyBatisFlexFactory {
 
 
@@ -119,7 +116,6 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(AdminSessionMapper.class);
         bootstrap.addMapper(AdminOperationAuditMapper.class);
         bootstrap.start();
-        log.info(I18n.message("log.data.mybatis_flex_ready"));
         return bootstrap;
     }
 

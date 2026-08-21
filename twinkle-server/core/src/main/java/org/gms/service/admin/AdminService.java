@@ -1,8 +1,10 @@
 package org.gms.service.admin;
 
+import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 管理侧访问频道的 service 契约（架构 M3-1 数据三路第②路：事务性操作经 service 接口）。
@@ -54,6 +56,15 @@ public interface AdminService {
             long characterId, String name, long stateVersion, List<InventoryItemView> items) {
     }
 
+    /** WZ 全局快照换代结果；runtimeObjects 为运行态参与者到刷新对象数。 */
+    public record WzReloadResult(long version, Map<String, Integer> resources,
+                                 Map<String, Integer> runtimeObjects) {
+        public WzReloadResult {
+            resources = Map.copyOf(resources);
+            runtimeObjects = Map.copyOf(runtimeObjects);
+        }
+    }
+
     /**
      * 频道在线玩家快照（只读，经 DTO 拷贝，不泄漏内存对象）。
      */
@@ -71,6 +82,26 @@ public interface AdminService {
      */
     boolean kick(long characterId);
 
+    /** 可供控制台选择的收发包 opcode 目录、默认降噪项与强制敏感项。 */
+    public default PacketTrace.Catalog packetTraceCatalog() {
+        return new PacketTrace.Catalog(List.of(), java.util.Set.of(), java.util.Set.of());
+    }
+
+    /** 为在线角色开启或重置临时封包监听；角色不在线返回 {@code null}。 */
+    public default PacketTrace.Snapshot startPacketTrace(long characterId, PacketTrace.Config config) {
+        return null;
+    }
+
+    /** 读取在线角色的监听窗口；角色不在线或会话不支持监听时返回 {@code null}。 */
+    public default PacketTrace.Snapshot packetTraceSnapshot(long characterId, long afterSequence, int limit) {
+        return null;
+    }
+
+    /** 停止在线角色的监听但保留当前窗口；角色不在线返回 {@code null}。 */
+    public default PacketTrace.Snapshot stopPacketTrace(long characterId) {
+        return null;
+    }
+
     // ---- M5 admin 控制台运维操作（架构 M5-1：运维操作经 service 接口，管理侧不得直踩游戏内存） ----
 
     /**
@@ -79,6 +110,9 @@ public interface AdminService {
      * @return 发生变化的脚本数
      */
     int reloadScripts();
+
+    /** 原子重载全部已注册 WZ 资源，并刷新当前频道已加载地图的静态数据。 */
+    WzReloadResult reloadWz();
 
     /**
      * 请求一次主动重启（L4：DRAINING → 增量 FLUSH → 退出，红线 17）。

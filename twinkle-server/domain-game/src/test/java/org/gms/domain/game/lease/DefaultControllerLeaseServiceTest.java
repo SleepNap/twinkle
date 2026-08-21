@@ -19,7 +19,7 @@ class DefaultControllerLeaseServiceTest {
     private final DefaultControllerLeaseService service = newService();
 
     private DefaultControllerLeaseService newService() {
-        return new DefaultControllerLeaseService(50, 15, 10_000, clock::get);
+        return new DefaultControllerLeaseService(50, 15, 10_000, 100, clock::get);
     }
 
     private final LeaseOwner alice = new LeaseOwner(1001, 9001, 1);
@@ -141,5 +141,22 @@ class DefaultControllerLeaseServiceTest {
         assertThat(service.isInCooldown(1001)).isFalse();
         // 重新分怪：完整新宽限
         assertThat(service.tryClaim(10, 1, alice)).isTrue();
+    }
+
+    @Test
+    void tickSweepUsesConfiguredBaseInterval() {
+        DefaultControllerLeaseService configured =
+                new DefaultControllerLeaseService(50, 15, 1_000, 250, clock::get);
+        configured.onClaim(1001, 9001, 1);
+        configured.tryClaim(10, 1, alice);
+        advanceSeconds(60);
+
+        configured.tick(1);
+        configured.tick(2);
+        configured.tick(3);
+        assertThat(configured.controlledAliveCount(alice)).isEqualTo(1);
+
+        configured.tick(4);
+        assertThat(configured.controlledAliveCount(alice)).isZero();
     }
 }

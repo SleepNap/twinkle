@@ -30,9 +30,10 @@ public final class ChannelNetworkInitializer {
     public ChannelNetworkInitializer(HandlerRegistry registry,
                                      ChannelHandlerRegistrar channelHandlers,
                                      ChannelServer channelServer,
+                                     @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
                                      @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int port) {
         channelHandlers.register(registry);
-        log.info(I18n.message("log.bootstrap.channel_handlers_registered"), registry.registeredCount());
         channelServer.start(port);
+        log.info(I18n.message("log.bootstrap.channel_started"), channelId, channelServer.boundPort());
     }
 }

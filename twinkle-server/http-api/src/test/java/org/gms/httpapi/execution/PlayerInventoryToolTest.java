@@ -74,6 +74,11 @@ public final class PlayerInventoryToolTest {
             }
 
             @Override
+            public WzReloadResult reloadWz() {
+                return new WzReloadResult(2, Map.of(), Map.of());
+            }
+
+            @Override
             public void requestRestart() {
             }
 

@@ -19,8 +19,8 @@ import org.reactivestreams.Publisher;
 /**
  * 第三方 API 限流过滤器（架构 M3-1：所有 /api/vN 主版本统一限流）。
  *
- * <p>只拦截 {@code /api/**}（第三方对外面）；{@code /internal/vN/**}（官网转调）
- * 不限流。限流键取来源 IP（管理侧对外 API 按客户端维度限流）。被限流返回 429。
+ * <p>这里只执行 {@code /api/**} 的认证后限流；{@code /internal/vN/**} 仍会经过
+ * {@code ApiKeyAuthFilter} 内的认证前限流。限流键取来源 IP，被限流返回 429。
  *
  * <p>HTTP 请求在 Micronaut 的 Netty EventLoop 处理（与游戏 Netty 隔离，红线 4）。
  */

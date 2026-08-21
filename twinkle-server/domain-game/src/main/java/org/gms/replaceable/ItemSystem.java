@@ -3,6 +3,7 @@ package org.gms.replaceable;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.domain.game.spi.TradeItemSnapshot;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.hotreload.versioned.VersionDecision;
 import org.gms.hotreload.versioned.VersionGate;
 
@@ -25,11 +26,11 @@ public final class ItemSystem {
     public static final int DEFAULT_SLOT_MAX = 100;
 
     private final VersionGate versionGate;
-    private final Map<Integer, ItemData> itemData;
+    private final GameDataProvider gameData;
 
-    public ItemSystem(VersionGate versionGate, Map<Integer, ItemData> itemData) {
+    public ItemSystem(VersionGate versionGate, GameDataProvider gameData) {
         this.versionGate = versionGate;
-        this.itemData = itemData;
+        this.gameData = gameData;
     }
 
     /**
@@ -44,7 +45,7 @@ public final class ItemSystem {
         if (quantity <= 0) {
             return false;
         }
-        ItemData data = itemData.get(itemId);
+        ItemData data = gameData.item(itemId);
         int slotMax = data != null && data.getSlotMax() > 0 ? data.getSlotMax() : DEFAULT_SLOT_MAX;
         return state.addItem(itemId, quantity, slotMax);
     }
@@ -80,7 +81,7 @@ public final class ItemSystem {
             if (entry.getValue() <= 0) {
                 return false;
             }
-            ItemData data = itemData.get(entry.getKey());
+            ItemData data = gameData.item(entry.getKey());
             int slotMax = data != null && data.getSlotMax() > 0 ? data.getSlotMax() : DEFAULT_SLOT_MAX;
             slotMaxByItem.put(entry.getKey(), slotMax);
         }
@@ -125,7 +126,7 @@ public final class ItemSystem {
     private Map<Integer, Integer> slotMaxByItem(List<TradeItemSnapshot> items) {
         Map<Integer, Integer> result = new HashMap<>();
         for (TradeItemSnapshot item : items) {
-            ItemData data = itemData.get(item.itemId());
+            ItemData data = gameData.item(item.itemId());
             int slotMax = item.equip() != null ? 1
                     : data != null && data.getSlotMax() > 0
                     ? data.getSlotMax() : DEFAULT_SLOT_MAX;

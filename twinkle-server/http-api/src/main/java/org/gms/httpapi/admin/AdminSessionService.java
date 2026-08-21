@@ -35,6 +35,10 @@ public final class AdminSessionService {
     private static final String TOKEN_PREFIX = "twk_adm_";
     private static final int LOOKUP_PREFIX_LENGTH = 12;
     private static final String SUPER_ADMIN_ROLE = "super_admin";
+    private static final String BUILT_IN_ADMIN_ACCOUNT = "admin";
+    /** 默认口令 admin 的 BCrypt 摘要；数据库和日志均不保存或输出明文。 */
+    private static final String BUILT_IN_ADMIN_PASSWORD_HASH =
+            "$2a$12$e/zmn4XpBCBZU.O37Ic8Ue6p/yBoQ5pdQXZyoyrMh4xU0BRa7Zc5S";
 
     private final AccountRepository accountRepository;
     private final AdminRoleRepository roleRepository;
@@ -148,31 +152,28 @@ public final class AdminSessionService {
         return permissions;
     }
 
-    /** bootstrap 首个管理员：配置了账号+密码则创建/补授 super_admin；否则无管理员时告警。 */
-    public void bootstrapAdmin(String accountName, String password) {
-        if (!isBlank(accountName) && !isBlank(password)) {
-            Account account = accountRepository.findByName(accountName.trim())
-                    .orElseGet(() -> createAdminAccount(accountName.trim(), password));
-            grantRole(account.getId(), SUPER_ADMIN_ROLE);
-            log.info(I18n.message("log.admin.bootstrap_ready"), accountName);
-            return;
-        }
-        if (accountRoleRepository.count() == 0) {
-            log.warn(I18n.message("log.admin.bootstrap_missing"));
+    /**
+     * 初始化内置管理员。首次启动创建 {@code admin} 账号，之后只补齐角色，不重置已存在账号的密码。
+     */
+    public void initializeBuiltInAdmin() {
+        Account account = accountRepository.findByName(BUILT_IN_ADMIN_ACCOUNT)
+                .orElseGet(this::createBuiltInAdminAccount);
+        if (grantRole(account.getId(), SUPER_ADMIN_ROLE)) {
+            log.info(I18n.message("log.admin.built_in_ready"), BUILT_IN_ADMIN_ACCOUNT);
         }
     }
 
-    private Account createAdminAccount(String name, String password) {
+    private Account createBuiltInAdminAccount() {
         Account account = new Account();
-        account.setName(name);
-        account.setPassword(BCrypt.hashpw(password, BCrypt.gensalt()));
+        account.setName(BUILT_IN_ADMIN_ACCOUNT);
+        account.setPassword(BUILT_IN_ADMIN_PASSWORD_HASH);
         account.setWebAdmin(1);
         accountRepository.insert(account);
         return account;
     }
 
-    private void grantRole(Long accountId, String roleCode) {
-        roleRepository.findByRoleCode(roleCode).ifPresent(role -> {
+    private boolean grantRole(Long accountId, String roleCode) {
+        return roleRepository.findByRoleCode(roleCode).map(role -> {
             boolean already = accountRoleRepository.findByAccountId(accountId).stream()
                     .anyMatch(relation -> role.getId().equals(relation.getRoleId()));
             if (!already) {
@@ -181,6 +182,10 @@ public final class AdminSessionService {
                 relation.setRoleId(role.getId());
                 accountRoleRepository.insert(relation);
             }
+            return true;
+        }).orElseGet(() -> {
+            log.error(I18n.message("log.admin.built_in_role_missing"), roleCode);
+            return false;
         });
     }
 

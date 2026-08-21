@@ -8,11 +8,11 @@ import org.gms.domain.game.map.SpawnPoint;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.domain.game.mob.MobData;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -42,7 +42,7 @@ public final class MonsterSpawnService {
 
 
 
-    private final Map<Integer, MobData> mobData;
+    private final GameDataProvider gameData;
     private final PlayerSessionRegistry sessions;
     private final ControllerLeaseService leaseService;
     private final ScheduledExecutorService respawnScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -59,9 +59,9 @@ public final class MonsterSpawnService {
     private final AtomicLong skippedDuplicate = new AtomicLong();
     private final AtomicLong reassigned = new AtomicLong();
 
-    public MonsterSpawnService(Map<Integer, MobData> mobData, PlayerSessionRegistry sessions,
+    public MonsterSpawnService(GameDataProvider gameData, PlayerSessionRegistry sessions,
                                ControllerLeaseService leaseService) {
-        this.mobData = mobData;
+        this.gameData = gameData;
         this.sessions = sessions;
         this.leaseService = leaseService;
     }
@@ -130,7 +130,7 @@ public final class MonsterSpawnService {
         if (sp.getChance() > 0 && (sp.getChance() < 100 && Math.random() * 100 > sp.getChance())) {
             return null;
         }
-        MobData data = mobData.get(sp.getMonsterId());
+        MobData data = gameData.mob(sp.getMonsterId());
         if (data == null) {
             missingMobData.incrementAndGet();
             log.warn(I18n.message("log.monster.spawn_missing_data"), sp.getMonsterId());

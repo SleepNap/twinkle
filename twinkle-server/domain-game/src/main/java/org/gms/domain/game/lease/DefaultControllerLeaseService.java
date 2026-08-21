@@ -74,6 +74,8 @@ public final class DefaultControllerLeaseService implements ControllerLeaseServi
     private final long cooldownNanos;
     /** 巡检间隔（毫秒，构造注入：tick 间隔 × sweepTicks）。 */
     private final long sweepIntervalMillis;
+    /** 每隔多少个基础 tick 执行一次巡检。 */
+    private final long sweepEveryTicks;
     /** 单调时钟（默认 {@link System#nanoTime()}；测试注入假时钟，报告 §5.3-6）。 */
     private final LongSupplier clock;
 
@@ -96,16 +98,21 @@ public final class DefaultControllerLeaseService implements ControllerLeaseServi
      * @param cooldownSeconds     控制权释放短冷却秒数（仅 LEASE_EXPIRED 进入）
      * @param sweepIntervalMillis 巡检间隔毫秒（= tick 间隔 × 每 N tick 扫一次）
      */
-    public DefaultControllerLeaseService(long ttlSeconds, long cooldownSeconds, long sweepIntervalMillis) {
-        this(ttlSeconds, cooldownSeconds, sweepIntervalMillis, System::nanoTime);
+    public DefaultControllerLeaseService(long ttlSeconds, long cooldownSeconds, long sweepIntervalMillis,
+                                         long tickIntervalMillis) {
+        this(ttlSeconds, cooldownSeconds, sweepIntervalMillis, tickIntervalMillis, System::nanoTime);
     }
 
     /** 测试注入假时钟（单调单调递增即可）。 */
-    DefaultControllerLeaseService(long ttlSeconds, long cooldownSeconds, long sweepIntervalMillis,
-                                  LongSupplier clock) {
+    public DefaultControllerLeaseService(long ttlSeconds, long cooldownSeconds, long sweepIntervalMillis,
+                                         long tickIntervalMillis, LongSupplier clock) {
+        if (tickIntervalMillis <= 0) {
+            throw new IllegalArgumentException("tickIntervalMillis must be positive");
+        }
         this.ttlNanos = ttlSeconds * 1_000_000_000L;
         this.cooldownNanos = cooldownSeconds * 1_000_000_000L;
         this.sweepIntervalMillis = sweepIntervalMillis;
+        this.sweepEveryTicks = Math.max(1L, Math.ceilDiv(sweepIntervalMillis, tickIntervalMillis));
         this.clock = clock;
         this.lastSweepAtNanos = clock.getAsLong();
     }
@@ -287,14 +294,9 @@ public final class DefaultControllerLeaseService implements ControllerLeaseServi
     @Override
     public void tick(long tickCount) {
         long count = tickCounter.incrementAndGet();
-        if (count % sweepTicks() == 0) {
+        if (count % sweepEveryTicks == 0) {
             sweep(now());
         }
-    }
-
-    /** 每 N tick 扫一次（sweepIntervalMillis / tick 间隔换算；100ms tick → 100 ticks = 10s）。 */
-    private long sweepTicks() {
-        return Math.max(1, sweepIntervalMillis / 100L);
     }
 
     // ---- 内部 ----

@@ -36,7 +36,7 @@ class ResourceBundleI18nServiceTest {
     void logTemplateKeepsSlf4jPlaceholderWhenNoArgs() {
         ResourceBundleI18nService service = new ResourceBundleI18nService("zh-CN");
         // 日志 key：无参 message() 返回原始 {} 模板，参数交给 log4j 填充
-        assertThat(service.message("log.tick.started")).isEqualTo("GameTickLoop 启动，间隔 {}ms");
+        assertThat(service.message("log.tick.started")).isEqualTo("游戏周期调度器启动，基础周期={}ms");
     }
 
     @Test

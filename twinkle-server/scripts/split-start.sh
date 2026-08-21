@@ -9,8 +9,8 @@
 #   TWINKLE_CHANNEL_COUNT    频道进程数（默认 1）
 #   TWINKLE_DB_URL           数据库 JDBC（默认 jdbc:sqlite:./data/twinkle.db，多进程共享同一库）
 #   TWINKLE_COORDINATOR_PORT coordinator 内部端口（默认 8510）
-#   TWINKLE_HTTP_HOST        管理 HTTP 绑定（默认 127.0.0.1，红线 20）
-#   TWINKLE_WZ_PATH / TWINKLE_SCRIPT_PATH / TWINKLE_CHANNEL_HOST
+#   TWINKLE_WZ_PATH / TWINKLE_SCRIPT_PATH
+#   TWINKLE_CHANNEL_HOST     登录服下发给客户端的频道 IPv4（默认 127.0.0.1）
 #
 # 注意：2C2G 强制单进程（红线 15）——split 仅限大内存机器/多机。
 # ============================================================
@@ -23,7 +23,6 @@ export TWINKLE_CHANNEL_COUNT="${TWINKLE_CHANNEL_COUNT:-1}"
 export TWINKLE_DB_URL="${TWINKLE_DB_URL:-jdbc:sqlite:./data/twinkle.db}"
 export TWINKLE_COORDINATOR_HOST="${TWINKLE_COORDINATOR_HOST:-127.0.0.1}"
 export TWINKLE_COORDINATOR_PORT="${TWINKLE_COORDINATOR_PORT:-8510}"
-export TWINKLE_HTTP_HOST="${TWINKLE_HTTP_HOST:-127.0.0.1}"
 export TWINKLE_WZ_PATH="${TWINKLE_WZ_PATH:-./wz}"
 export TWINKLE_SCRIPT_PATH="${TWINKLE_SCRIPT_PATH:-./scripts}"
 export TWINKLE_CHANNEL_HOST="${TWINKLE_CHANNEL_HOST:-127.0.0.1}"
@@ -60,8 +59,8 @@ done
 
 echo ""
 echo "==> split 档已启动：coordinator($COORD_PID) + $TWINKLE_CHANNEL_COUNT 频道进程"
-echo "    管理控制台: http://$TWINKLE_HTTP_HOST:8080/admin/v1/health"
-echo "    验证频道注册: curl http://$TWINKLE_HTTP_HOST:8080/admin/v1/channels"
+echo "    管理控制台: http://127.0.0.1:8080/admin/v1/health（HTTP 已监听所有网卡）"
+echo "    验证频道注册: curl http://127.0.0.1:8080/admin/v1/channels"
 echo "    停止: kill $COORD_PID ${PIDS[*]}"
 
 trap 'echo "==> 停止全部进程"; kill $COORD_PID "${PIDS[@]}" 2>/dev/null || true; wait' INT TERM

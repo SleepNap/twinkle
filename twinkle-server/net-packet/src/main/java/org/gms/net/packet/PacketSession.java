@@ -1,5 +1,7 @@
 package org.gms.net.packet;
 
+import org.gms.diagnostics.PacketTrace;
+
 /**
  * 连接会话最小接口（handler 的对外出口，定义在协议层使 net-packet 零依赖）。
  *
@@ -50,4 +52,19 @@ public interface PacketSession {
      * 归属用 {@code (characterId, sessionId, sessionGeneration)} 三元组证明。
      */
     long sessionId();
+
+    /** 开启或重置本连接的临时封包监听；不支持监听的会话实现返回 {@code null}。 */
+    default PacketTrace.Snapshot startPacketTrace(PacketTrace.Config config) {
+        return null;
+    }
+
+    /** 读取监听窗口；afterSequence=0 返回最新一页，正数则返回其后的增量。 */
+    default PacketTrace.Snapshot packetTraceSnapshot(long afterSequence, int limit) {
+        return null;
+    }
+
+    /** 停止采集但保留已有窗口，便于 GM 停止后继续查看。 */
+    default PacketTrace.Snapshot stopPacketTrace() {
+        return null;
+    }
 }
