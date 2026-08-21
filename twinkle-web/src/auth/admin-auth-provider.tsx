@@ -36,13 +36,13 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     return next
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     const current = window.sessionStorage.getItem(SESSION_KEY)
     window.sessionStorage.removeItem(SESSION_KEY)
     window.sessionStorage.removeItem(IDENTITY_KEY)
     setToken("")
     setIdentity(null)
-    if (current) void adminAuthApi.logout(current).catch(() => {})
+    if (current) await adminAuthApi.logout(current).catch(() => {})
   }, [])
 
   const value = useMemo(() => ({ token, identity, login, logout }), [token, identity, login, logout])

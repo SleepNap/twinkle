@@ -1,4 +1,4 @@
-import { Code2, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
+import { Code2, DatabaseZap, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -37,7 +37,7 @@ const phaseLabelKeys: Record<RestartPhaseResponse["phase"], MessageKey> = {
 export function OperationsPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
-  const [dialog, setDialog] = useState<"scripts" | "logic" | "restart" | null>(null)
+  const [dialog, setDialog] = useState<"scripts" | "logic" | "wz" | "restart" | null>(null)
   const inFlight = useQuery({
     queryKey: adminQueryKeys.inFlight,
     queryFn: ({ signal }) => adminApi.inFlight(signal),
@@ -70,6 +70,21 @@ export function OperationsPage() {
       setDialog(null)
     },
     onError: (error) => toast.error(t("operations.logicFailed"), { description: error.message }),
+  })
+  const wzMutation = useMutation({
+    mutationFn: (reason: string) => adminApi.reloadWz(reason),
+    onSuccess: (result) => {
+      const runtimeCount = Object.values(result.runtimeObjects).reduce((sum, count) => sum + count, 0)
+      toast.success(t("operations.wzSuccess"), {
+        description: t("operations.wzSuccessDescription", {
+          version: result.version,
+          resources: Object.keys(result.resources).length,
+          runtime: runtimeCount,
+        }),
+      })
+      setDialog(null)
+    },
+    onError: (error) => toast.error(t("operations.wzFailed"), { description: error.message }),
   })
   const restartMutation = useMutation({
     mutationFn: (reason: string) => adminApi.restart(reason),
@@ -112,7 +127,7 @@ export function OperationsPage() {
 
       {firstError && <QueryError error={firstError} retry={refreshAll} />}
 
-      <section className="grid gap-3 lg:grid-cols-3" aria-label={t("operations.actions")}>
+      <section className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4" aria-label={t("operations.actions")}>
         <Card>
           <CardHeader>
             <CardTitle>{t("operations.scriptTitle")}</CardTitle>
@@ -130,6 +145,27 @@ export function OperationsPage() {
               pending={scriptsMutation.isPending}
               requireReason
               onConfirm={(reason) => scriptsMutation.mutate(reason)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.wzTitle")}</CardTitle>
+            <CardDescription>{t("operations.wzDescription")}</CardDescription>
+            <CardAction><DatabaseZap className="size-4 text-muted-foreground" /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <ConfirmationDialog
+              open={dialog === "wz"}
+              onOpenChange={(open) => setDialog(open ? "wz" : null)}
+              trigger={<Button variant="outline" className="w-full">{t("operations.reloadWz")}</Button>}
+              title={t("operations.reloadWzTitle")}
+              description={t("operations.reloadWzDescription")}
+              confirmLabel={t("operations.confirmReload")}
+              pending={wzMutation.isPending}
+              requireReason
+              onConfirm={(reason) => wzMutation.mutate(reason)}
             />
           </CardContent>
         </Card>

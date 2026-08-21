@@ -1,4 +1,4 @@
-import { RefreshCw, Search } from "lucide-react"
+import { Radio, RefreshCw, Search } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { adminApi, adminQueryKeys, type OnlinePlayer } from "@/api/admin"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { PageHeader } from "@/components/page-header"
+import { PacketTraceDialog } from "@/components/packet-trace-dialog"
 import { EmptyState, QueryError } from "@/components/query-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,7 @@ export function PlayersPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
   const [kickTarget, setKickTarget] = useState<OnlinePlayer | null>(null)
+  const [traceTarget, setTraceTarget] = useState<OnlinePlayer | null>(null)
   const query = useQuery({
     queryKey: adminQueryKeys.online,
     queryFn: ({ signal }) => adminApi.online(signal),
@@ -110,7 +112,7 @@ export function PlayersPage() {
                   <TableHead className="text-right">{t("players.level")}</TableHead>
                   <TableHead className="text-right">{t("players.job")}</TableHead>
                   <TableHead className="text-right">{t("players.map")}</TableHead>
-                  <TableHead className="w-20 text-right">{t("common.operation")}</TableHead>
+                  <TableHead className="w-44 text-right">{t("common.operation")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -122,9 +124,15 @@ export function PlayersPage() {
                     <TableCell className="text-right tabular-nums">{player.job}</TableCell>
                     <TableCell className="text-right tabular-nums">{player.mapId}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setKickTarget(player)}>
-                        {t("players.kick")}
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setTraceTarget(player)}>
+                          <Radio data-icon="inline-start" />
+                          {t("packetTrace.action")}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setKickTarget(player)}>
+                          {t("players.kick")}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -150,6 +158,7 @@ export function PlayersPage() {
         requireReason
         onConfirm={(reason) => kickTarget && kickMutation.mutate({ characterId: kickTarget.characterId, reason })}
       />
+      <PacketTraceDialog player={traceTarget} onOpenChange={(open) => !open && setTraceTarget(null)} />
     </div>
   )
 }

@@ -56,6 +56,51 @@ export interface KickResponse {
   characterId: number
 }
 
+export type PacketTraceDirection = "INBOUND" | "OUTBOUND"
+export type PacketTraceFilterMode = "INCLUDE" | "EXCLUDE"
+
+export interface PacketTraceOpcode {
+  direction: PacketTraceDirection
+  value: number
+  name: string
+  sensitive: boolean
+  defaultExcluded: boolean
+}
+
+export interface PacketTraceCatalog {
+  opcodes: PacketTraceOpcode[]
+  defaultExcluded: string[]
+  neverCaptured: string[]
+}
+
+export interface PacketTraceConfig {
+  mode: PacketTraceFilterMode
+  directions: PacketTraceDirection[]
+  opcodeNames: string[]
+  maxPayloadBytes: number
+}
+
+export interface PacketTraceEvent {
+  sequence: number
+  timestampEpochMillis: number
+  direction: PacketTraceDirection
+  opcode: number
+  opcodeName: string
+  packetLength: number
+  capturedLength: number
+  truncated: boolean
+  payloadHex: string
+}
+
+export interface PacketTraceSnapshot {
+  configured: boolean
+  enabled: boolean
+  config: PacketTraceConfig | null
+  lastSequence: number
+  droppedEvents: number
+  events: PacketTraceEvent[]
+}
+
 export interface ScriptReloadResponse {
   changed: number
 }
@@ -64,6 +109,12 @@ export interface LogicReloadResponse {
   safeSwitched: number
   interrupted: number
   newVersion: number
+}
+
+export interface WzReloadResponse {
+  version: number
+  resources: Record<string, number>
+  runtimeObjects: Record<string, number>
 }
 
 export interface RestartResponse extends RestartPhaseResponse {
@@ -97,6 +148,16 @@ export interface AdminAccount extends AccountOption {
   tempBan: string
   characterSlots: number
   gender: number
+  temporaryPasswordActive: boolean
+  temporaryPasswordExpiresAt: string
+}
+
+export interface TemporaryPasswordResponse {
+  generated: true
+  accountId: number
+  temporaryPassword: string
+  expiresAt: string
+  oneTime: true
 }
 
 export interface AdminCharacter {
@@ -301,6 +362,32 @@ export interface BackgroundTaskRun {
   subjectId: string | null
   errorCode: string | null
   errorSummary: string | null
+  queueDelayMs: number | null
+  executorType: "virtual-thread-per-task" | string
+  threadName: string | null
+}
+
+export interface ThreadExecutorMetrics {
+  executorType: string
+  virtualThreads: boolean
+  closed: boolean
+  submittedTasks: number
+  runningTasks: number
+  succeededTasks: number
+  failedTasks: number
+  rejectedTasks: number
+}
+
+export interface BackgroundTaskMetrics {
+  registeredSchedules: number
+  retainedRuns: number
+  runningRuns: number
+  succeededRuns: number
+  failedRuns: number
+  cancelledRuns: number
+  totalRuns: number
+  totalErrors: number
+  executor: ThreadExecutorMetrics
 }
 
 export interface TaskSchedule {
@@ -321,6 +408,7 @@ export interface TaskSchedule {
 export interface TasksResponse {
   limit: number
   tasks: BackgroundTaskRun[]
+  metrics: BackgroundTaskMetrics
 }
 
 export interface SchedulesResponse {
@@ -405,6 +493,7 @@ function humanizeApiError(error?: string) {
     character_not_online: translate("api.characterNotOnline"),
     account_not_found: translate("api.accountNotFound"),
     character_not_found: translate("api.characterNotFound"),
+    invalid_packet_trace_filter: translate("api.invalidPacketTraceFilter"),
   }
   return messages[error] ?? error
 }
@@ -440,6 +529,11 @@ export const adminApi = {
     }),
   reloadLogic: (reason: string) =>
     request<LogicReloadResponse>("/reload/logic", {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  reloadWz: (reason: string) =>
+    request<WzReloadResponse>("/reload/wz", {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),
@@ -506,6 +600,30 @@ export const adminApi = {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),
+  packetTraceCatalog: (signal?: AbortSignal) =>
+    request<PacketTraceCatalog>("/packet-traces/catalog", { signal }),
+  packetTrace: (characterId: number, afterSequence = 0, limit = 200, signal?: AbortSignal) =>
+    request<PacketTraceSnapshot>(`/packet-traces/${characterId}?afterSequence=${afterSequence}&limit=${limit}`, { signal }),
+  startPacketTrace: (
+    characterId: number,
+    config: { mode: PacketTraceFilterMode; directions: PacketTraceDirection[]; opcodes: string[]; maxPayloadBytes: number },
+    reason: string,
+  ) => request<PacketTraceSnapshot>(`/packet-traces/${characterId}`, {
+    method: "PUT",
+    body: JSON.stringify(config),
+    headers: { "X-Admin-Reason": reason },
+  }),
+  stopPacketTrace: (characterId: number, reason: string) =>
+    request<PacketTraceSnapshot>(`/packet-traces/${characterId}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  generateTemporaryPassword: (accountId: number, reason: string, durationMinutes = 30) =>
+    request<TemporaryPasswordResponse>(`/accounts/${accountId}/temporary-password`, {
+      method: "POST",
+      body: JSON.stringify({ durationMinutes }),
+      headers: { "X-Admin-Reason": reason },
+    }),
   accountRoles: (accountId: number, signal?: AbortSignal) =>
     request<AccountRolesResponse>(`/accounts/${accountId}/roles`, { signal }),
   setAccountRoles: (accountId: number, roleIds: number[], reason: string) =>
@@ -520,6 +638,8 @@ export const adminQueryKeys = {
   health: ["admin", "health"] as const,
   channels: ["admin", "channels"] as const,
   online: ["admin", "online"] as const,
+  packetTraceCatalog: ["admin", "packet-trace", "catalog"] as const,
+  packetTrace: (characterId: number) => ["admin", "packet-trace", characterId] as const,
   config: ["admin", "config"] as const,
   inFlight: ["admin", "reload", "in-flight"] as const,
   restartPhase: ["admin", "restart", "phase"] as const,

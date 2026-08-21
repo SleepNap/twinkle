@@ -1,0 +1,15 @@
+import { lazy } from "react"
+
+export const OverviewPage = lazy(() => import("@/pages/overview-page").then((module) => ({ default: module.OverviewPage })))
+export const ChannelsPage = lazy(() => import("@/pages/channels-page").then((module) => ({ default: module.ChannelsPage })))
+export const PlayersPage = lazy(() => import("@/pages/players-page").then((module) => ({ default: module.PlayersPage })))
+export const AccountsPage = lazy(() => import("@/pages/accounts-page").then((module) => ({ default: module.AccountsPage })))
+export const BillingPage = lazy(() => import("@/pages/billing-page").then((module) => ({ default: module.BillingPage })))
+export const ConfigPage = lazy(() => import("@/pages/config-page").then((module) => ({ default: module.ConfigPage })))
+export const OperationsPage = lazy(() => import("@/pages/operations-page").then((module) => ({ default: module.OperationsPage })))
+export const ApiKeysPage = lazy(() => import("@/pages/api-keys-page").then((module) => ({ default: module.ApiKeysPage })))
+export const AuditsPage = lazy(() => import("@/pages/audits-page").then((module) => ({ default: module.AuditsPage })))
+export const RolesPage = lazy(() => import("@/pages/roles-page").then((module) => ({ default: module.RolesPage })))
+export const TasksPage = lazy(() => import("@/pages/tasks-page").then((module) => ({ default: module.TasksPage })))
+export const CapabilitiesPage = lazy(() => import("@/pages/capabilities-page").then((module) => ({ default: module.CapabilitiesPage })))
+export const NotFoundPage = lazy(() => import("@/pages/not-found-page").then((module) => ({ default: module.NotFoundPage })))

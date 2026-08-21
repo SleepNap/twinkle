@@ -9,7 +9,7 @@ export interface AdminAuthContextValue {
   token: string
   identity: AdminIdentity | null
   login: (name: string, password: string) => Promise<AdminIdentity>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 export const AdminAuthContext = createContext<AdminAuthContextValue | null>(null)

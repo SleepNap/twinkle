@@ -1,9 +1,9 @@
-import { Ban, Eye, LogOut, RefreshCw, Search, ShieldOff, Volume2, VolumeX } from "lucide-react"
+import { Ban, Copy, Eye, KeyRound, LogOut, RefreshCw, Search, ShieldOff, Volume2, VolumeX } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 
-import { adminApi, adminQueryKeys, type AdminAccount } from "@/api/admin"
+import { adminApi, adminQueryKeys, type AdminAccount, type TemporaryPasswordResponse } from "@/api/admin"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-state"
@@ -12,6 +12,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
@@ -25,11 +34,12 @@ import { useI18n } from "@/i18n"
 
 const PAGE_SIZE = 20
 type AccountStatus = "all" | "active" | "banned"
-type ActionType = "ban" | "unban" | "mute" | "unmute" | "offline"
+type ActionType = "ban" | "unban" | "mute" | "unmute" | "offline" | "temporaryPassword"
 interface PendingAction { type: ActionType; account: AdminAccount }
+interface IssuedTemporaryPassword extends TemporaryPasswordResponse { accountName: string }
 
 export function AccountsPage() {
-  const { t, formatNumber } = useI18n()
+  const { t, formatNumber, locale } = useI18n()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
   const [submittedSearch, setSubmittedSearch] = useState("")
@@ -38,6 +48,7 @@ export function AccountsPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
   const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [issuedTemporaryPassword, setIssuedTemporaryPassword] = useState<IssuedTemporaryPassword | null>(null)
 
   const accountsQuery = useQuery({
     queryKey: adminQueryKeys.accounts(submittedSearch, status, offset),
@@ -73,9 +84,15 @@ export function AccountsPage() {
         await adminApi.updateAccountRestrictions(account.id, { muted: false }, reason)
         return
       }
+      if (type === "temporaryPassword") {
+        return adminApi.generateTemporaryPassword(account.id, reason)
+      }
       await adminApi.forceAccountOffline(account.id, reason)
     },
-    onSuccess: (_result, { action }) => {
+    onSuccess: (result, { action }) => {
+      if (action.type === "temporaryPassword" && result) {
+        setIssuedTemporaryPassword({ ...result, accountName: action.account.name })
+      }
       toast.success(t("accounts.actionSucceeded"), {
         description: t("accounts.actionSucceededDescription", { name: action.account.name }),
       })
@@ -189,6 +206,7 @@ export function AccountsPage() {
                             {account.banned ? t("accounts.banned") : t("accounts.normal")}
                           </Badge>
                           {account.muted && <Badge variant="outline">{t("accounts.muted")}</Badge>}
+                          {account.temporaryPasswordActive && <Badge variant="outline">{t("accounts.temporaryPasswordActive")}</Badge>}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -207,6 +225,13 @@ export function AccountsPage() {
                             {account.muted ? <Volume2 /> : <VolumeX />}
                           </Button>
                           <Button variant="ghost" size="icon-sm" aria-label={t("accounts.action.offline")} onClick={() => setPendingAction({ type: "offline", account })}><LogOut /></Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t("accounts.action.temporaryPassword")}
+                            disabled={account.banned}
+                            onClick={() => setPendingAction({ type: "temporaryPassword", account })}
+                          ><KeyRound /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -387,8 +412,62 @@ export function AccountsPage() {
         requireReason
         onConfirm={(reason) => pendingAction && actionMutation.mutate({ action: pendingAction, reason })}
       />
+
+      <Dialog
+        open={issuedTemporaryPassword !== null}
+        onOpenChange={(open) => !open && setIssuedTemporaryPassword(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{t("accounts.temporaryPasswordTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("accounts.temporaryPasswordDescription", {
+                name: issuedTemporaryPassword?.accountName ?? "",
+                expiresAt: formatDate(issuedTemporaryPassword?.expiresAt ?? "", locale),
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Input
+              readOnly
+              value={issuedTemporaryPassword?.temporaryPassword ?? ""}
+              className="font-mono text-base tracking-wider"
+              aria-label={t("accounts.temporaryPassword")}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <p className="text-xs text-muted-foreground">{t("accounts.temporaryPasswordWarning")}</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const password = issuedTemporaryPassword?.temporaryPassword
+                if (!password) return
+                void navigator.clipboard.writeText(password)
+                  .then(() => toast.success(t("accounts.temporaryPasswordCopied")))
+                  .catch(() => toast.error(t("accounts.temporaryPasswordCopyFailed")))
+              }}
+            >
+              <Copy data-icon="inline-start" />
+              {t("accounts.copyTemporaryPassword")}
+            </Button>
+            <DialogClose asChild>
+              <Button onClick={() => setIssuedTemporaryPassword(null)}>{t("accounts.temporaryPasswordSaved")}</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+function formatDate(value: string, locale: string) {
+  if (!value) return "—"
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(date)
 }
 
 function Snapshot({ label, value, hint }: { label: string; value: string; hint?: string }) {

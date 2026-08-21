@@ -83,6 +83,71 @@ describe("adminApi", () => {
       body: JSON.stringify({ enabled: false }),
     }))
   })
+
+  it("带审计原因触发 WZ 热重载", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      version: 2,
+      resources: { items: 10, mobs: 20 },
+      runtimeObjects: { "channel-maps": 3 },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.reloadWz("更新活动数据")
+
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/reload/wz", expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ "X-Admin-Reason": "更新活动数据" }),
+    }))
+  })
+
+  it("生成带审计原因的临时密码", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      generated: true,
+      accountId: 7,
+      temporaryPassword: "Abcd2345Wxyz",
+      expiresAt: "2026-08-21T10:30:00Z",
+      oneTime: true,
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.generateTemporaryPassword(7, "排查卡图", 30)
+
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/accounts/7/temporary-password", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ durationMinutes: 30 }),
+      headers: expect.objectContaining({ "X-Admin-Reason": "排查卡图" }),
+    }))
+  })
+
+  it("按角色启停带过滤条件的封包监听", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ configured: true, enabled: true, events: [] }))
+      .mockResolvedValueOnce(jsonResponse({ configured: true, enabled: false, events: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.startPacketTrace(42, {
+      mode: "EXCLUDE",
+      directions: ["INBOUND"],
+      opcodes: ["MOVE_LIFE", "GENERAL_CHAT"],
+      maxPayloadBytes: 4096,
+    }, "核查异常攻击")
+    await adminApi.stopPacketTrace(42, "证据已收集")
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/v1/packet-traces/42", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({
+        mode: "EXCLUDE",
+        directions: ["INBOUND"],
+        opcodes: ["MOVE_LIFE", "GENERAL_CHAT"],
+        maxPayloadBytes: 4096,
+      }),
+      headers: expect.objectContaining({ "X-Admin-Reason": "核查异常攻击" }),
+    }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/admin/v1/packet-traces/42", expect.objectContaining({
+      method: "DELETE",
+      headers: expect.objectContaining({ "X-Admin-Reason": "证据已收集" }),
+    }))
+  })
 })
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {

@@ -72,8 +72,8 @@ export function TasksPage() {
 
   const schedules = schedulesQuery.data?.schedules ?? []
   const tasks = tasksQuery.data?.tasks ?? []
-  const failedCount = tasks.filter((task) => task.status === "failed").length
-  const runningCount = tasks.filter((task) => task.status === "running").length
+  const failedCount = tasksQuery.data?.metrics.failedRuns ?? tasks.filter((task) => task.status === "failed").length
+  const runningCount = tasksQuery.data?.metrics.runningRuns ?? tasks.filter((task) => task.status === "running").length
   const error = schedulesQuery.error ?? tasksQuery.error
   const pending = schedulesQuery.isPending || tasksQuery.isPending
 
@@ -93,7 +93,7 @@ export function TasksPage() {
       {error && <QueryError error={error as Error} retry={refresh} />}
 
       <section className="grid gap-4 sm:grid-cols-3" aria-label={t("tasks.metrics") }>
-        <MetricCard title={t("tasks.registeredSchedules")} value={error ? "—" : schedules.length} icon={CalendarClock} pending={pending} />
+        <MetricCard title={t("tasks.registeredSchedules")} value={error ? "—" : (tasksQuery.data?.metrics.registeredSchedules ?? schedules.length)} icon={CalendarClock} pending={pending} />
         <MetricCard title={t("tasks.running")} value={error ? "—" : runningCount} icon={Activity} pending={pending} />
         <MetricCard title={t("tasks.failedSample")} value={error ? "—" : failedCount} icon={CircleAlert} pending={pending} />
       </section>
