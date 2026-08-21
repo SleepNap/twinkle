@@ -28,6 +28,8 @@ public final class AdminAuthFilter implements HttpServerFilter, Ordered {
     public static final String PRINCIPAL_ATTRIBUTE = "twinkle.admin.principal";
     public static final String REQUEST_ID_ATTRIBUTE = "twinkle.admin.request-id";
     public static final String REASON_HEADER = "X-Admin-Reason";
+    public static final String BEFORE_SUMMARY_ATTRIBUTE = "twinkle.admin.before-summary";
+    public static final String AFTER_SUMMARY_ATTRIBUTE = "twinkle.admin.after-summary";
 
     private static final int MAX_REASON_LENGTH = 256;
 
@@ -98,7 +100,9 @@ public final class AdminAuthFilter implements HttpServerFilter, Ordered {
                     .orElse(requestId);
             result.header("X-Request-Id", effectiveRequestId);
             auditService.record(effectiveRequestId, principal, request.getMethodName(),
-                    request.getPath(), operationOf(request.getPath()), reason, "", "",
+                    request.getPath(), operationOf(request.getPath()), reason,
+                    request.getAttribute(BEFORE_SUMMARY_ATTRIBUTE, String.class).orElse(""),
+                    request.getAttribute(AFTER_SUMMARY_ATTRIBUTE, String.class).orElse(""),
                     "allowed", result.getStatus().getCode(),
                     remoteAddress(request), elapsedMs(started));
             return result;

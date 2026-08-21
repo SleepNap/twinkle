@@ -24,3 +24,6 @@
   - `archived/security/` — 安全加固
   - `archived/design/` — 设计规范
   - `archived/tasks/` — M0-M6 里程碑任务文档
+
+> `archived/` 仅用于追溯当时的决策与完成边界，其中保留的未勾选项不代表当前待办。
+> 当前任务只以 `planned/`、`in-progress/` 和根目录现行架构文档为准。

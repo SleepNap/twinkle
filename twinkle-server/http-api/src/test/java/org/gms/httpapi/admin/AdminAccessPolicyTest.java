@@ -60,6 +60,18 @@ class AdminAccessPolicyTest {
     }
 
     @Test
+    void accountRestriction_requiresAccountManage() {
+        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.PUT, "/admin/v1/accounts/7/restrictions");
+        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.ACCOUNT_MANAGE);
+    }
+
+    @Test
+    void accountForceOffline_requiresAccountManage() {
+        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/accounts/7/force-offline");
+        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.ACCOUNT_MANAGE);
+    }
+
+    @Test
     void taskWrite_requiresTaskManage() {
         AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/tasks/abc/retry");
         assertThat(p.requiredPermission()).isEqualTo(AdminPermission.TASK_MANAGE);

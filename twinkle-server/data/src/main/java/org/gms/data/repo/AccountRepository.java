@@ -12,6 +12,10 @@ import java.util.Optional;
  */
 public interface AccountRepository {
 
+    /** 控制台账号分页结果。 */
+    record AccountPage(long total, int offset, int limit, List<Account> records) {
+    }
+
     /**
      * 按账号名查询。不存在返回 {@link Optional#empty()}。
      */
@@ -36,4 +40,12 @@ public interface AccountRepository {
      * 按账号名模糊搜索（供签发 key 时批量选择账号）。
      */
     List<Account> findByNameLike(String query, int limit);
+
+    /**
+     * 管理控制台分页检索。{@code banned == null} 表示全部，true/false 分别表示封禁/正常。
+     */
+    default AccountPage findPage(String query, Boolean banned, int offset, int limit) {
+        List<Account> records = findByNameLike(query, Math.max(1, limit));
+        return new AccountPage(records.size(), 0, limit, records);
+    }
 }

@@ -586,7 +586,7 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 ### 12.6 M0 验收项（追加）
 - [ ] Micrometer + Prometheus 接入，`/metrics` 暴露 SLI 子集（至少：tick p99、在线人数、写队列深度、存档延迟）
 - [ ] 结构化日志格式落地 + 脱敏校验
-- [ ] 健康检查端点（liveness/readiness）
+- [x] 健康检查端点（liveness/readiness）：已由 `HealthRegistry` 聚合并经 `/internal/v1/health`、`/admin/v1/health` 和 `server.health.read` 暴露
 - [ ] 至少 2 条告警规则（tick 预算突破、coordinator 心跳超时）
 
 ---

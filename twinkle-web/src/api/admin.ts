@@ -87,6 +87,150 @@ export interface AccountOption {
   name: string
 }
 
+export interface AdminAccount extends AccountOption {
+  banned: boolean
+  banReason: string
+  muted: boolean
+  loggedIn: boolean
+  lastLogin: string
+  createdAt: string
+  tempBan: string
+  characterSlots: number
+  gender: number
+}
+
+export interface AdminCharacter {
+  id: number
+  name: string
+  world: number
+  level: number
+  job: number
+  map: number
+  meso: number
+  fame: number
+  guildId: number
+  lastLogoutTime: string
+  online: boolean
+}
+
+export interface AccountsPageResponse {
+  total: number
+  offset: number
+  limit: number
+  accounts: AdminAccount[]
+}
+
+export interface AccountDetailResponse {
+  account: AdminAccount
+  characters: AdminCharacter[]
+}
+
+export interface AdminCharacterProfile {
+  id: number
+  accountId: number
+  name: string
+  world: number
+  level: number
+  exp: number
+  job: number
+  map: number
+  spawnPoint: number
+  hp: number
+  maxHp: number
+  mp: number
+  maxMp: number
+  str: number
+  dex: number
+  int: number
+  luk: number
+  ap: number
+  sp: string
+  fame: number
+  gm: number
+  partyId: number
+  guildId: number
+  guildRank: number
+  buddyCapacity: number
+  createdAt: string
+  lastLogoutTime: string
+  lastExpGainTime: string
+}
+
+export interface AdminCharacterCurrencies {
+  meso: number
+  nxCredit: number
+  maplePoint: number
+  nxPrepaid: number
+  rewardPoints: number
+  votePoints: number
+}
+
+export interface AdminInventoryItem {
+  id: number | null
+  itemId: number
+  type: number
+  inventoryType: number
+  position: number
+  quantity: number
+  owner: string
+  flag: number
+  expiration: number
+  cashId: number
+  petId: number
+  upgradeSlots: number
+  itemLevel: number
+  itemExp: number
+  str: number
+  dex: number
+  int: number
+  luk: number
+  watk: number
+  matk: number
+  wdef: number
+  mdef: number
+  petName: string
+  petLevel: number
+}
+
+export interface AdminQuestProgress {
+  progressId: number
+  value: string
+}
+
+export interface AdminQuest {
+  questId: number
+  status: number
+  time: number
+  expires: number
+  forfeited: number
+  completed: number
+  info: number
+  progress: AdminQuestProgress[]
+}
+
+export interface AdminSkill {
+  skillId: number
+  level: number
+  masterLevel: number
+  expiration: number
+}
+
+export interface AdminBuddy {
+  characterId: number
+  name: string
+  status: string
+  createdAt: string
+}
+
+export interface CharacterAdminDetailResponse {
+  character: AdminCharacterProfile
+  currencies: AdminCharacterCurrencies
+  inventory: AdminInventoryItem[]
+  quests: AdminQuest[]
+  skills: AdminSkill[]
+  buddies: AdminBuddy[]
+}
+
 export interface AccountRolesResponse {
   accountId: number
   roles: AdminRole[]
@@ -259,6 +403,8 @@ function humanizeApiError(error?: string) {
   const messages: Record<string, string> = {
     config_not_found: translate("api.configNotFound"),
     character_not_online: translate("api.characterNotOnline"),
+    account_not_found: translate("api.accountNotFound"),
+    character_not_found: translate("api.characterNotFound"),
   }
   return messages[error] ?? error
 }
@@ -340,6 +486,26 @@ export const adminApi = {
     }),
   searchAccounts: (query: string, limit = 20, signal?: AbortSignal) =>
     request<{ accounts: AccountOption[] }>(`/accounts?query=${encodeURIComponent(query)}&limit=${limit}`, { signal }),
+  accounts: (query: string, status: "all" | "active" | "banned", offset: number, limit = 20, signal?: AbortSignal) =>
+    request<AccountsPageResponse>(`/accounts?query=${encodeURIComponent(query)}&status=${status}&offset=${offset}&limit=${limit}`, { signal }),
+  account: (accountId: number, signal?: AbortSignal) =>
+    request<AccountDetailResponse>(`/accounts/${accountId}`, { signal }),
+  character: (accountId: number, characterId: number, signal?: AbortSignal) =>
+    request<CharacterAdminDetailResponse>(`/accounts/${accountId}/characters/${characterId}`, { signal }),
+  updateAccountRestrictions: (
+    accountId: number,
+    restrictions: { banned?: boolean; muted?: boolean; banReason?: string },
+    reason: string,
+  ) => request<{ updated: true; disconnected: number; account: AdminAccount }>(`/accounts/${accountId}/restrictions`, {
+    method: "PUT",
+    body: JSON.stringify(restrictions),
+    headers: { "X-Admin-Reason": reason },
+  }),
+  forceAccountOffline: (accountId: number, reason: string) =>
+    request<{ forcedOffline: true; accountId: number; disconnected: number }>(`/accounts/${accountId}/force-offline`, {
+      method: "POST",
+      headers: { "X-Admin-Reason": reason },
+    }),
   accountRoles: (accountId: number, signal?: AbortSignal) =>
     request<AccountRolesResponse>(`/accounts/${accountId}/roles`, { signal }),
   setAccountRoles: (accountId: number, roleIds: number[], reason: string) =>
@@ -362,4 +528,7 @@ export const adminQueryKeys = {
   tasks: ["admin", "tasks"] as const,
   schedules: ["admin", "schedules"] as const,
   roles: ["admin", "roles"] as const,
+  accounts: (query: string, status: string, offset: number) => ["admin", "accounts", query, status, offset] as const,
+  account: (accountId: number) => ["admin", "account", accountId] as const,
+  character: (accountId: number, characterId: number) => ["admin", "account", accountId, "character", characterId] as const,
 }

@@ -18,6 +18,11 @@ public interface CharacterRepository {
      */
     List<Character> findByAccount(int accountId, int world);
 
+    /** 管理控制台读取账号下所有世界的角色快照。 */
+    default List<Character> findByAccount(long accountId) {
+        return findByAccount(Math.toIntExact(accountId), 0);
+    }
+
     /**
      * 按角色 id 加载完整存档（进图用）。不存在返回 empty。
      */

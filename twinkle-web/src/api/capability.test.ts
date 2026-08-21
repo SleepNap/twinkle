@@ -73,6 +73,24 @@ describe("capabilityApi", () => {
       status: 401,
     })
   })
+
+  it("按只读 profile 和搜索词读取凭据可见的能力目录", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      contractVersion: "1",
+      catalogVersion: "catalog_0.3.0",
+      permissionVersion: "v2",
+      tools: [],
+      generatedAt: "2026-08-21T00:00:00Z",
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await capabilityApi.capabilities("reader", "player inventory")
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/capabilities?profile=read-only&query=player%20inventory",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer reader" }) }),
+    )
+  })
 })
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {

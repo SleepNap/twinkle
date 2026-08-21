@@ -17,6 +17,7 @@ const ApiKeysPage = lazy(() => import("@/pages/api-keys-page").then((module) => 
 const AuditsPage = lazy(() => import("@/pages/audits-page").then((module) => ({ default: module.AuditsPage })))
 const RolesPage = lazy(() => import("@/pages/roles-page").then((module) => ({ default: module.RolesPage })))
 const TasksPage = lazy(() => import("@/pages/tasks-page").then((module) => ({ default: module.TasksPage })))
+const CapabilitiesPage = lazy(() => import("@/pages/capabilities-page").then((module) => ({ default: module.CapabilitiesPage })))
 const NotFoundPage = lazy(() => import("@/pages/not-found-page").then((module) => ({ default: module.NotFoundPage })))
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="audits" element={<AuditsPage />} />
         <Route path="roles" element={<RolesPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="capabilities" element={<CapabilitiesPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

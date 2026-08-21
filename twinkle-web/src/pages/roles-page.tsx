@@ -1,6 +1,6 @@
 import { Pencil, Plus, RefreshCw, Search } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { adminApi, adminQueryKeys, type AccountOption, type AdminRole } from "@/api/admin"
@@ -43,6 +43,7 @@ const PERMISSION_OPTIONS: { value: string; key: MessageKey }[] = [
   { value: "admin.billing:manage", key: "roles.perm.billing" },
   { value: "admin.role:manage", key: "roles.perm.role" },
   { value: "admin.ai:manage", key: "roles.perm.ai" },
+  { value: "admin.account:manage", key: "roles.perm.account" },
 ]
 
 interface RoleDraft {
@@ -109,11 +110,6 @@ export function RolesPage() {
     enabled: Boolean(submittedSearch),
     retry: false,
   })
-  const accountRolesQuery = useQuery({
-    queryKey: ["admin", "account-roles", assignTarget?.id ?? 0],
-    queryFn: ({ signal }) => adminApi.accountRoles(assignTarget!.id, signal),
-    enabled: Boolean(assignTarget),
-  })
   const assignMutation = useMutation({
     mutationFn: ({ accountId, roleIds, reason }: { accountId: number; roleIds: number[]; reason: string }) =>
       adminApi.setAccountRoles(accountId, roleIds, reason),
@@ -125,12 +121,6 @@ export function RolesPage() {
     onError: (error) => toast.error(t("roles.assignFailed"), { description: error.message }),
   })
 
-  useEffect(() => {
-    if (accountRolesQuery.data) {
-      setAssignRoleIds(accountRolesQuery.data.roles.map((role) => role.id))
-    }
-  }, [accountRolesQuery.data])
-
   function submitAccountSearch() {
     const normalized = accountSearch.trim()
     if (normalized) setSubmittedSearch(normalized)
@@ -140,6 +130,10 @@ export function RolesPage() {
     setAssignRoleIds([])
     setAssignReason("")
     setAssignTarget(account)
+    void queryClient.fetchQuery({
+      queryKey: ["admin", "account-roles", account.id],
+      queryFn: ({ signal }) => adminApi.accountRoles(account.id, signal),
+    }).then((data) => setAssignRoleIds(data.roles.map((role) => role.id)))
   }
 
   function toggleAssignRole(roleId: number) {

@@ -83,6 +83,64 @@ export interface CharacterSummary {
   meso: number
 }
 
+export interface ToolSummary {
+  toolId: string
+  toolVersion: string
+  title: string
+  summary: string
+  provider: string
+  categories: string[]
+  tags: string[]
+  riskLevel: "read" | "sensitive_read" | string
+  availability: "available" | "unavailable"
+  permissionState: "allowed" | string
+}
+
+export interface ToolCatalogResponse {
+  contractVersion: string
+  catalogVersion: string
+  permissionVersion: string
+  tools: ToolSummary[]
+  generatedAt: string
+}
+
+export interface ToolDetailResponse {
+  contractVersion: string
+  toolId: string
+  toolVersion: string
+  title: string
+  description: string
+  provider: string
+  availability: "available" | "unavailable"
+  schemaDialect: string
+  inputSchema: Record<string, unknown>
+  outputSchema: Record<string, unknown>
+  permission: {
+    requiredScopes: string[]
+    resourceTypes: string[]
+    resourceResolution: string
+  }
+  risk: {
+    level: string
+    confirmation: string
+    supportsDryRun: boolean
+  }
+  execution: {
+    mode: string
+    timeoutMs: number
+    idempotency: string
+    retryPolicy: string
+  }
+  result: {
+    contentTypes: string[]
+    dataClassification: string
+  }
+  audit: {
+    mode: string
+    parameterSummary: string
+  }
+}
+
 async function capabilityRequest<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
   let response: Response
   try {
@@ -154,6 +212,10 @@ export const capabilityApi = {
     capabilityRequest<AccountSummary>(`/account/${encodeURIComponent(name)}`, token, { signal }),
   characters: (token: string, accountId: number, signal?: AbortSignal) =>
     capabilityRequest<CharacterSummary[]>(`/account/${accountId}/characters`, token, { signal }),
+  capabilities: (token: string, query = "", signal?: AbortSignal) =>
+    capabilityRequest<ToolCatalogResponse>(`/capabilities?profile=read-only&query=${encodeURIComponent(query)}`, token, { signal }),
+  capability: (token: string, toolId: string, signal?: AbortSignal) =>
+    capabilityRequest<ToolDetailResponse>(`/capabilities/${encodeURIComponent(toolId)}`, token, { signal }),
 }
 
 export const capabilityQueryKeys = {
@@ -161,4 +223,6 @@ export const capabilityQueryKeys = {
   keys: ["capability", "keys"] as const,
   account: (name: string) => ["capability", "account", name] as const,
   characters: (accountId: number) => ["capability", "account", accountId, "characters"] as const,
+  catalog: (query: string) => ["capability", "catalog", query] as const,
+  tool: (toolId: string) => ["capability", "tool", toolId] as const,
 }

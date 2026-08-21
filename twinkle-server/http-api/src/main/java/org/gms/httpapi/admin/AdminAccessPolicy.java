@@ -43,6 +43,9 @@ public final class AdminAccessPolicy {
                     || (path.startsWith("/admin/v1/accounts/") && path.endsWith("/roles"))) {
                 return new Policy(false, AdminPermission.ROLE_MANAGE);
             }
+            if (path.startsWith("/admin/v1/accounts")) {
+                return new Policy(false, AdminPermission.ACCOUNT_MANAGE);
+            }
         }
         return new Policy(false, AdminPermission.READ);
     }

@@ -48,4 +48,29 @@ public class FlexAccountRepository implements AccountRepository {
                 .where(Account::getName).like(query)
                 .limit(limit));
     }
+
+    @Override
+    public AccountPage findPage(String query, Boolean banned, int offset, int limit) {
+        String normalized = query == null ? "" : query.trim();
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        long total = mapper.selectCountByQuery(pageQuery(normalized, banned));
+        List<Account> records = mapper.selectListByQuery(pageQuery(normalized, banned)
+                .orderBy(Account::getId).desc()
+                .limit(safeOffset, safeLimit));
+        return new AccountPage(total, safeOffset, safeLimit, records);
+    }
+
+    private static QueryWrapper pageQuery(String query, Boolean banned) {
+        QueryWrapper wrapper = QueryWrapper.create()
+                .where(Account::getName).like(query);
+        if (banned != null) {
+            if (banned) {
+                wrapper.and(Account::getBanned).eq(1);
+            } else {
+                wrapper.and(Account::getBanned).ne(1);
+            }
+        }
+        return wrapper;
+    }
 }

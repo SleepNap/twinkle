@@ -243,6 +243,19 @@ class MyBatisFlexRepositoryTest {
         assertThat(accountRepo.findByName("tester").get().getPassword()).isEqualTo("stored-hash");
         assertThat(accountRepo.findByName("nobody")).isEmpty();
 
+        Account banned = new Account();
+        banned.setName("tester-banned");
+        banned.setPassword("stored-hash");
+        banned.setBanned(1);
+        accountMapper.insertSelective(banned);
+        assertThat(accountRepo.findPage("tester", null, 0, 1)).satisfies(page -> {
+            assertThat(page.total()).isEqualTo(2);
+            assertThat(page.records()).hasSize(1);
+        });
+        assertThat(accountRepo.findPage("tester", true, 0, 20).records())
+                .extracting(Account::getName)
+                .containsExactly("tester-banned");
+
         // 角色插入 + 按账号/世界查询（选角列表）
         Character hero = new Character();
         hero.setAccountId(acc.getId());
@@ -266,6 +279,9 @@ class MyBatisFlexRepositoryTest {
         assertThat(charRepo.findByAccount(acc.getId().intValue(), 1))
                 .extracting(Character::getName)
                 .containsExactly("Other");
+        assertThat(charRepo.findByAccount(acc.getId()))
+                .extracting(Character::getName)
+                .containsExactly("Hero", "Other");
     }
 
     /**
