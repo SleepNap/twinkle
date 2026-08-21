@@ -28,9 +28,9 @@ describe("capabilityApi", () => {
 
   it("按签发契约提交名称、账号、Scope 和有效期", async () => {
     const input = {
-      displayName: "twish production",
+      displayName: "public api client",
       ownerAccountId: 42,
-      scopes: ["game:read", "ai:use"],
+      scopes: ["game:read", "player.online:read"],
       expiresAt: "2027-01-01T00:00:00Z",
     }
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ...input, id: 1, token: "twk_x_secret" }, { status: 201 }))
@@ -51,14 +51,14 @@ describe("capabilityApi", () => {
   })
 
   it("updates credential scopes without sending a new secret", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ keyPrefix: "abcdef123456", scopes: ["ai:use"] }))
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ keyPrefix: "abcdef123456", scopes: ["player.online:read"] }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await capabilityApi.updateKeyScopes("manager", "abcdef123456", ["ai:use"])
+    await capabilityApi.updateKeyScopes("manager", "abcdef123456", ["player.online:read"])
 
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/auth/keys/abcdef123456/scopes", expect.objectContaining({
       method: "PUT",
-      body: JSON.stringify({ scopes: ["ai:use"] }),
+      body: JSON.stringify({ scopes: ["player.online:read"] }),
     }))
   })
 

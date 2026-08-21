@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 积分流水（V12 迁移建表）。正数为充值/签到/调账，负数为 AI/联网搜索消耗。
+ * 积分流水（V12 迁移建表）。正数为充值/签到/调账，负数为消费或扣减。
  */
 @Table("point_transaction")
 @Getter

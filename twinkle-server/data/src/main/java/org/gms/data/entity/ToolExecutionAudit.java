@@ -6,7 +6,7 @@ import com.mybatisflex.annotation.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** twish Tool 权威审计；只保存安全摘要，不复制 Tool 输出或 Credential。 */
+/** Tool 权威审计；只保存安全摘要，不复制 Tool 输出或 Credential。 */
 @Table("tool_execution_audit")
 @Getter
 @Setter

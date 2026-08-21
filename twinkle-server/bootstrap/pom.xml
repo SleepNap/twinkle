@@ -76,11 +76,6 @@
             <groupId>org.gms</groupId>
             <artifactId>twinkle-http-api</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.gms</groupId>
-            <artifactId>twinkle-ai</artifactId>
-        </dependency>
-
         <!-- Micronaut 运行时入口 -->
         <dependency>
             <groupId>io.micronaut</groupId>

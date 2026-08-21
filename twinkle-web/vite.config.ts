@@ -16,6 +16,18 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
+        "/api-docs": {
+          target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8080",
+          changeOrigin: true,
+        },
+        "/docs": {
+          target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8080",
+          changeOrigin: true,
+        },
+        "/api": {
+          target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8080",
+          changeOrigin: true,
+        },
         "/admin": {
           target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8080",
           changeOrigin: true,

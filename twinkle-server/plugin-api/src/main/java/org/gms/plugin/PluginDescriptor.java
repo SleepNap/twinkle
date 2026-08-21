@@ -19,7 +19,6 @@ import java.util.List;
  * @param eventListeners      事件监听贡献点
  * @param scriptNamespaces    脚本命名空间贡献点
  * @param logicSystems        游戏逻辑系统贡献点
- * @param aiTools              AI 工具贡献点（M4 声明，接线留 M5）
  * @param httpEndpoints        HTTP 路由贡献点（M4 声明，接线留 M5）
  */
 public record PluginDescriptor(
@@ -34,7 +33,6 @@ public record PluginDescriptor(
         List<EventListenerContribution> eventListeners,
         List<ScriptNamespaceContribution> scriptNamespaces,
         List<LogicSystemContribution> logicSystems,
-        List<AiToolContribution> aiTools,
         List<HttpEndpointContribution> httpEndpoints) {
 
     /** 包处理器贡献点：绑定收包 opcode（RecvOpcode 枚举名），版本化。 */
@@ -55,10 +53,6 @@ public record PluginDescriptor(
 
     /** 游戏逻辑系统贡献点：注册进 LogicSystemRegistry，可替换内置系统。 */
     public record LogicSystemContribution(String key, String className, int version) {
-    }
-
-    /** AI 工具贡献点（LangChain4j @Tool 实现类，M4 声明不接线）。 */
-    public record AiToolContribution(String className, int version) {
     }
 
     /** HTTP 路由贡献点（方法 + 路径，M4 声明不接线）。 */

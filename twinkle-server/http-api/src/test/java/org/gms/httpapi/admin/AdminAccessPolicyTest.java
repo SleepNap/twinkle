@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** /admin/v1 URL 契约到权限点的映射测试。 */
+/** 各 /admin/vN URL 契约到权限点的映射测试。 */
 class AdminAccessPolicyTest {
 
     private final AdminAccessPolicy policy = new AdminAccessPolicy();
@@ -78,17 +78,9 @@ class AdminAccessPolicyTest {
     }
 
     @Test
-    void aiPolicyWrite_requiresAiManage() {
-        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.PUT, "/admin/v1/ai/policies/7");
-        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.AI_MANAGE);
+    void unchangedV2RouteInheritsPermissionMapping() {
+        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.PUT, "/admin/v2/accounts/7/restrictions");
+        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.ACCOUNT_MANAGE);
     }
 
-    /** AI 的读端点必须落在通用只读权限上，别被写分支吃掉——审计员也要能看运行态。 */
-    @Test
-    void aiStatusRead_requiresAdminRead() {
-        assertThat(policy.resolve(HttpMethod.GET, "/admin/v1/ai/status").requiredPermission())
-                .isEqualTo(AdminPermission.READ);
-        assertThat(policy.resolve(HttpMethod.GET, "/admin/v1/ai/usage").requiredPermission())
-                .isEqualTo(AdminPermission.READ);
-    }
 }

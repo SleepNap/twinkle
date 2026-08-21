@@ -8,10 +8,8 @@ import org.gms.net.packet.InPacket;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
-import org.gms.service.agent.PlayerSupportAgent;
 import org.gms.i18n.I18n;
 import org.gms.i18n.ResourceBundleI18nService;
-import org.gms.service.agent.UnavailablePlayerSupportAgent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,12 +17,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 玩家聊天接入值班 GM 的协议、异步回包和限流测试。 */
+/** 玩家普通聊天协议测试。 */
 class GeneralChatHandlerTest {
 
     @BeforeEach
@@ -45,56 +41,6 @@ class GeneralChatHandlerTest {
         assertThat(packet.available()).isZero();
     }
 
-    @Test
-    void agentQuestionIsAcceptedAndReturnedOnlyToCurrentSession() {
-        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
-        FakeSession session = sessionWithCharacter(1001L, 7L, "Hero");
-        sessions.claim(7L, session);
-        RecordingAgent agent = new RecordingAgent();
-        GeneralChatHandler handler = new GeneralChatHandler(sessions, agent, 15);
-
-        handler.handle(session, input("@gm 我的背包里还有药水吗", 0));
-
-        assertThat(agent.questions).singleElement().satisfies(question -> {
-            assertThat(question.characterId()).isEqualTo(7L);
-            assertThat(question.characterName()).isEqualTo("Hero");
-            assertThat(question.sessionId()).isEqualTo(1001L);
-            assertThat(question.message()).isEqualTo("我的背包里还有药水吗");
-        });
-        assertThat(session.notices()).containsExactly(
-                "AI 值班 GM 已受理，只会读取证，不会修改角色数据。",
-                "[AI值班GM] 已落库背包中有 5 个药水。",
-                "取证审计号：audit_agent_test");
-    }
-
-    @Test
-    void repeatedQuestionWithinCooldownDoesNotCallAgentAgain() {
-        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
-        FakeSession session = sessionWithCharacter(1002L, 8L, "Mage");
-        sessions.claim(8L, session);
-        RecordingAgent agent = new RecordingAgent();
-        GeneralChatHandler handler = new GeneralChatHandler(sessions, agent, 15);
-
-        handler.handle(session, input("@gm 第一个问题", 0));
-        handler.handle(session, input("@gm 第二个问题", 0));
-
-        assertThat(agent.questions).hasSize(1);
-        assertThat(session.notices().getLast()).contains("请求过于频繁");
-    }
-
-    @Test
-    void unavailableAgentReturnsStableNotice() {
-        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
-        FakeSession session = sessionWithCharacter(1003L, 9L, "Archer");
-        sessions.claim(9L, session);
-        GeneralChatHandler handler = new GeneralChatHandler(
-                sessions, new UnavailablePlayerSupportAgent(), 15);
-
-        handler.handle(session, input("@gm 帮帮我", 0));
-
-        assertThat(session.notices()).containsExactly("AI 值班 GM 当前未启用。");
-    }
-
     private static InPacket input(String text, int show) {
         ByteArrayOutPacket packet = new ByteArrayOutPacket();
         packet.writeString(text);
@@ -109,22 +55,6 @@ class GeneralChatHandlerTest {
         character.setName(name);
         session.setAttr("character", character);
         return session;
-    }
-
-    private static final class RecordingAgent implements PlayerSupportAgent {
-        private final List<PlayerQuestion> questions = new ArrayList<>();
-
-        @Override
-        public boolean available() {
-            return true;
-        }
-
-        @Override
-        public CompletionStage<Reply> ask(PlayerQuestion question) {
-            questions.add(question);
-            return CompletableFuture.completedFuture(
-                    new Reply("已落库背包中有 5 个药水。", List.of("audit_agent_test")));
-        }
     }
 
     private static final class FakeSession implements PacketSession {

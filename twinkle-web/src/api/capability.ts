@@ -9,7 +9,6 @@ export const supportedScopes = [
   "player.inventory:read",
   "game:read",
   "game:write",
-  "ai:use",
   "keys:manage",
   "events:read",
   "events:write",

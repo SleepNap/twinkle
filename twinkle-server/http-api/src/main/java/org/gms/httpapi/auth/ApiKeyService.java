@@ -144,28 +144,6 @@ public final class ApiKeyService {
         return Optional.of(summary(record));
     }
 
-    /**
-     * 刷新某计费账号名下所有未吊销凭据的 permissionVersion，返回刷新条数。
-     *
-     * <p>AI 策略变更后调用。<b>这不是策略的生效机制</b>——治理层每次调用实时查库，写库即生效；
-     * 刷新只让客户端持有的能力目录缓存（etag）失效，并让后续审计带上新的 policyVersion。
-     */
-    public int refreshPermissionVersionByAccount(Long ownerAccountId) {
-        if (ownerAccountId == null) {
-            return 0;
-        }
-        int refreshed = 0;
-        for (ApiKeyRecord record : repository.findByOwnerAccountId(ownerAccountId)) {
-            if (!isBlank(record.getRevokedAt())) {
-                continue;
-            }
-            record.setPermissionVersion(newPublicId("perm"));
-            repository.update(record);
-            refreshed++;
-        }
-        return refreshed;
-    }
-
     /** 生成等权新 Credential 后立即吊销旧 Credential；新秘密仍只返回一次。 */
     public Optional<IssuedKey> rotate(ApiPrincipal issuer, String keyPrefix) {
         Optional<ApiKeyRecord> found = manageableRecord(issuer, keyPrefix)

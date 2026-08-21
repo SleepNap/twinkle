@@ -6,15 +6,12 @@ import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.gms.config.ConfigFacade;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AccountAdminRoleRepository;
 import org.gms.data.repo.AdminOperationAuditRepository;
 import org.gms.data.repo.AdminRoleRepository;
 import org.gms.data.repo.AdminSessionRepository;
 import org.gms.data.repo.ApiKeyRepository;
-import org.gms.data.repo.AiUsagePolicyRepository;
-import org.gms.data.repo.ModelRateRepository;
 import org.gms.data.repo.PointAccountRepository;
 import org.gms.data.repo.PointTransactionRepository;
 import org.gms.data.repo.SubscriptionPlanRepository;
@@ -23,25 +20,24 @@ import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.event.EventBus;
 import org.gms.httpapi.limit.ApiRateLimiter;
+import org.gms.httpapi.docs.PublicApiContractService;
+import org.gms.httpapi.version.ApiVersionCatalog;
 import org.gms.httpapi.admin.AdminAccessPolicy;
 import org.gms.httpapi.admin.AdminAuditService;
 import org.gms.httpapi.admin.AdminSessionService;
 import org.gms.httpapi.auth.ApiAccessPolicy;
 import org.gms.httpapi.auth.ApiAuditService;
+import org.gms.httpapi.auth.ApiErrorContractRegistry;
 import org.gms.httpapi.auth.ApiKeyService;
-import org.gms.httpapi.billing.AiPolicyService;
-import org.gms.httpapi.billing.BillingAiGovernance;
 import org.gms.httpapi.billing.BillingService;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
-import org.gms.httpapi.service.AdminApiService;
+import org.gms.httpapi.application.admin.AdminApiService;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.execution.OnlinePlayerPageService;
 import org.gms.httpapi.execution.PlayerInventoryTool;
 import org.gms.httpapi.execution.ServerHealthTool;
 import org.gms.httpapi.execution.ToolExecutionService;
-import org.gms.service.agent.AiGovernanceService;
-import org.gms.service.agent.ServerAgentService;
 import org.gms.observability.Metrics;
 import org.gms.observability.HealthRegistry;
 import org.gms.role.ManagementProcessCondition;
@@ -101,6 +97,24 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
+    public ApiErrorContractRegistry apiErrorContractRegistry() {
+        return new ApiErrorContractRegistry();
+    }
+
+    @Bean
+    @Singleton
+    public ApiVersionCatalog apiVersionCatalog() {
+        return new ApiVersionCatalog();
+    }
+
+    @Bean
+    @Singleton
+    public PublicApiContractService publicApiContractService(org.gms.i18n.I18nService i18n) {
+        return new PublicApiContractService(i18n);
+    }
+
+    @Bean
+    @Singleton
     public AdminAccessPolicy adminAccessPolicy() {
         return new AdminAccessPolicy();
     }
@@ -117,29 +131,9 @@ public class HttpApiConfig {
     @Bean
     @Singleton
     public BillingService billingService(PointAccountRepository pointAccountRepository,
-                                         ModelRateRepository modelRateRepository,
                                          SubscriptionPlanRepository planRepository,
-                                         PointTransactionRepository transactionRepository,
-                                         ConfigFacade configFacade) {
-        return new BillingService(pointAccountRepository, modelRateRepository, planRepository,
-                transactionRepository, configFacade);
-    }
-
-    /** AI 权限与预算策略（全局开关 + 模型白名单 + 账号日用量上限）。 */
-    @Bean
-    @Singleton
-    public AiPolicyService aiPolicyService(AiUsagePolicyRepository policyRepository,
-                                           ConfigFacade configFacade) {
-        return new AiPolicyService(policyRepository, configFacade);
-    }
-
-    /** AI 治理实现：覆盖 core 兜底，让 AI 门面成为唯一策略与计费点。 */
-    @Bean
-    @Singleton
-    public AiGovernanceService billingAiGovernance(BillingService billingService,
-                                                   AiPolicyService aiPolicyService,
-                                                   ApiKeyRepository apiKeyRepository) {
-        return new BillingAiGovernance(billingService, aiPolicyService, apiKeyRepository);
+                                         PointTransactionRepository transactionRepository) {
+        return new BillingService(pointAccountRepository, planRepository, transactionRepository);
     }
 
     @Bean
@@ -156,9 +150,8 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
-    public ToolCatalogService toolCatalogService(ServerIdentity serverIdentity,
-                                                 ServerAgentService serverAgentService) {
-        return new ToolCatalogService(serverIdentity, serverAgentService);
+    public ToolCatalogService toolCatalogService(ServerIdentity serverIdentity) {
+        return new ToolCatalogService(serverIdentity);
     }
 
     @Bean
@@ -190,10 +183,9 @@ public class HttpApiConfig {
             ToolCatalogService catalogService, ServerHealthTool healthTool,
             OnlinePlayerPageService onlineTool, PlayerInventoryTool inventoryTool,
             ToolExecutionAuditRepository auditRepository,
-            ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity,
-            ServerAgentService serverAgentService) {
+            ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity) {
         return new ToolExecutionService(catalogService, healthTool, onlineTool, inventoryTool,
-                auditRepository, rateLimiter, metrics, serverIdentity, serverAgentService);
+                auditRepository, rateLimiter, metrics, serverIdentity);
     }
 
     @Bean

@@ -23,21 +23,8 @@ public final class FlexApiKeyRepository implements ApiKeyRepository {
     }
 
     @Override
-    public Optional<ApiKeyRecord> findByCredentialId(String credentialId) {
-        return Optional.ofNullable(mapper.selectOneByQuery(
-                QueryWrapper.create().where(ApiKeyRecord::getCredentialId).eq(credentialId)));
-    }
-
-    @Override
     public List<ApiKeyRecord> findAll() {
         return mapper.selectListByQuery(QueryWrapper.create()
-                .orderBy(ApiKeyRecord::getId, false));
-    }
-
-    @Override
-    public List<ApiKeyRecord> findByOwnerAccountId(Long ownerAccountId) {
-        return mapper.selectListByQuery(QueryWrapper.create()
-                .where(ApiKeyRecord::getOwnerAccountId).eq(ownerAccountId)
                 .orderBy(ApiKeyRecord::getId, false));
     }
 

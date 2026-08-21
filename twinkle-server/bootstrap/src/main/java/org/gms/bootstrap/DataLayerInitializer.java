@@ -3,7 +3,6 @@ package org.gms.bootstrap;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
-import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
 import org.gms.config.ConfigFacade;

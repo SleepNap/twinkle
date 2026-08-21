@@ -45,14 +45,6 @@ export interface SubscriptionPlan {
   enabled: number
 }
 
-export interface ModelRate {
-  id: number
-  modelKey: string
-  inputRate: number
-  outputRate: number
-  enabled: number
-}
-
 export interface AccountOption {
   id: number
   name: string
@@ -133,14 +125,6 @@ export const billingApi = {
       body: JSON.stringify(plan),
       headers: { "X-Admin-Reason": reason },
     }),
-  modelRates: (signal?: AbortSignal) =>
-    request<{ rates: ModelRate[] }>("/billing/model-rates", { signal }),
-  upsertRate: (rate: Partial<ModelRate> & { modelKey: string }, reason: string) =>
-    request<ModelRate>("/billing/model-rates", {
-      method: "POST",
-      body: JSON.stringify(rate),
-      headers: { "X-Admin-Reason": reason },
-    }),
   searchAccounts: (query: string, limit = 20, signal?: AbortSignal) =>
     request<{ accounts: AccountOption[] }>(`/accounts?query=${encodeURIComponent(query)}&limit=${limit}`, { signal }),
 }
@@ -150,5 +134,4 @@ export const billingQueryKeys = {
   account: (accountId: number) => ["billing", "account", accountId] as const,
   transactions: (accountId: number) => ["billing", "transactions", accountId] as const,
   plans: ["billing", "plans"] as const,
-  rates: ["billing", "rates"] as const,
 }

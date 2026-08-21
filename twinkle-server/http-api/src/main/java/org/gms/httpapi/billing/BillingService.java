@@ -1,12 +1,9 @@
 package org.gms.httpapi.billing;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.config.ConfigFacade;
-import org.gms.data.entity.ModelRate;
 import org.gms.data.entity.PointAccount;
 import org.gms.data.entity.PointTransaction;
 import org.gms.data.entity.SubscriptionPlan;
-import org.gms.data.repo.ModelRateRepository;
 import org.gms.data.repo.PointAccountRepository;
 import org.gms.data.repo.PointTransactionRepository;
 import org.gms.data.repo.SubscriptionPlanRepository;
@@ -17,83 +14,30 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 
 /**
- * 积分计费服务（账号层）：积分余额、模型倍率、plan 三档滚动限额、充值/签到/调账。
+ * 积分服务（账号层）：积分余额、plan 三档滚动限额、充值/签到/调账。
  *
- * <p>积分是账号维度资源（同一账号所有 API Key 共享）。AI 调用按 token×模型倍率扣积分，
- * 联网搜索按次扣固定积分；plan 用户受月/周/5h 三档滚动限额约束，无 plan 用户纯按余额扣。
- * 由 bootstrap 装配（不加 @Singleton），不依赖 ai/domain-game。
+ * <p>积分是账号维度资源（同一账号所有 API Key 共享）。由 bootstrap 装配
+ * （不加 @Singleton），不依赖具体插件或游戏域实现。
  */
 @Log4j2
 public final class BillingService {
 
-    /** 倍率缩放因子：model_rate 的 input_rate/output_rate 放大 1e4 存整数。 */
-    private static final long RATE_SCALE = 10_000L;
     /** 每日签到奖励积分。 */
     private static final long SIGNIN_POINTS = 10L;
     /** 每日签到次数上限。 */
     private static final int DAILY_SIGNIN_LIMIT = 1;
     /** 每日金币购买次数上限。 */
     private static final int DAILY_MESO_PURCHASE_LIMIT = 3;
-    /** 联网搜索计费成本配置键（配置中心可调，默认 1 积分/次）。 */
-    private static final String WEBSEARCH_COST_KEY = "billing.websearch.cost";
-
     private final PointAccountRepository pointAccountRepository;
-    private final ModelRateRepository modelRateRepository;
     private final SubscriptionPlanRepository planRepository;
     private final PointTransactionRepository transactionRepository;
-    private final ConfigFacade configFacade;
 
     public BillingService(PointAccountRepository pointAccountRepository,
-                          ModelRateRepository modelRateRepository,
                           SubscriptionPlanRepository planRepository,
-                          PointTransactionRepository transactionRepository,
-                          ConfigFacade configFacade) {
+                          PointTransactionRepository transactionRepository) {
         this.pointAccountRepository = pointAccountRepository;
-        this.modelRateRepository = modelRateRepository;
         this.planRepository = planRepository;
         this.transactionRepository = transactionRepository;
-        this.configFacade = configFacade;
-    }
-
-    /** 调用前粗检：余额或 plan 限额不足以支持一次调用时抛异常。 */
-    public void precheck(Long accountId) {
-        PointAccount account = getOrCreate(accountId);
-        SubscriptionPlan plan = planFor(account);
-        rollWindows(account, plan, Instant.now());
-        if (plan != null) {
-            if (windowExceeded(account, plan)) {
-                throw new BillingException("billing_limit_exceeded", I18n.message("error.billing.plan_limit_exceeded"));
-            }
-        } else if (account.getBalance() <= 0) {
-            throw new BillingException("insufficient_points", I18n.message("error.billing.insufficient_points"));
-        }
-    }
-
-    /** 调用后按实际用量扣积分，返回扣除的积分数（0 表示免计费）。扣费失败不回滚 AI 结果。 */
-    public long charge(Long accountId, String model, int inputTokens, int outputTokens,
-                       int webSearchCount) {
-        long points = computePoints(model, inputTokens, outputTokens)
-                + webSearchPoints(webSearchCount);
-        if (points <= 0) {
-            return 0;
-        }
-        PointAccount account = getOrCreate(accountId);
-        SubscriptionPlan plan = planFor(account);
-        Instant now = Instant.now();
-        rollWindows(account, plan, now);
-        long newBalance = account.getBalance() - points;
-        account.setBalance(newBalance);
-        if (plan != null) {
-            account.setMonthlyUsed(account.getMonthlyUsed() + points);
-            account.setWeeklyUsed(account.getWeeklyUsed() + points);
-            account.setFiveHourUsed(account.getFiveHourUsed() + points);
-        }
-        account.setUpdatedAt(now.toString());
-        pointAccountRepository.update(account);
-        insertTransaction(accountId, -points, newBalance, "ai_consume", null,
-                "model=" + model + ",tokens=" + (inputTokens + outputTokens)
-                        + ",websearch=" + webSearchCount);
-        return points;
     }
 
     /** 查询账号余额 + plan + 三窗口限额汇总。 */
@@ -184,34 +128,6 @@ public final class BillingService {
         insertTransaction(accountId, -points, newBalance, reason, null, detail);
     }
 
-    private long computePoints(String model, int inputTokens, int outputTokens) {
-        if (inputTokens <= 0 && outputTokens <= 0) {
-            return 0;
-        }
-        ModelRate rate = modelRateRepository.findByModelKey(model).orElse(null);
-        if (rate == null || Integer.valueOf(0).equals(rate.getEnabled())) {
-            return 0;
-        }
-        long inputRate = rate.getInputRate() == null ? 0L : rate.getInputRate();
-        long outputRate = rate.getOutputRate() == null ? 0L : rate.getOutputRate();
-        long total = (long) inputTokens * inputRate + (long) outputTokens * outputRate;
-        if (total <= 0) {
-            return 0;
-        }
-        return (total + RATE_SCALE - 1) / RATE_SCALE;
-    }
-
-    private long webSearchPoints(int webSearchCount) {
-        if (webSearchCount <= 0) {
-            return 0;
-        }
-        int cost = configFacade.getOrDefault(WEBSEARCH_COST_KEY, 1);
-        if (cost <= 0) {
-            return 0;
-        }
-        return (long) webSearchCount * cost;
-    }
-
     private PointAccount getOrCreate(Long accountId) {
         return pointAccountRepository.findByAccountId(accountId).orElseGet(() -> {
             PointAccount account = new PointAccount();
@@ -262,16 +178,6 @@ public final class BillingService {
         } catch (DateTimeParseException e) {
             return true;
         }
-    }
-
-    private boolean windowExceeded(PointAccount account, SubscriptionPlan plan) {
-        return exceeds(account.getMonthlyUsed(), plan.getMonthlyLimit())
-                || exceeds(account.getWeeklyUsed(), plan.getWeeklyLimit())
-                || exceeds(account.getFiveHourUsed(), plan.getFiveHourLimit());
-    }
-
-    private static boolean exceeds(Long used, Long limit) {
-        return limit != null && limit > 0 && used != null && used >= limit;
     }
 
     private SubscriptionPlan planFor(PointAccount account) {

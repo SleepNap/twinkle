@@ -37,7 +37,7 @@ mvn -B verify
 ./scripts/start.sh
 ```
 
-**建库内容**：`param_config`、`account_records`、`character_records`、`quest_status`（九列）、`quest_progress`、`inventory_items`、`ai_usage_log`、`bus_outbox_queue`、`bus_stream_state`、`buddy_list` + seed 5 条 param_config。
+**建库内容**：`param_config`、`account_records`、`character_records`、`quest_status`（九列）、`quest_progress`、`inventory_items`、`bus_outbox_queue`、`bus_stream_state`、`buddy_list` + seed 5 条 param_config。
 
 **账号**：新库无默认账号。需手动建号（BCrypt 密码）或用测试号 `admin/admin`（`web_admin=1`）。
 

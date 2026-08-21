@@ -30,7 +30,7 @@ public final class ApiKeyServiceTest {
         InMemoryApiKeyRepository repository = new InMemoryApiKeyRepository();
         ApiKeyService service = service(repository);
 
-        ApiKeyService.IssuedKey issued = service.issue(service.bootstrapPrincipal(), "twish-test", 7L,
+        ApiKeyService.IssuedKey issued = service.issue(service.bootstrapPrincipal(), "client-test", 7L,
                 Set.of(ApiScopes.GAME_READ), null);
 
         assertThat(issued.token()).startsWith("twk_");
@@ -52,7 +52,7 @@ public final class ApiKeyServiceTest {
     public void revokedKeyIsRejectedAndUnknownScopesCannotBeIssued() {
         InMemoryApiKeyRepository repository = new InMemoryApiKeyRepository();
         ApiKeyService service = service(repository);
-        ApiKeyService.IssuedKey issued = service.issue(service.bootstrapPrincipal(), "twish-test", null,
+        ApiKeyService.IssuedKey issued = service.issue(service.bootstrapPrincipal(), "client-test", null,
                 Set.of(ApiScopes.GAME_READ), null);
 
         assertThat(service.revoke(service.bootstrapPrincipal(), issued.keyPrefix())).isTrue();
@@ -104,11 +104,12 @@ public final class ApiKeyServiceTest {
                 Set.of(ApiScopes.SERVER_HEALTH_READ), null);
 
         ApiKeyService.KeySummary updated = service.updateScopes(service.bootstrapPrincipal(),
-                issued.keyPrefix(), Set.of(ApiScopes.SERVER_HEALTH_READ, ApiScopes.AI_USE)).orElseThrow();
+                issued.keyPrefix(), Set.of(ApiScopes.SERVER_HEALTH_READ, ApiScopes.PLAYER_ONLINE_READ)).orElseThrow();
 
-        assertThat(updated.scopes()).containsExactlyInAnyOrder(ApiScopes.SERVER_HEALTH_READ, ApiScopes.AI_USE);
+        assertThat(updated.scopes()).containsExactlyInAnyOrder(
+                ApiScopes.SERVER_HEALTH_READ, ApiScopes.PLAYER_ONLINE_READ);
         assertThat(service.authenticate(issued.token())).get()
-                .satisfies(principal -> assertThat(principal.permits(ApiScopes.AI_USE)).isTrue());
+                .satisfies(principal -> assertThat(principal.permits(ApiScopes.PLAYER_ONLINE_READ)).isTrue());
     }
 
     private static ApiKeyService service(InMemoryApiKeyRepository repository) {
@@ -128,23 +129,8 @@ public final class ApiKeyServiceTest {
         }
 
         @Override
-        public Optional<ApiKeyRecord> findByCredentialId(String credentialId) {
-            return records.stream()
-                    .filter(record -> credentialId.equals(record.getCredentialId()))
-                    .findFirst();
-        }
-
-        @Override
         public List<ApiKeyRecord> findAll() {
             return List.copyOf(records);
-        }
-
-        @Override
-        public List<ApiKeyRecord> findByOwnerAccountId(Long ownerAccountId) {
-            return records.stream()
-                    .filter(record -> ownerAccountId != null
-                            && ownerAccountId.equals(record.getOwnerAccountId()))
-                    .toList();
         }
 
         @Override

@@ -12,12 +12,10 @@ import org.gms.data.config.ParamConfRepository;
 import org.gms.data.mapper.AccountMapper;
 import org.gms.data.mapper.AccountAdminRoleMapper;
 import org.gms.data.mapper.AdminOperationAuditMapper;
-import org.gms.data.mapper.AiUsagePolicyMapper;
 import org.gms.data.mapper.AdminRoleMapper;
 import org.gms.data.mapper.AdminSessionMapper;
 import org.gms.data.mapper.ApiKeyMapper;
 import org.gms.data.mapper.ApiRequestAuditMapper;
-import org.gms.data.mapper.AiUsageMapper;
 import org.gms.data.mapper.BuddyListMapper;
 import org.gms.data.mapper.BusOutboxMapper;
 import org.gms.data.mapper.BusStreamMapper;
@@ -28,31 +26,26 @@ import org.gms.data.mapper.QuestProgressMapper;
 import org.gms.data.mapper.QuestStatusMapper;
 import org.gms.data.mapper.SkillMapper;
 import org.gms.data.mapper.ToolExecutionAuditMapper;
-import org.gms.data.mapper.ModelRateMapper;
 import org.gms.data.mapper.PointAccountMapper;
 import org.gms.data.mapper.PointTransactionMapper;
 import org.gms.data.mapper.SubscriptionPlanMapper;
 import org.gms.data.repo.AccountRepository;
 import org.gms.data.repo.AccountAdminRoleRepository;
 import org.gms.data.repo.AdminOperationAuditRepository;
-import org.gms.data.repo.AiUsagePolicyRepository;
 import org.gms.data.repo.AdminRoleRepository;
 import org.gms.data.repo.AdminSessionRepository;
 import org.gms.data.repo.ApiKeyRepository;
 import org.gms.data.repo.ApiRequestAuditRepository;
-import org.gms.data.repo.AiUsageRepository;
 import org.gms.data.repo.BuddyListRepository;
 import org.gms.data.repo.CharacterRepository;
 import org.gms.data.repo.CharacterSnapshotRepository;
 import org.gms.data.repo.FlexAccountRepository;
 import org.gms.data.repo.FlexAccountAdminRoleRepository;
 import org.gms.data.repo.FlexAdminOperationAuditRepository;
-import org.gms.data.repo.FlexAiUsagePolicyRepository;
 import org.gms.data.repo.FlexAdminRoleRepository;
 import org.gms.data.repo.FlexAdminSessionRepository;
 import org.gms.data.repo.FlexApiKeyRepository;
 import org.gms.data.repo.FlexApiRequestAuditRepository;
-import org.gms.data.repo.FlexAiUsageRepository;
 import org.gms.data.repo.FlexBuddyListRepository;
 import org.gms.data.repo.FlexBusOutboxRepository;
 import org.gms.data.repo.FlexCharacterRepository;
@@ -65,11 +58,9 @@ import org.gms.data.repo.FlexSkillRepository;
 import org.gms.data.repo.SkillRepository;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.data.repo.FlexToolExecutionAuditRepository;
-import org.gms.data.repo.ModelRateRepository;
 import org.gms.data.repo.PointAccountRepository;
 import org.gms.data.repo.PointTransactionRepository;
 import org.gms.data.repo.SubscriptionPlanRepository;
-import org.gms.data.repo.FlexModelRateRepository;
 import org.gms.data.repo.FlexPointAccountRepository;
 import org.gms.data.repo.FlexPointTransactionRepository;
 import org.gms.data.repo.FlexSubscriptionPlanRepository;
@@ -114,7 +105,6 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(QuestStatusMapper.class);
         bootstrap.addMapper(QuestProgressMapper.class);
         bootstrap.addMapper(SkillMapper.class);
-        bootstrap.addMapper(AiUsageMapper.class);
         bootstrap.addMapper(BusOutboxMapper.class);
         bootstrap.addMapper(BusStreamMapper.class);
         bootstrap.addMapper(BuddyListMapper.class);
@@ -122,14 +112,12 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(ApiRequestAuditMapper.class);
         bootstrap.addMapper(ToolExecutionAuditMapper.class);
         bootstrap.addMapper(PointAccountMapper.class);
-        bootstrap.addMapper(ModelRateMapper.class);
         bootstrap.addMapper(SubscriptionPlanMapper.class);
         bootstrap.addMapper(PointTransactionMapper.class);
         bootstrap.addMapper(AdminRoleMapper.class);
         bootstrap.addMapper(AccountAdminRoleMapper.class);
         bootstrap.addMapper(AdminSessionMapper.class);
         bootstrap.addMapper(AdminOperationAuditMapper.class);
-        bootstrap.addMapper(AiUsagePolicyMapper.class);
         bootstrap.start();
         log.info(I18n.message("log.data.mybatis_flex_ready"));
         return bootstrap;
@@ -179,12 +167,6 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
-    public AiUsageMapper aiUsageMapper(MybatisFlexBootstrap bootstrap) {
-        return bootstrap.getMapper(AiUsageMapper.class);
-    }
-
-    @Bean
-    @Singleton
     public BusOutboxMapper busOutboxMapper(MybatisFlexBootstrap bootstrap) {
         return bootstrap.getMapper(BusOutboxMapper.class);
     }
@@ -227,12 +209,6 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
-    public ModelRateMapper modelRateMapper(MybatisFlexBootstrap bootstrap) {
-        return bootstrap.getMapper(ModelRateMapper.class);
-    }
-
-    @Bean
-    @Singleton
     public SubscriptionPlanMapper subscriptionPlanMapper(MybatisFlexBootstrap bootstrap) {
         return bootstrap.getMapper(SubscriptionPlanMapper.class);
     }
@@ -265,12 +241,6 @@ public class MyBatisFlexFactory {
     @Singleton
     public AdminOperationAuditMapper adminOperationAuditMapper(MybatisFlexBootstrap bootstrap) {
         return bootstrap.getMapper(AdminOperationAuditMapper.class);
-    }
-
-    @Bean
-    @Singleton
-    public AiUsagePolicyMapper aiUsagePolicyMapper(MybatisFlexBootstrap bootstrap) {
-        return bootstrap.getMapper(AiUsagePolicyMapper.class);
     }
 
     @Bean
@@ -323,12 +293,6 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
-    public AiUsageRepository aiUsageRepository(AiUsageMapper mapper) {
-        return new FlexAiUsageRepository(mapper);
-    }
-
-    @Bean
-    @Singleton
     public OutboxRepository busOutboxRepository(BusOutboxMapper mapper, BusStreamMapper streamMapper) {
         return new FlexBusOutboxRepository(mapper, streamMapper);
     }
@@ -361,12 +325,6 @@ public class MyBatisFlexFactory {
     @Singleton
     public PointAccountRepository pointAccountRepository(PointAccountMapper mapper) {
         return new FlexPointAccountRepository(mapper);
-    }
-
-    @Bean
-    @Singleton
-    public ModelRateRepository modelRateRepository(ModelRateMapper mapper) {
-        return new FlexModelRateRepository(mapper);
     }
 
     @Bean
@@ -405,9 +363,4 @@ public class MyBatisFlexFactory {
         return new FlexAdminOperationAuditRepository(mapper);
     }
 
-    @Bean
-    @Singleton
-    public AiUsagePolicyRepository aiUsagePolicyRepository(AiUsagePolicyMapper mapper) {
-        return new FlexAiUsagePolicyRepository(mapper);
-    }
 }

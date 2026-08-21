@@ -1,26 +1,25 @@
 package org.gms.httpapi.auth;
 
 import io.micronaut.http.HttpMethod;
+import org.gms.httpapi.version.ApiRoutes;
 
 /** 将稳定 URL 契约映射到最小权限 scope。 */
 public final class ApiAccessPolicy {
 
     public Policy resolve(HttpMethod method, String path) {
-        if ("/api/v1/openapi.yaml".equals(path)) {
+        String relativePath = ApiRoutes.relativeToVersion(ApiRoutes.PUBLIC_ROOT, path);
+        if ("/openapi.yaml".equals(relativePath)) {
             return new Policy(true, "");
         }
-        if (path.startsWith("/api/v1/auth/keys")) {
+        if (relativePath.startsWith("/auth/keys")) {
             return new Policy(false, ApiScopes.KEYS_MANAGE);
         }
-        if (path.startsWith("/api/v1/identity/")
-                || path.startsWith("/api/v1/capabilities")
-                || path.startsWith("/api/v1/tool-executions")) {
+        if (relativePath.startsWith("/identity/")
+                || relativePath.startsWith("/capabilities")
+                || relativePath.startsWith("/tool-executions")) {
             return new Policy(false, "");
         }
-        if (path.startsWith("/api/v1/ai/")) {
-            return new Policy(false, ApiScopes.AI_USE);
-        }
-        if ("/api/v1/online".equals(path)) {
+        if ("/online".equals(relativePath)) {
             return new Policy(false, ApiScopes.PLAYER_ONLINE_READ);
         }
         if (method == HttpMethod.GET || method == HttpMethod.HEAD) {

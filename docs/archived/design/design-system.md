@@ -86,7 +86,7 @@ npm run typecheck
 - 已完成运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、审计日志和任务监控页面。
 - 页面具备自动轮询、手动刷新、骨架屏、失败重试和空状态；不使用伪造业务数据兜底。
 - 配置热改、踢下线、脚本/逻辑重载、重启、API Key Scope 调整、任务立即运行和失败重试均使用确认对话框、防重复提交与统一 Toast 反馈。
-- API Key 的 `ai:use` Scope 作为 AI 调用总开关展示；保存后立即生效，并由服务端刷新 `permissionVersion`。
+- API Key Scope 保存后立即生效，并由服务端刷新 `permissionVersion`。
 - 任务监控复用 Card、Badge、Table、Dialog、Skeleton 和 Sonner，不另造任务专用基础组件。
 - 管理 API 客户端已建立 Vitest 契约测试，覆盖读取、写入、错误码、断网、非 JSON 响应、Scope 更新和调度开关。
 - `demo.html` 仅作为旧书签兼容入口，正式预览须通过 `npm run dev` 打开 Vite 应用。

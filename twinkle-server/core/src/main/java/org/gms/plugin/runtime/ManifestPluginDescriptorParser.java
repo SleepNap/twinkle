@@ -89,7 +89,6 @@ public final class ManifestPluginDescriptorParser {
         java.util.List<PluginDescriptor.EventListenerContribution> eventListeners = new java.util.ArrayList<>();
         java.util.List<PluginDescriptor.ScriptNamespaceContribution> scriptNamespaces = new java.util.ArrayList<>();
         java.util.List<PluginDescriptor.LogicSystemContribution> logicSystems = new java.util.ArrayList<>();
-        java.util.List<PluginDescriptor.AiToolContribution> aiTools = new java.util.ArrayList<>();
         java.util.List<PluginDescriptor.HttpEndpointContribution> httpEndpoints = new java.util.ArrayList<>();
 
         // 按 contribution.N.type 逐条分桶
@@ -123,7 +122,6 @@ public final class ManifestPluginDescriptorParser {
                         required(props, prefix + "namespace")));
                 case LOGIC_SYSTEM -> logicSystems.add(new PluginDescriptor.LogicSystemContribution(
                         required(props, prefix + "key"), cls, cVersion));
-                case AI_TOOL -> aiTools.add(new PluginDescriptor.AiToolContribution(cls, cVersion));
                 case HTTP_ENDPOINT -> httpEndpoints.add(new PluginDescriptor.HttpEndpointContribution(
                         required(props, prefix + "method"),
                         required(props, prefix + "path"),
@@ -139,11 +137,11 @@ public final class ManifestPluginDescriptorParser {
                 id, name, version, scope, sdkVersion, mainClass,
                 java.util.List.copyOf(packetHandlers), java.util.List.copyOf(tickHandlers),
                 java.util.List.copyOf(eventListeners), java.util.List.copyOf(scriptNamespaces),
-                java.util.List.copyOf(logicSystems), java.util.List.copyOf(aiTools),
+                java.util.List.copyOf(logicSystems),
                 java.util.List.copyOf(httpEndpoints));
         log.info(I18n.message("log.plugin.manifest_parsed"), id, version, scope,
                 packetHandlers.size() + tickHandlers.size() + eventListeners.size()
-                        + scriptNamespaces.size() + logicSystems.size() + aiTools.size() + httpEndpoints.size());
+                        + scriptNamespaces.size() + logicSystems.size() + httpEndpoints.size());
         return descriptor;
     }
 

@@ -33,7 +33,6 @@
         <module>login</module>
         <module>admin</module>
         <module>http-api</module>
-        <module>ai</module>
     </modules>
 
     <properties>
@@ -48,6 +47,8 @@
         <micronaut.platform.version>4.10.17</micronaut.platform.version>
         <!-- Micronaut core 线最新（注解处理器与 core 同版本线） -->
         <micronaut.version>4.10.26</micronaut.version>
+        <micronaut.openapi.version>6.20.0</micronaut.openapi.version>
+        <swagger.annotations.version>2.2.43</swagger.annotations.version>
         <!-- Netty：4.2 线最新（虚拟线程）。显式覆盖 platform BOM 管理的 4.2.16 -->
         <netty.version>4.2.17.Final</netty.version>
 
@@ -63,7 +64,6 @@
         <graalvm-js.version>23.1.11</graalvm-js.version>
         <log4j2.version>2.26.1</log4j2.version>
         <lombok.version>1.18.46</lombok.version>
-        <langchain4j.version>1.18.1</langchain4j.version>
         <bucket4j.version>8.19.0</bucket4j.version>
         <archunit.version>1.5.0</archunit.version>
         <junit.version>6.1.2</junit.version>
@@ -99,14 +99,6 @@
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-bom</artifactId>
                 <version>${log4j2.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- LangChain4j BOM（M3 才实际引入，此处预占版本） -->
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-bom</artifactId>
-                <version>${langchain4j.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -213,11 +205,6 @@
                 <artifactId>twinkle-http-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>org.gms</groupId>
-                <artifactId>twinkle-ai</artifactId>
-                <version>${project.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -295,7 +282,16 @@
                                 <artifactId>micronaut-graal</artifactId>
                                 <version>${micronaut.version}</version>
                             </path>
+                            <path>
+                                <groupId>io.micronaut.openapi</groupId>
+                                <artifactId>micronaut-openapi</artifactId>
+                                <version>${micronaut.openapi.version}</version>
+                            </path>
                         </annotationProcessorPaths>
+                        <compilerArgs>
+                            <!-- 从 Micronaut Controller/DTO 编译期生成 OpenAPI，并生成 Swagger UI 静态页面。 -->
+                            <arg>-Amicronaut.openapi.views.spec=swagger-ui.enabled=true</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <!-- 依赖单向无环：本模块只能依赖列出的模块 -->

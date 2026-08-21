@@ -1,4 +1,4 @@
--- twish 能力面：API-key 生命周期与调用审计。
+-- 公共 API：API-key 生命周期与调用审计。
 CREATE TABLE api_key_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     credential_id TEXT NOT NULL,

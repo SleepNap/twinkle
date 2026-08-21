@@ -1,5 +1,7 @@
 package org.gms.httpapi.auth;
 
+import org.gms.httpapi.version.ApiRoutes;
+
 import io.micronaut.core.async.publisher.Publishers;
 import io.micronaut.core.order.Ordered;
 import io.micronaut.http.HttpHeaders;
@@ -12,8 +14,7 @@ import io.micronaut.http.filter.HttpServerFilter;
 import io.micronaut.http.filter.ServerFilterChain;
 import io.micronaut.http.filter.ServerFilterPhase;
 import org.reactivestreams.Publisher;
-import org.gms.httpapi.contract.ApiContract;
-import org.gms.httpapi.contract.ApiErrorResponses;
+import org.gms.httpapi.version.ApiHeaders;
 import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.i18n.I18nService;
 
@@ -23,8 +24,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** /api/v1 能力面的 API-key 认证、scope 授权和全链路审计。 */
-@Filter("/api/v1/**")
+/** 所有公共 API 主版本共用的 API-key 认证、scope 授权和全链路审计。 */
+@Filter(ApiRoutes.PUBLIC_ROOT + "/**")
 public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
 
     public static final String PRINCIPAL_ATTRIBUTE = "twinkle.api.principal";
@@ -36,14 +37,17 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
     private final ApiAuditService auditService;
     private final ApiAccessPolicy accessPolicy;
     private final ApiRateLimiter rateLimiter;
+    private final ApiErrorContractRegistry errorContracts;
     private final I18nService i18n;
 
     public ApiKeyAuthFilter(ApiKeyService apiKeyService, ApiAuditService auditService,
-                            ApiAccessPolicy accessPolicy, ApiRateLimiter rateLimiter, I18nService i18n) {
+                            ApiAccessPolicy accessPolicy, ApiRateLimiter rateLimiter,
+                            ApiErrorContractRegistry errorContracts, I18nService i18n) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.accessPolicy = accessPolicy;
         this.rateLimiter = rateLimiter;
+        this.errorContracts = errorContracts;
         this.i18n = i18n;
     }
 
@@ -66,23 +70,23 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
             auditService.record(requestId, null, request.getMethodName(), request.getPath(),
                     policy.requiredScope(), "rate_limited", HttpStatus.TOO_MANY_REQUESTS.getCode(),
                     remoteAddress(request), elapsedMs(started));
-            return Publishers.just(ApiErrorResponses.response(HttpStatus.TOO_MANY_REQUESTS,
+            return Publishers.just(errorContracts.response(request.getPath(), HttpStatus.TOO_MANY_REQUESTS,
                             requestId, null, "rate_limited", message("api.error.preauth_rate_limited"),
                             true, Map.of())
-                    .header(ApiContract.REQUEST_ID_HEADER, requestId)
-                    .header(ApiContract.CONTRACT_HEADER, ApiContract.VERSION));
+                    .header(ApiHeaders.REQUEST_ID, requestId)
+                    .header(ApiHeaders.CONTRACT_VERSION, errorContracts.contractVersion(request.getPath())));
         }
         Optional<ApiPrincipal> authenticated = apiKeyService.authenticate(extractToken(request));
         if (authenticated.isEmpty()) {
             auditService.record(requestId, null, request.getMethodName(), request.getPath(),
                     policy.requiredScope(), "unauthenticated", HttpStatus.UNAUTHORIZED.getCode(),
                     remoteAddress(request), elapsedMs(started));
-            MutableHttpResponse<?> response = ApiErrorResponses.response(HttpStatus.UNAUTHORIZED,
+            MutableHttpResponse<?> response = errorContracts.response(request.getPath(), HttpStatus.UNAUTHORIZED,
                     requestId, null, "unauthenticated", message("api.error.unauthenticated"),
                     false, Map.of())
                     .header(HttpHeaders.WWW_AUTHENTICATE, "Bearer")
-                    .header(ApiContract.REQUEST_ID_HEADER, requestId)
-                    .header(ApiContract.CONTRACT_HEADER, ApiContract.VERSION);
+                    .header(ApiHeaders.REQUEST_ID, requestId)
+                    .header(ApiHeaders.CONTRACT_VERSION, errorContracts.contractVersion(request.getPath()));
             return Publishers.just(response);
         }
 
@@ -94,11 +98,11 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
             auditService.record(requestId, principal, request.getMethodName(), request.getPath(),
                     policy.requiredScope(), "forbidden", HttpStatus.FORBIDDEN.getCode(),
                     remoteAddress(request), elapsedMs(started));
-            MutableHttpResponse<?> response = ApiErrorResponses.response(HttpStatus.FORBIDDEN,
+            MutableHttpResponse<?> response = errorContracts.response(request.getPath(), HttpStatus.FORBIDDEN,
                     requestId, null, "permission_denied", message("api.error.permission_denied"),
                     false, Map.of("requiredScopes", List.of(policy.requiredScope())))
-                    .header(ApiContract.REQUEST_ID_HEADER, requestId)
-                    .header(ApiContract.CONTRACT_HEADER, ApiContract.VERSION);
+                    .header(ApiHeaders.REQUEST_ID, requestId)
+                    .header(ApiHeaders.CONTRACT_VERSION, errorContracts.contractVersion(request.getPath()));
             return Publishers.just(response);
         }
 
@@ -107,8 +111,8 @@ public final class ApiKeyAuthFilter implements HttpServerFilter, Ordered {
         return Publishers.map(response, result -> {
             String effectiveRequestId = request.getAttribute(REQUEST_ID_ATTRIBUTE, String.class)
                     .orElse(requestId);
-            result.header(ApiContract.REQUEST_ID_HEADER, effectiveRequestId);
-            result.header(ApiContract.CONTRACT_HEADER, ApiContract.VERSION);
+            result.header(ApiHeaders.REQUEST_ID, effectiveRequestId);
+            result.header(ApiHeaders.CONTRACT_VERSION, errorContracts.contractVersion(request.getPath()));
             auditService.record(effectiveRequestId, principal, request.getMethodName(), request.getPath(),
                     policy.requiredScope(), "allowed", result.getStatus().getCode(),
                     remoteAddress(request), elapsedMs(started));

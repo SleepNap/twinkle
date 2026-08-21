@@ -1,4 +1,4 @@
-import { Activity, Bot, BookOpen, ChevronDown, Coins, FileSearch, Globe2, KeyRound, ListTodo, LogOut, Radio, Server, Settings2, ShieldCheck, UserRoundSearch, Users, Wrench } from "lucide-react"
+import { Activity, BookOpen, ChevronDown, Coins, FileJson, FileSearch, Globe2, KeyRound, ListTodo, LogOut, Radio, Server, Settings2, ShieldCheck, UserRoundSearch, Users, Wrench } from "lucide-react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { Suspense, useState } from "react"
 
@@ -16,6 +16,7 @@ interface NavItem {
   label: string
   icon: typeof Activity
   end?: boolean
+  external?: boolean
 }
 
 interface NavGroup {
@@ -50,6 +51,7 @@ const navigationGroups: NavGroup[] = [
       { to: "/config", label: "nav.config", icon: Settings2 },
       { to: "/operations", label: "nav.operations", icon: Wrench },
       { to: "/capabilities", label: "nav.capabilities", icon: BookOpen },
+      { to: "/docs/index.html", label: "nav.apiDocs", icon: FileJson, external: true },
     ],
   },
   {
@@ -57,7 +59,6 @@ const navigationGroups: NavGroup[] = [
     label: "nav.group.security",
     items: [
       { to: "/api-keys", label: "nav.apiKeys", icon: KeyRound },
-      { to: "/ai-policies", label: "nav.aiPolicies", icon: Bot },
       { to: "/roles", label: "nav.roles", icon: ShieldCheck },
       { to: "/audits", label: "nav.audits", icon: FileSearch },
     ],
@@ -141,7 +142,18 @@ export function AppShell() {
                   </button>
                   {!isCollapsed && (
                     <div className="flex flex-col gap-1">
-                      {group.items.map(({ to, label, icon: Icon, end }) => (
+                      {group.items.map(({ to, label, icon: Icon, end, external }) => external ? (
+                        <a
+                          key={to}
+                          href={to}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={cn(buttonVariants({ variant: "ghost" }), "shrink-0 justify-start")}
+                        >
+                          <Icon data-icon="inline-start" />
+                          {t(label as MessageKey)}
+                        </a>
+                      ) : (
                         <NavLink
                           key={to}
                           to={to}

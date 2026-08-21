@@ -131,10 +131,7 @@ public final class TwinklePluginHost implements PluginHost {
             }
         }
 
-        // ---- 未接线类型（M4 决策）：AI Tool / HTTP 路由 ----
-        if (!descriptor.aiTools().isEmpty()) {
-            log.warn(I18n.message("log.plugin.ai_unwired"), descriptor.id(), descriptor.aiTools().size());
-        }
+        // ---- 未接线类型（M4 决策）：HTTP 路由 ----
         if (!descriptor.httpEndpoints().isEmpty()) {
             log.warn(I18n.message("log.plugin.http_unwired"), descriptor.id(), descriptor.httpEndpoints().size());
         }

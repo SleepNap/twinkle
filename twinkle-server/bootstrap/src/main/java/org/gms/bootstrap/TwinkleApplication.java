@@ -16,7 +16,7 @@ import io.micronaut.runtime.Micronaut;
  * <h2>进程装配是配置</h2>
  * <p>同一套代码，按 profile 决定哪些角色模块装配到一个 JVM：
  * <ul>
- *   <li>single / standalone：全部内嵌（coordinator + channel + login + admin + http + ai）</li>
+ *   <li>single / standalone：全部内嵌（coordinator + channel + login + admin + http）</li>
  *   <li>split-channel：管理进程 + 每频道 1 进程（按需启动，profile 在启动脚本中指定）</li>
  *   <li>split-realm：管理进程 + 每大区 1 进程</li>
  * </ul>

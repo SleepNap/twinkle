@@ -11,7 +11,7 @@ M0 调研确认的版本（2026-08，全部来自 Maven Central maven-metadata.x
 - **Netty 4.2.17.Final**（最新，4.2 线支持虚拟线程 `Transports.newEventLoopGroup` 等）；Micronaut 4.10 platform BOM 管理 4.2.x。
 - **MyBatis-Flex 1.11.8**；**SQLite JDBC 3.53.2.1**；**PostgreSQL 42.7.13**；**MySQL connector 9.7.0**。
 - **Flyway Community 不支持 SQLite**（`org.flywaydb:flyway-sqlite` 是商业版，Central 404）→ 决策：三库统一自研迁移器，放弃 Flyway。**已同步更新 ARCHITECTURE.md**。
-- **GraalVM JS 23.1.11**（`org.graalvm.js:js-language` + `truffle-runtime` + `polyglot`，`org.graalvm.js:js` 是 pom 聚合器不含 jar），配 `-XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI`（EnableJVMCI 是实验选项需 unlock 前置；GraalVM JDK 原生 JVMCI 无需）。**宿主对象必须 public 类 + public 方法**（匿名/包私有类方法 GraalVM 反射不可见，"Unknown identifier"）。**log4j2 2.26.1**（3.0 仍是 beta）；**LangChain4j 1.18.1**；**Bucket4j 8.19.0**；**ArchUnit 1.5.0**；**JUnit 6.1.2**（bom）。
+- **GraalVM JS 23.1.11**（`org.graalvm.js:js-language` + `truffle-runtime` + `polyglot`，`org.graalvm.js:js` 是 pom 聚合器不含 jar），配 `-XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI`（EnableJVMCI 是实验选项需 unlock 前置；GraalVM JDK 原生 JVMCI 无需）。**宿主对象必须 public 类 + public 方法**（匿名/包私有类方法 GraalVM 反射不可见，"Unknown identifier"）。**log4j2 2.26.1**（3.0 仍是 beta）；**Bucket4j 8.19.0**；**ArchUnit 1.5.0**；**JUnit 6.1.2**（bom）。
 
 **GraalVM JS 版本匹配（红线 16 JDK 21 约束下的关键事实，2026-08 实测）**：
 - **自 GraalVM for JDK 21 起，JS 运行时不再随 JDK 内置**（standalone 化）→ Oracle GraalVM 21.0.11 只内置 JVMCI/Graal 编译器，无 `languages/js`、无 `org.graalvm.polyglot` 模块，JS 必须经 Maven 依赖引入。

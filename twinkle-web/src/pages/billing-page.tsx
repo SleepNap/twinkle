@@ -19,8 +19,6 @@ import { cn } from "@/lib/utils"
 import { useI18n, type MessageKey } from "@/i18n"
 
 const REASON_LABELS: Record<string, MessageKey> = {
-  ai_consume: "billing.reason.ai_consume",
-  websearch_consume: "billing.reason.websearch_consume",
   purchase_nx: "billing.reason.purchase_nx",
   purchase_meso: "billing.reason.purchase_meso",
   daily_signin: "billing.reason.daily_signin",
@@ -43,10 +41,6 @@ export function BillingPage() {
   const plansQuery = useQuery({
     queryKey: billingQueryKeys.plans,
     queryFn: ({ signal }) => billingApi.plans(signal),
-  })
-  const ratesQuery = useQuery({
-    queryKey: billingQueryKeys.rates,
-    queryFn: ({ signal }) => billingApi.modelRates(signal),
   })
   const transactionsQuery = useQuery({
     queryKey: billingQueryKeys.transactions(selectedAccount?.accountId ?? 0),
@@ -185,7 +179,7 @@ export function BillingPage() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>{t("billing.plansTitle")}</CardTitle>
@@ -214,38 +208,6 @@ export function BillingPage() {
                       <TableCell className="text-right tabular-nums">{formatNumber(plan.monthlyLimit)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(plan.weeklyLimit)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(plan.fiveHourLimit)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">{t("billing.unavailable")}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("billing.ratesTitle")}</CardTitle>
-            <CardDescription>{t("billing.ratesDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {ratesQuery.isPending ? (
-              <Skeleton className="h-24 w-full" />
-            ) : (ratesQuery.data?.rates ?? []).length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("billing.modelKey")}</TableHead>
-                    <TableHead className="text-right">{t("billing.inputRate")}</TableHead>
-                    <TableHead className="text-right">{t("billing.outputRate")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ratesQuery.data!.rates.map((rate) => (
-                    <TableRow key={rate.id}>
-                      <TableCell className="font-mono text-xs">{rate.modelKey}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(rate.inputRate)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(rate.outputRate)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

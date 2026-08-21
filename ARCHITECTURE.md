@@ -18,7 +18,7 @@
 
 | 目标 | 方案 |
 |---|---|
-| **1. 原生 HTTP** | Micronaut MVC；`/internal/v1/*`（官网转调）+ `/api/v1/*`（第三方，限流+版本化）。HTTP 线程投递游戏线程，禁止直踩游戏内存对象 |
+| **1. 原生 HTTP** | Micronaut MVC；`/internal/vN/*`（内部转调）+ `/admin/vN/*`（Web 控制台）+ `/api/vN/*`（第三方，限流+版本化）。HTTP 线程投递游戏线程，禁止直踩游戏内存对象；OpenAPI 编译期生成并按发布版本冻结 |
 | **2. 保留 Netty** | v83 协议 / 加解密 / RecvOpcode 字节级不动；`HandlerRegistry` 可 register/replace |
 | **3. 热更新** | 进程内真无感热重载（L1-L3）+ L4 进程兜底（见第五节） |
 | **4. 多数据源** | 非第一约束。单库为主；将来若确实需要，接口先行、按需引入（同铁律 1） |
@@ -40,7 +40,6 @@
 | JDK | **GraalVM Community Edition for JDK 21**（基于 OpenJDK，内置 JVMCI + GraalVM JS） | 原生带 JVMCI → GraalJS 全速无需额外开关；启动快、内存可控；社区中立发行版 |
 | 持久化 / ORM | **MyBatis-Flex** | 无 JPA 生命周期负担；无 N+1；查出来即普通数据，贴合"数据在内存"模型 |
 | 数据库 | **SQLite**（低配 standalone 默认）/ **PostgreSQL**（大服/分布式）/ MySQL 8+、MariaDB（兼容切换） | 按规模三档，接口化按需切换；方言全覆盖 |
-| AI | **LangChain4j** | 流式 + 工具调用原生合一 |
 | 客户端网络 | **Netty 4** | v83 协议 / 加解密 / RecvOpcode 全部不动 |
 | 脚本 | **GraalVM JS**（独立库引入） | 保留，宿主对象契约（cm/qm/em/rm/im）不变 |
 | 数据迁移 | **自研迁移器**（M0 决策，替换 Flyway） | 每数据源独立版本表；Flyway 社区版自 V10 撤 SQLite（商业版才有），架构默认 SQLite，故三库统一自研（见 6.2） |
@@ -56,10 +55,9 @@
 - **缓存 / 对象 / MQ 不引入**：2C2G 红线 + 内存态权威。共享状态进程内实现，接口打底，分布式按需替换。
 - **JDK 锁定 GraalVM CE for JDK 21**：原生内置 JVMCI 与 GraalVM JS，**选定即自带「全速」前提**，不再依赖 `-XX:+EnableJVMCI` 或外部挂载 `org.graalvm.compiler`；GraalVM JS 以独立 Maven 库（`org.graalvm.js:js`）形式引入，仅作版本管理。内存调优走 HotSpot 侧（GraalVM CE 基于 HotSpot）：AppCDS + SerialGC + 收紧堆。
 - **SQLite 规模验证（搜索核证）**：WAL 下实测 70K reads/s + 3.6K writes/s，读吞吐 2 倍于 MySQL、p99 读延迟低 19 倍；极限是"持续 >10 并发写/秒"而非"人数"——本架构低频批量写天然避开。**三件套做对即稳**：WAL + 单写连接 + busy_timeout。
-- **AI 选定 LangChain4j**：流式 + 工具调用同时支持是硬需求。
 - **框架选定 Micronaut 4**：轻量 + 中间件全主流。Vert.x 因响应式风格与命令式游戏逻辑割裂被否。
 - **Java 后台语言由服务端配置统一决定**：`twinkle.service.language` 使用 BCP 47（首批 `zh-CN`、`en-US`），日志、异常、HTTP 消息和系统文案统一经 `I18nService` 解析；客户端请求与账号不得覆盖。Web 控制台有独立 UI locale。错误码、opcode、字段 ID、JSON key 等机器契约保持稳定。WZ/脚本不参与该机制，继续按显式路径加载。完整规范见 `docs/archived/i18n.md`。
-- **前端框架选定 React 19 + Vite + TypeScript + shadcn**：运维后台统一使用 shadcn Registry 组件，固定 `radix-nova` preset、Radix、Lucide、CSS Variables 与 Tailwind CSS v4。视觉以 shadcn 官方组件、variant、密度和 neutral 浅深主题为准，不再模仿其他品牌设计系统；页面只在业务组合与布局层扩展，避免重复实现基础组件。前端为独立工程 `twinkle-web/`，与 Java 服务端通过 `http-api` 模块（`/api/v1`）解耦，浏览器端不受 2C2G 红线约束。详细纪律见 `docs/archived/design/design-system.md`。
+- **前端框架选定 React 19 + Vite + TypeScript + shadcn**：运维后台统一使用 shadcn Registry 组件，固定 `radix-nova` preset、Radix、Lucide、CSS Variables 与 Tailwind CSS v4。视觉以 shadcn 官方组件、variant、密度和 neutral 浅深主题为准，不再模仿其他品牌设计系统；页面只在业务组合与布局层扩展，避免重复实现基础组件。前端为独立工程 `twinkle-web/`，与 Java 服务端通过版本化 `http-api` 解耦，迁移期间允许不同功能分别调用受支持的 `/admin/vN`；浏览器端不受 2C2G 红线约束。详细纪律见 `docs/archived/design/design-system.md`。
 
 ---
 
@@ -87,7 +85,6 @@ twinkle/
 │   ├── login/         # 账号校验、选角
 │   ├── admin/         # Web 控制台、运维 API
 │   ├── http-api/      # Micronaut Controller（/internal + /api）
-│   └── ai/            # LangChain4j Agent + Tool
 │
 └── plugins/           # 内置插件（按部署作用域分发进对应进程）
 ```
@@ -96,10 +93,10 @@ twinkle/
 
 | 进程 | 装配模块 |
 |---|---|
-| **管理进程**（1 个） | 公共底座 + coordinator + login + admin + http-api + ai + 平台插件 |
+| **管理进程**（1 个） | 公共底座 + coordinator + login + admin + http-api + 平台插件 |
 | **频道进程**（每分片 1 个） | 公共底座 + domain-game + domain-script + wz-provider + channel + 频道插件 |
 
-依赖单向无环，且管理侧**不得依赖 domain-game**——分进程时两者不在同一 JVM（物理隔离），single 档同进程也禁止跨依赖，从编译期杜绝 HTTP/AI 直踩游戏内存。
+依赖单向无环，且管理侧**不得依赖 domain-game**——分进程时两者不在同一 JVM（物理隔离），single 档同进程也禁止跨依赖，从编译期杜绝 HTTP 直踩游戏内存。
 
 ### 状态 / 逻辑分层
 
@@ -159,7 +156,7 @@ twinkle.jar --profile=split-realm      # 按大区拆：coordinator + 每大区 
 
 **2C2G 强制单进程**：多 JVM 常驻开销每多开一个整体翻倍，2G 预算只够一个 JVM。"大区/频道独立进程"仅限大内存机器 / 多机。
 
-**网络平面收敛**（安全门槛 M0 / 红线 20）：admin、运维 API、`/internal/v1` 等内部接口默认绑定 **loopback / 内网**，不对公网暴露；仅客户端端口（Netty）与受控 `/api/v1` 按部署需对外。装配配置显式指定绑定地址，禁止默认 `0.0.0.0`。
+**网络平面收敛**（安全门槛 M0 / 红线 20）：admin、运维 API、`/internal/vN` 等内部接口默认绑定 **loopback / 内网**，不对公网暴露；仅客户端端口（Netty）与受控 `/api/vN` 按部署需对外。装配配置显式指定绑定地址，禁止默认 `0.0.0.0`。
 
 ### 4.3 拓扑
 
@@ -223,7 +220,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 | **coordinator 机器宕机**（M6 跨机） | 整服跨频道通信/定位中断，直至该机恢复或人工迁移（coordinator 地址静态配置，故障转移会让频道指向死地址） | 跨频道功能 | 单频道可玩（频道本地逻辑不依赖 coordinator） | 人工介入（机器级 HA 见「待办/后续增强」） |
 | **频道进程崩** | 该频道玩家掉线；在途跨频道消息由 coordinator 队列重投（发往已离线玩家的随玩家离线丢弃，可接受） | 该频道在线状态 | 其他频道不受影响（故障隔离） | 频道重启 |
 | **网络分区**（频道 ↔ coordinator 失联） | 定位表过期，跨频道消息停摆；频道本地逻辑继续（无 split-brain——共享状态单一属主、频道不持副本） | 跨频道功能（降级为单频道可玩） | 一致性（无数据发散） | 分区恢复即自愈 |
-### 4.6 分进程组件全图（配置中心 / 注册中心 / 插件 / AI / HTTP 归属）
+### 4.6 分进程组件全图（配置中心 / 注册中心 / 插件 / HTTP 归属）
 
 #### 4.6.1 概念纠正：不是所有东西都是"进程"
 
@@ -232,20 +229,19 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 | 组件 | 是不是进程 | 真相 |
 |---|---|---|
 | coordinator / channel | **是** | 分进程的意义所在，独立成进程 |
-| login / admin / http / ai | 可选 | 低频、无状态，可并进管理进程 |
+| login / admin / http | 可选 | 低频、无状态，可并进管理进程 |
 | **插件** | 不是 | 是"模块"，按部署作用域分发进对应进程（见 7.2） |
-| **AI** | 不是 | 平台级模块，放管理进程 |
 | **注册中心** | 不是 | coordinator 内建服务，不独立成组件 |
 | **配置中心** | 不是 | DB 真值 + 版本号广播，管理进程提供服务 |
 | **消息总线** | 不是 | 进程内 EventBus / 进程间 Netty 帧，同一接口 |
 
-**决定归属的判据是"部署作用域"**：频道逻辑（战斗/任务）就近进频道进程，平台逻辑（AI/API）进管理进程，共享状态属主（公会/排行）在哪、其插件就进哪。
+**决定归属的判据是"部署作用域"**：频道逻辑（战斗/任务）就近进频道进程，平台逻辑（API/管理插件）进管理进程，共享状态属主（公会/排行）在哪、其插件就进哪。
 
 #### 4.6.2 完整拓扑（split 形态：频道隔离，管理侧合一）
 
 ```
 ┌───────────────────────────────────────────────────────┐
-│ 管理进程（coordinator + login + admin + http + ai）       │
+│ 管理进程（coordinator + login + admin + http）            │
 │                                                        │
 │  ├─ coordinator：定位表 / 共享状态代理 / 消息路由          │
 │  ├─ 内建 注册中心：channel 启动上报 host:port，心跳维护    │
@@ -253,8 +249,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 │  ├─ login：账号校验 / 选角                               │
 │  ├─ admin：Web 控制台（替代 JavaFX）                      │
 │  ├─ http-api：/internal/v1(官网) + /api/v1(第三方)       │
-│  ├─ ai：LangChain4j Agent（平台插件）                     │
-│  └─ 平台插件（AI / API 工具）                             │
+│  └─ 平台插件（API 工具 / 外部 Harness 适配）              │
 └─────────┬──────────────────────┬────────────────────────┘
           │ TCP 长连接（注册+心跳+消息）  │
      ┌────┴──────┐            ┌─────┴─────┐
@@ -265,7 +260,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
      └───────────┘            └───────────┘
 ```
 
-**进程总数 = `1 + 分片数`**（管理进程 1 个 + 每频道/每大区 1 个）。20 频道 → 21 个进程。login / admin / http / ai 全部并入管理进程——低频、无状态、只经 service 接口，为隔离它们单独付 JVM 常驻内存不值。
+**进程总数 = `1 + 分片数`**（管理进程 1 个 + 每频道/每大区 1 个）。20 频道 → 21 个进程。login / admin / http 全部并入管理进程——低频、无状态、只经 service 接口，为隔离它们单独付 JVM 常驻内存不值。
 
 **"何时才值得分"判据**：单机多进程的价值是**故障隔离，不是性能**（4.5 已述）。20 频道在单机 16C32G 上若用 split 档 = 20 份 JVM 常驻开销；没有"一个频道崩了不能连累全服"的诉求，就 `--profile=single` 单进程抗满（现状即如此且没问题）。分进程留给**多机 / 多区**或**明确隔离诉求**时才划算。
 
@@ -275,8 +270,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 |---|---|---|
 | 频道插件（战斗/任务） | **频道进程** | 游戏逻辑，同进程就近执行 |
 | 大区插件（公会/事件） | **频道进程**（或管理进程） | 按数据属主定——公会状态真值在 coordinator 就进管理进程 |
-| 平台插件（AI/API） | **管理进程** | 平台级，服务所有人 |
-| **AI Agent + Tool** | **管理进程** | 只经 application service 接口，与频道内存隔离 |
+| 平台插件（API/外部 Harness 适配） | **管理进程** | 平台级，服务所有人 |
 | **第三方 HTTP（/api/v1）** | **管理进程** | 只读 DB + 经 service 接口，不能碰频道内存 |
 | 官网转调（/internal/v1） | **管理进程** | 同上 |
 
@@ -444,14 +438,14 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 
 | 特性 | 游戏服对应 |
 |---|---|
-| 贡献点（命令/菜单/视图/语言服务） | **贡献点 = PacketHandler / HTTP 路由 / 定时任务 / 事件监听 / Script 命名空间 / AI Tool / 游戏逻辑系统** |
+| 贡献点（命令/菜单/视图/语言服务） | **贡献点 = PacketHandler / HTTP 路由 / 定时任务 / 事件监听 / Script 命名空间 / 游戏逻辑系统** |
 | SDK 版本化 | **`plugin-api` 模块**，插件依赖它，版本变则 API 升 |
 | 隔离 | 插件 classloader 隔离 |
 
 ### 7.2 关键结论
 
 1. **插件系统 = 热重载系统**：同一套 classloader + 贡献点机制，不重复造。
-2. **部署作用域**：频道插件（战斗/任务）、大区插件（公会/事件）、平台插件（AI/API）。分发后插件按进程类型部署。
+2. **部署作用域**：频道插件（战斗/任务）、大区插件（公会/事件）、平台插件（API/Harness 适配）。分发后插件按进程类型部署。
 3. **信任边界 = 全权**：插件可访问一切数据，但**通过接口**操作（可替换层不得引用游戏对象具体类——见第三节）。
 
 ### 7.3 核心约束
@@ -462,22 +456,13 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 
 ---
 
-## 八、AI 集成
+## 八、外部 Agent 插件边界
 
-- LangChain4j `AiServices` 声明式 Agent + `@Tool` 注解，多工具调用靠模型原生 function calling 自动循环。
-- 流式 `TokenStream` + 工具调用原生合一。
-- 场景：AI 报表 / AI 数据统计 / 多工具调用 / 每日总结（`@Scheduled`）/ 玩家游戏内 `@gm` 值班入口。
-- 结构化输出：返回 POJO/Enum/JSON 自动解析；RAG 全套备查 WZ/游戏知识库。
-- **AI 工具不得直踩游戏内存对象**（同 HTTP 约束），只经 application service 接口。计费/记忆/配置落 SQLite（复用现有 Dao 设计；低配模式下 SQLite 本即主库）。
-- **唯一计费点在 AI 门面内部**：AI 入口有三条——能力面 `server.agent.investigate`、`/api/v1/ai/chat`、
-  游戏内 `@gm`。计费与准入下沉为 core 稳定契约 `AiGovernanceService`（`precheck` / `settle`），
-  由 `AiFacade.investigate` 统一调用，实现 `BillingAiGovernance` 在 http-api，缺实现时用
-  `NoopAiGovernanceService` 放行兜底（同 `ServerAgentService` / `AdminService` 的跨模块契约范式）。
-  **禁止在各入口自行接线计费**——早期 `/api/v1/ai/chat` 就因绕过能力面而完全不扣费；
-  入口侧只负责把额度拒绝映射成 429。
-- **模型标识统一用 descriptor**（`provider/modelName`）：倍率表 `model_rate.model_key`、
-  计费入参与将来的模型白名单共用同一口径，不得退回裸 modelName。
-- Agent 默认关闭；真实模型密钥只经环境变量注入。玩家入口只读本人数据，工具调用写权威审计；外部模型在独立线程池运行，不得阻塞 Netty/游戏 tick。
+- 核心仓库不再内置模型 SDK、Agent 编排、会话记忆、提示词或游戏内对话入口。
+- 未来 Agent 基于 DeepSeek Harness 套壳插件接入；插件只消费版本化公共 API 与插件 SPI。
+- 插件按最小 Scope 授权，所有 Tool 调用写权威审计；不得直踩游戏内存对象。
+- Harness 协议或模型能力升级不得修改任何已发布 API 契约；需要不兼容变化时新增主版本端点，未变化端点复用同一 Handler。版本兼容、退役和 OpenAPI 规则见 `docs/API-VERSIONING.md`。
+- 插件密钥只经环境变量或部署 secret 注入，不进入核心配置表和仓库。
 
 ---
 
@@ -503,7 +488,7 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 
 ### 9.2 逐组件 2C2G 判定
 
-逐组件判定（Netty 留 / MyBatis-Flex+SQLite 留 / Micronaut 留盯 / GraalVM JS 盯 / WAL 按需 / AI 按需 / 独立 coordinator 降级为进程内模块）见 2.1 选型表与第十节红线，不重复列表。
+逐组件判定（Netty 留 / MyBatis-Flex+SQLite 留 / Micronaut 留盯 / GraalVM JS 盯 / WAL 按需 / 独立 coordinator 降级为进程内模块）见 2.1 选型表与第十节红线，不重复列表。
 
 ### 9.3 CPU 与启动预算
 
@@ -542,7 +527,7 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 | **M0** | 骨架 + Micronaut + 多模块 + MyBatis-Flex 连 SQLite（低配默认）与 PG（大服）双验证 + 配置门面 + **自研迁移器**（替代 Flyway，社区版不支持 SQLite）+ **热更新地基（接口化/事件化/模块 classloader/RestartCoordinator 状态机）** + **状态/逻辑分离边界** + **2C2G 内存/启动预算基线** + **parity 测试基建** + **GraalVM CE for JDK 21 + GraalJS 全速验证** + **SQLite 100 人负载实测（写延迟/锁冲突/峰值内存）** + **增量 FLUSH 重开实测（秒级 + 不丢档）** | 能启动、连 SQLite、param_conf 热改、2C2G 跑通、GraalJS 峰值验证、WZ 文件缓存 |
 | **M1** | 协议 + Netty + HandlerRegistry + NetworkSession | 客户端登录、进图 |
 | **M2** | 游戏逻辑**重写**（状态/逻辑分离），参考项目作 parity 真值（录包回放 / 双跑对照） | 行为对齐参考项目 |
-| **M3** | HTTP 重做（/internal + /api）+ LangChain4j AI + **按实体渐进重载** | API 可调、AI 流式+工具可用、重载无复制 bug |
+| **M3** | HTTP 重做（/internal + /api）+ **按实体渐进重载** | API 可调、重载无复制 bug |
 | **M4** | 插件框架 + 热更新 L1-L4 全通 + **频道间三机制** | 插件可装卸、重开不丢档、悄悄话/CC 走三机制 |
 | **M5** | Web 控制台 + 迁移 + 上线切换 | 控制台、单库迁移、切换 |
 | **M6** | **分布式**（大区/频道独立进程、world-coordinator、CC 迁移、消息总线） | 多机部署、玩家换频道、升级滚动 |

@@ -28,7 +28,7 @@ import java.util.function.Function;
  * 插件经接口访问宿主服务（信任边界 = 全权但经接口）。
  *
  * <p>插件宿主依赖 TickScheduler（频道进程专属），故插件装配归 channel 侧
- * （架构 4.6.2：频道插件进频道进程；平台插件/AI 进管理进程，留 M6 后续扩展）。
+ * （架构 4.6.2：频道插件进频道进程；平台插件进管理进程，留 M6 后续扩展）。
  */
 @Factory
 @Requires(condition = ChannelProcessCondition.class)

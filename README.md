@@ -25,17 +25,18 @@ twinkle/
 
 ## 当前状态
 
-M0–M6 服务端里程碑已完成，当前持续扩展 `/api/v1` 能力面和 Web 运维控制台。
+M0–M6 服务端里程碑已完成，当前持续扩展版本化公共 API 和 Web 运维控制台。
 
 Web 控制台采用 React 19、Vite、Tailwind CSS v4 和 shadcn `radix-nova`，已经接入运行概览、
 频道、在线玩家、账号管理、角色权限、配置、运维操作、API Key、能力目录、审计日志和任务监控。账号管理支持
 模糊检索、状态筛选、分页、账号管控，以及角色属性、货币、背包、任务、技能和好友快照；API Key 支持
-签发、启停、轮换、吊销及 Scope 调整；`ai:use` 可作为 AI 调用总开关即时授予或收回。
-后台任务通过统一注册表提供有界执行历史、状态、耗时、失败摘要、调度启停和失败重试，
-现有 AI 每日总结是首个接入任务。
+签发、启停、轮换、吊销及 Scope 调整。后台任务通过统一注册表提供有界执行历史、状态、
+耗时、失败摘要、调度启停和失败重试。
 
 详细范围与遗留见 [控制台路线图](docs/in-progress/console-roadmap.md)，视觉与组件纪律见
 [Web 设计规范](docs/archived/design/design-system.md)。
+API 主版本、历史兼容、退役与自动 OpenAPI 文档规则见 [API 版本管理](docs/API-VERSIONING.md)。服务端编译后通过 `/docs/index.html` 提供 Swagger UI、通过 `/api-docs/**` 提供生成契约；内置自研 Agent 已删除；
+未来 Agent 仅通过 DeepSeek Harness 套壳插件接入。
 
 ## 本地验证
 

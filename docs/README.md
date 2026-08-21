@@ -17,7 +17,7 @@
 
 ## 当前分布
 
-- `planned/` — 待实施的设计（当前为空；积分计费系统设计已落地并移入 `archived/`）。
+- `planned/` — 待实施的设计（当前为空）。
 - `in-progress/` — 正在推进的路线图（Web 控制台路线图）。
 - `archived/` — 已完成的历史文档，按主题分子目录：
   - `archived/ops/` — 运维操作手册
@@ -27,3 +27,5 @@
 
 > `archived/` 仅用于追溯当时的决策与完成边界，其中保留的未勾选项不代表当前待办。
 > 当前任务只以 `planned/`、`in-progress/` 和根目录现行架构文档为准。
+
+跨版本 API 的选择性分叉、历史兼容、退役和自动 OpenAPI 文档规则见 [`API-VERSIONING.md`](API-VERSIONING.md)。

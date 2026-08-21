@@ -4,7 +4,7 @@ import io.micronaut.http.HttpStatus;
 
 import java.util.Map;
 
-/** 可安全映射到 twish Error Envelope 的预期协议异常。 */
+/** 可安全映射到公共 API Error Envelope 的预期协议异常。 */
 public final class ToolProtocolException extends RuntimeException {
 
     private final HttpStatus httpStatus;

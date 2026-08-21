@@ -1,5 +1,7 @@
 package org.gms.httpapi.admin;
 
+import org.gms.httpapi.version.ApiRoutes;
+
 import io.micronaut.core.async.publisher.Publishers;
 import io.micronaut.core.order.Ordered;
 import io.micronaut.http.HttpHeaders;
@@ -20,9 +22,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * {@code /admin/v1} 管理面强鉴权过滤器：管理员会话认证 → RBAC 授权 → 写操作 reason 校验 → 审计。
+ * 所有 {@code /admin/vN} 管理面共用的强鉴权过滤器：管理员会话认证 → RBAC 授权 → 写操作 reason 校验 → 审计。
  */
-@Filter("/admin/v1/**")
+@Filter(ApiRoutes.ADMIN_ROOT + "/**")
 public final class AdminAuthFilter implements HttpServerFilter, Ordered {
 
     public static final String PRINCIPAL_ATTRIBUTE = "twinkle.admin.principal";
@@ -140,8 +142,8 @@ public final class AdminAuthFilter implements HttpServerFilter, Ordered {
         if (path == null) {
             return "";
         }
-        String prefix = "/admin/v1/";
-        return path.startsWith(prefix) ? path.substring(prefix.length()) : path;
+        String relative = ApiRoutes.relativeToVersion(ApiRoutes.ADMIN_ROOT, path);
+        return relative.startsWith("/") ? relative.substring(1) : relative;
     }
 
     private static String requestId(HttpRequest<?> request) {

@@ -41,7 +41,7 @@ twinkle:
 
   # 服务器列表展示名（LoginServer 响应 SERVERLIST 用）
   server:
-    # twish 权限与 Cursor 绑定使用的稳定 ID；生产环境必须显式配置且不得随展示名变化。
+    # API 权限、审计与 Cursor 绑定使用的稳定 ID；生产环境必须显式配置且不得随展示名变化。
     id: ${TWINKLE_SERVER_ID:twinkle-local}
     name: ${TWINKLE_SERVER_NAME:twinkle}
     environment: ${TWINKLE_SERVER_ENVIRONMENT:development}
@@ -53,33 +53,10 @@ twinkle:
   script:
     path: ${TWINKLE_SCRIPT_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\scripts}
 
-  # ============== AI 模块（可选功能，2C2G 默认不装配） ==============
-  # 同 WAL 按需启用：需要时 -Dtwinkle.ai.enabled=true 显式开启。
-  # 默认关省内存/CPU（2C2G 红线 15/9.2）；只在管理进程装配（single/standalone/coordinator 角色）。
-  ai:
-    enabled: ${TWINKLE_AI_ENABLED:false}
-    # local-rule 仅用于无外网开发/测试；生产值班 GM 使用 openai-compatible 或 deepseek。
-    model:
-      provider: ${TWINKLE_AI_MODEL_PROVIDER:local-rule}
-      # DeepSeek 示例：https://api.deepseek.com/v1；Ollama：http://127.0.0.1:11434/v1
-      base-url: ${TWINKLE_LLM_BASE_URL:}
-      api-key: ${TWINKLE_LLM_API_KEY:}
-      name: ${TWINKLE_LLM_MODEL:}
-      temperature: ${TWINKLE_LLM_TEMPERATURE:0.1}
-      max-tokens: ${TWINKLE_LLM_MAX_TOKENS:1200}
-      timeout-seconds: ${TWINKLE_LLM_TIMEOUT_SECONDS:45}
-    player:
-      worker-threads: ${TWINKLE_AI_PLAYER_WORKER_THREADS:1}
-      cooldown-seconds: ${TWINKLE_AI_PLAYER_COOLDOWN_SECONDS:15}
-    memory:
-      # 每会话只保留短窗口，并限制内存会话总数，避免可选 Agent 破坏 2C2G 红线。
-      max-messages: ${TWINKLE_AI_MAX_MESSAGES:20}
-      max-conversations: ${TWINKLE_AI_MAX_CONVERSATIONS:100}
-
   # ============== 第三方 API 限流（架构 M3-1：/api/v1 Bucket4j，/internal 不限流） ==============
   http:
     api:
-      # twish 首次签发管理密钥的根凭据。必须由环境变量注入；留空时除 OpenAPI 外全部拒绝。
+      # 首次签发管理密钥的根凭据。必须由环境变量注入；留空时除 OpenAPI 外全部拒绝。
       # 建议仅首次签发 keys:manage key 时使用，随后从运行环境移除。
       bootstrap-key: ${TWINKLE_API_BOOTSTRAP_KEY:}
       # 短期分页 Cursor 的 HMAC 密钥；生产环境应显式配置以支持重启后继续分页。
@@ -109,3 +86,11 @@ micronaut:
   server:
     host: ${TWINKLE_HTTP_HOST:127.0.0.1}
     port: ${TWINKLE_HTTP_PORT:8080}
+  router:
+    static-resources:
+      openapi:
+        mapping: /api-docs/**
+        paths: classpath:META-INF/swagger
+      swagger-ui:
+        mapping: /docs/**
+        paths: classpath:META-INF/swagger/views/swagger-ui

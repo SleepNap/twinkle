@@ -570,11 +570,6 @@ function EditScopesDialog({
             </Label>
           ))}
         </fieldset>
-        <Alert>
-          <ShieldCheck />
-          <AlertTitle>{t("keys.aiPermission")}</AlertTitle>
-          <AlertDescription>{t("keys.aiPermissionDescription")}</AlertDescription>
-        </Alert>
         <DialogFooter>
           {!pending && <DialogClose asChild><Button variant="outline">{t("common.cancel")}</Button></DialogClose>}
           <Button onClick={onSubmit} disabled={pending || !draft || draft.scopes.length === 0}>

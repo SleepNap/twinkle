@@ -1,25 +1,16 @@
 package org.gms.httpapi.execution;
 
-import io.micronaut.http.HttpStatus;
 import lombok.extern.log4j.Log4j2;
 import org.gms.data.entity.ToolExecutionAudit;
 import org.gms.data.repo.ToolExecutionAuditRepository;
 import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.capability.ToolCatalogService;
-import org.gms.httpapi.contract.ApiContract;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
-import org.gms.service.agent.AiGovernanceException;
-import org.gms.service.agent.ServerAgentService;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +29,7 @@ public final class ToolExecutionService {
     private static final Set<String> CLIENT_CONTEXT_FIELDS = Set.of(
             "locale", "source", "intentSummary");
     private static final Set<String> CLIENT_SOURCES = Set.of(
-            "desktop", "web", "server_agent", "local_im", "server_im");
+            "desktop", "web", "plugin", "local_im", "server_im");
 
     private final ToolCatalogService catalogService;
     private final ServerHealthTool healthTool;
@@ -48,7 +39,6 @@ public final class ToolExecutionService {
     private final ApiRateLimiter rateLimiter;
     private final Metrics metrics;
     private final ServerIdentity serverIdentity;
-    private final ServerAgentService serverAgent;
     private final Object[] executionLocks = new Object[64];
     private final Map<String, StoredExecution> byExecutionId = new ConcurrentHashMap<>();
     private final Map<String, String> executionIdByDedupeKey = new ConcurrentHashMap<>();
@@ -58,7 +48,7 @@ public final class ToolExecutionService {
                                 PlayerInventoryTool inventoryTool,
                                 ToolExecutionAuditRepository auditRepository,
                                 ApiRateLimiter rateLimiter, Metrics metrics,
-                                ServerIdentity serverIdentity, ServerAgentService serverAgent) {
+                                ServerIdentity serverIdentity) {
         this.catalogService = catalogService;
         this.healthTool = healthTool;
         this.onlineTool = onlineTool;
@@ -67,19 +57,19 @@ public final class ToolExecutionService {
         this.rateLimiter = rateLimiter;
         this.metrics = metrics;
         this.serverIdentity = serverIdentity;
-        this.serverAgent = serverAgent;
         for (int index = 0; index < executionLocks.length; index++) {
             executionLocks[index] = new Object();
         }
     }
 
     public ExecutionResult execute(ApiPrincipal principal, Map<String, Object> body,
-                                   String fallbackRequestId) {
+                                   String fallbackRequestId, String contractVersion) {
         pruneExpiredExecutions();
-        ExecutionCall call = parse(body, fallbackRequestId);
+        ExecutionCall call = parse(body, fallbackRequestId, contractVersion);
         String dedupeKey = principal.subjectId() + "\n" + call.requestId() + "\n" + call.toolId();
         synchronized (executionLocks[Math.floorMod(dedupeKey.hashCode(), executionLocks.length)]) {
-        Optional<Map<String, Object>> visibleDetail = catalogService.detail(principal, call.toolId());
+        Optional<ToolCatalogService.ToolSpec> visibleDetail = catalogService.detail(
+                principal, call.toolId());
         if (visibleDetail.isEmpty()) {
             metrics.increment("twinkle.tool.rejected", "code", "resource_not_found");
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.NOT_FOUND,
@@ -91,10 +81,9 @@ public final class ToolExecutionService {
                 .orElseThrow(() -> new ToolProtocolException(io.micronaut.http.HttpStatus.BAD_REQUEST,
                         "invalid_input", I18n.message("error.execution.unsupported_tool_version"), false, null, call.requestId(),
                         Map.of("supportedVersion", ToolCatalogService.TOOL_VERSION)));
-        if (!spec.available() || ((ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())
-                || ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) && !serverAgent.available())) {
+        if (!spec.available()) {
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "tool_unavailable", I18n.message("error.execution.agent_disabled"), true, null,
+                    "tool_unavailable", I18n.message("error.execution.tool_unavailable"), true, null,
                     call.requestId(), Map.of());
         }
         if ((ToolCatalogService.ONLINE_TOOL.equals(call.toolId())
@@ -139,10 +128,6 @@ public final class ToolExecutionService {
                 output = onlineTool.page(principal, call.input(), call.requestId(), executionId);
             } else if (ToolCatalogService.INVENTORY_TOOL.equals(call.toolId())) {
                 output = inventoryTool.read(call.input(), call.requestId(), executionId);
-            } else if (ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())) {
-                output = investigateWithAgent(principal, call);
-            } else if (ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) {
-                output = closeAgentConversation(principal, call);
             } else {
                 throw new ToolProtocolException(io.micronaut.http.HttpStatus.NOT_FOUND,
                         "resource_not_found", I18n.message("error.execution.tool_not_found_generic"), false, executionId,
@@ -156,13 +141,13 @@ public final class ToolExecutionService {
                     "failed", e.getClass().getSimpleName());
             metrics.increment("twinkle.tool.calls", "tool", call.toolId(), "result", "failed");
             throw new ToolProtocolException(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "tool_unavailable", I18n.message("error.execution.agent_investigation_failed"), true, executionId,
+                    "tool_unavailable", I18n.message("error.execution.tool_failed"), true, executionId,
                     call.requestId(), Map.of());
         }
 
         Instant completedAt = Instant.now();
-        Map<String, Object> result = resultEnvelope(call.requestId(), executionId, output,
-                auditRef, completedAt);
+        Map<String, Object> result = resultEnvelope(contractVersion, call.requestId(), executionId,
+                output, auditRef, completedAt);
         insertAudit(auditRef, executionId, call, principal, spec, startedAt, completedAt,
                 "succeeded", null);
         byExecutionId.put(executionId, new StoredExecution(principal.subjectId(),
@@ -184,7 +169,8 @@ public final class ToolExecutionService {
         return Optional.of(stored.result());
     }
 
-    private ExecutionCall parse(Map<String, Object> body, String fallbackRequestId) {
+    private ExecutionCall parse(Map<String, Object> body, String fallbackRequestId,
+                                String expectedContractVersion) {
         if (body == null) {
             throw invalidInput(I18n.message("error.execution.body_not_object"), fallbackRequestId, null);
         }
@@ -192,7 +178,7 @@ public final class ToolExecutionService {
                 I18n.message("error.validation.envelope_label"));
         String contractVersion = requiredString(body.get("contractVersion"),
                 "contractVersion", 16, fallbackRequestId, null);
-        if (!ApiContract.VERSION.equals(contractVersion)) {
+        if (!expectedContractVersion.equals(contractVersion)) {
             throw invalidInput(I18n.message("error.execution.unsupported_contract_version"), fallbackRequestId, null);
         }
         String requestId = requiredString(body.get("requestId"), "requestId", 128,
@@ -269,95 +255,18 @@ public final class ToolExecutionService {
             Object pageSize = call.input().getOrDefault("pageSize", 100);
             return "pageSize=" + pageSize + ",cursorPresent=" + (call.input().get("cursor") != null);
         }
-        if (ToolCatalogService.AGENT_INVESTIGATE_TOOL.equals(call.toolId())) {
-            String message = String.valueOf(call.input().getOrDefault("message", ""));
-            return "messageHash=" + shortHash(message) + ",messageLength=" + message.length()
-                    + ",conversationIdPresent=" + (call.input().get("conversationId") != null);
-        }
-        if (ToolCatalogService.AGENT_CLOSE_TOOL.equals(call.toolId())) {
-            return "conversationIdHash=" + shortHash(String.valueOf(call.input().get("conversationId")));
-        }
         if (ToolCatalogService.INVENTORY_TOOL.equals(call.toolId())) {
             return "characterId=" + call.input().get("characterId");
         }
         return "none";
     }
 
-    private Map<String, Object> investigateWithAgent(ApiPrincipal principal, ExecutionCall call) {
-        rejectExtraFields(call.input(), Set.of("conversationId", "message"),
-                call.requestId(), null, "server.agent.investigate input");
-        String message = requiredString(call.input().get("message"), "message", 2000,
-                call.requestId(), null).trim();
-        String conversationId = optionalString(call.input().get("conversationId"),
-                "conversationId", 64, call.requestId(), null);
-        if (conversationId == null || conversationId.isBlank()) {
-            conversationId = "twish-" + UUID.randomUUID().toString().replace("-", "");
-        }
-        if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
-            throw invalidInput(I18n.message("error.execution.conversation_id_invalid"), call.requestId(), null);
-        }
-        // 计费由 AI 门面内部的唯一计费点完成（core AiGovernanceService 契约），此处只把
-        // 被拒绝的额度异常映射回 429，不再重复扣费——否则同一次调用会被扣两次。
-        ServerAgentService.InvestigationResult reply;
-        try {
-            reply = serverAgent.investigate(
-                    new ServerAgentService.InvestigationRequest(conversationId, message,
-                            call.requestId(), principal.subjectId(), principal.credentialId(),
-                            "twish-" + call.source()));
-        } catch (AiGovernanceException e) {
-            throw governanceError(e, call.requestId());
-        }
-        return Map.of(
-                "conversationId", reply.conversationId(),
-                "reply", reply.reply(),
-                "model", reply.model(),
-                "executedTools", reply.executedTools(),
-                "auditRefs", reply.auditRefs(),
-                "inputTokens", reply.inputTokens(),
-                "outputTokens", reply.outputTokens());
-    }
-
-    private Map<String, Object> closeAgentConversation(ApiPrincipal principal, ExecutionCall call) {
-        rejectExtraFields(call.input(), Set.of("conversationId"), call.requestId(), null,
-                "server.agent.conversation.close input");
-        String conversationId = requiredString(call.input().get("conversationId"),
-                "conversationId", 64, call.requestId(), null);
-        if (!conversationId.matches("[A-Za-z0-9._:-]{1,64}")) {
-            throw invalidInput(I18n.message("error.execution.conversation_id_invalid"), call.requestId(), null);
-        }
-        return Map.of("conversationId", conversationId,
-                "evicted", serverAgent.closeConversation(conversationId, principal.subjectId()));
-    }
-
-    /**
-     * 治理拒绝 → HTTP 状态：策略类不可重试（重试多少次都不会通过），额度类与整体关闭可重试。
-     */
-    private static ToolProtocolException governanceError(AiGovernanceException e, String requestId) {
-        HttpStatus status = switch (e.kind()) {
-            case POLICY -> HttpStatus.FORBIDDEN;
-            case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
-            case QUOTA -> HttpStatus.TOO_MANY_REQUESTS;
-        };
-        boolean retryable = e.kind() != AiGovernanceException.Kind.POLICY;
-        return new ToolProtocolException(status, e.code(), e.getMessage(), retryable,
-                null, requestId, Map.of());
-    }
-
-    private static String shortHash(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest, 0, 12);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(I18n.message("error.crypto.algorithm_missing", "SHA-256"), e);
-        }
-    }
-
-    private static Map<String, Object> resultEnvelope(String requestId, String executionId,
+    private static Map<String, Object> resultEnvelope(String contractVersion, String requestId,
+                                                       String executionId,
                                                        Map<String, Object> output, String auditRef,
                                                        Instant completedAt) {
         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
-        result.put("contractVersion", ApiContract.VERSION);
+        result.put("contractVersion", contractVersion);
         result.put("executionId", executionId);
         result.put("requestId", requestId);
         result.put("status", "succeeded");

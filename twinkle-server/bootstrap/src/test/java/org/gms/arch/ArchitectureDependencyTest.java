@@ -4,9 +4,11 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import io.micronaut.http.annotation.Controller;
 import org.junit.jupiter.api.Test;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 
 /**
  * 架构测试：依赖单向无环 + 可替换层纪律（架构第三节 / 红线 11、12）。
@@ -18,7 +20,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  *       {@code org.gms.domain.game}（架构 4.1：管理侧禁止直踩游戏内存）。</li>
  *   <li><b>domain-game 不得依赖管理侧</b>：数据模型单向依赖核心底座，不反向。</li>
  *   <li><b>可替换层不得引用稳定层具体类</b>：可重载逻辑必须经接口访问稳定层（红线 11，防换 classloader CCE）。</li>
- *   <li><b>管理侧 HTTP/AI 不得依赖协议栈</b>：不碰 net-netty / net-packet（架构：管理侧经 application service 交互）。</li>
+ *   <li><b>管理侧 HTTP 不得依赖协议栈</b>：不碰 net-netty / net-packet（架构：管理侧经 application service 交互）。</li>
  * </ol>
  */
 class ArchitectureDependencyTest {
@@ -38,7 +40,7 @@ class ArchitectureDependencyTest {
 
     private static final String[] MANAGEMENT_SIDE_PACKAGES = {
             "org.gms.coordinator..", "org.gms.login..", "org.gms.admin..",
-            "org.gms.httpapi..", "org.gms.ai.."
+            "org.gms.httpapi.."
     };
 
     // ---- 规则 1：管理侧不得依赖 domain-game ----
@@ -98,12 +100,12 @@ class ArchitectureDependencyTest {
         rule.check(ALL_CLASSES);
     }
 
-    // ---- 规则 4：管理侧 HTTP/AI 不得依赖协议栈 ----
+    // ---- 规则 4：管理侧 HTTP 不得依赖协议栈 ----
     // login 例外：login 本身就是 v83 客户端登录协议处理器（读包/回包），必然依赖
-    // net-packet；禁的是 HTTP/AI 这类管理 API 直踩协议栈（架构：管理侧经 application service 交互）。
+    // net-packet；禁的是 HTTP 管理 API 直踩协议栈（架构：管理侧经 application service 交互）。
     private static final String[] HTTP_AI_PACKAGES = {
             "org.gms.coordinator..", "org.gms.admin..",
-            "org.gms.httpapi..", "org.gms.ai.."
+            "org.gms.httpapi.."
     };
 
     @Test
@@ -126,7 +128,7 @@ class ArchitectureDependencyTest {
     private static final String[] UPPER_PACKAGES = {
             "org.gms.domain.game..", "org.gms.domain.script..", "org.gms.wz..",
             "org.gms.channel..", "org.gms.coordinator..", "org.gms.login..",
-            "org.gms.admin..", "org.gms.httpapi..", "org.gms.ai..", "org.gms.bootstrap.."
+            "org.gms.admin..", "org.gms.httpapi..", "org.gms.bootstrap.."
     };
 
     @Test
@@ -134,6 +136,66 @@ class ArchitectureDependencyTest {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage(BASE_PACKAGES)
                 .should().dependOnClassesThat().resideInAnyPackage(UPPER_PACKAGES);
+        rule.check(ALL_CLASSES);
+    }
+
+    /** HTTP 入口必须显式归属主版本，禁止恢复无版本的 controller 平铺包。 */
+    @Test
+    void httpControllersMustLiveInVersionedEntrypointPackages() {
+        ArchRule rule = classes()
+                .that().areAnnotatedWith(Controller.class)
+                .and().resideInAPackage("org.gms.httpapi..")
+                .should().resideInAnyPackage(
+                        "org.gms.httpapi.api.v*.controller..",
+                        "org.gms.httpapi.api.stable.controller..",
+                        "org.gms.httpapi.admin.v*.controller..",
+                        "org.gms.httpapi.admin.stable.controller..",
+                        "org.gms.httpapi.internal.v*.controller..",
+                        "org.gms.httpapi.internal.stable.controller..");
+        rule.check(ALL_CLASSES);
+    }
+
+    /** 公共传输层只能依赖应用投影，不得把数据库实体或仓库直接变成版本契约。 */
+    @Test
+    void publicApiControllersMustNotDependOnPersistenceLayer() {
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage(
+                        "org.gms.httpapi.api.v*.controller..",
+                        "org.gms.httpapi.api.stable.controller..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.gms.data.entity..", "org.gms.data.repo..");
+        rule.check(ALL_CLASSES);
+    }
+
+    /** 版本 DTO 只描述线上契约，不得反向绑定应用服务或持久化实现。 */
+    @Test
+    void publicApiDtosMustRemainTransportOnly() {
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage(
+                        "org.gms.httpapi.api.v*.dto..",
+                        "org.gms.httpapi.api.stable.dto..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.gms.httpapi.application..",
+                        "org.gms.httpapi.capability..",
+                        "org.gms.httpapi.execution..",
+                        "org.gms.data.entity..",
+                        "org.gms.data.repo..");
+        rule.check(ALL_CLASSES);
+    }
+
+    /** 可复用的应用/能力/执行层不得依赖某个 HTTP 主版本。 */
+    @Test
+    void versionNeutralHttpServicesMustNotDependOnVersionContracts() {
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage(
+                        "org.gms.httpapi.application..",
+                        "org.gms.httpapi.capability..",
+                        "org.gms.httpapi.execution..",
+                        "org.gms.httpapi.identity..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.gms.httpapi.api.v*..",
+                        "org.gms.httpapi.admin.v*..",
+                        "org.gms.httpapi.internal.v*..");
         rule.check(ALL_CLASSES);
     }
 }

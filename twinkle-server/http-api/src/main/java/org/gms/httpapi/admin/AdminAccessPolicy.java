@@ -1,49 +1,48 @@
 package org.gms.httpapi.admin;
 
 import io.micronaut.http.HttpMethod;
+import org.gms.httpapi.version.ApiRoutes;
 
-/** 将 {@code /admin/v1} 稳定 URL 契约映射到最小权限点。 */
+/** 将各 {@code /admin/vN} 稳定 URL 契约映射到最小权限点。 */
 public final class AdminAccessPolicy {
 
     public Policy resolve(HttpMethod method, String path) {
-        if ("/admin/v1/auth/login".equals(path)) {
+        String relativePath = ApiRoutes.relativeToVersion(ApiRoutes.ADMIN_ROOT, path);
+        if ("/auth/login".equals(relativePath)) {
             return new Policy(true, "");
         }
         // auth 自身端点（logout/me）只需已认证，无额外权限。
-        if (path.startsWith("/admin/v1/auth/")) {
+        if (relativePath.startsWith("/auth/")) {
             return new Policy(false, "");
         }
         if (method != HttpMethod.GET && method != HttpMethod.HEAD) {
-            if ("/admin/v1/config".equals(path)) {
+            if ("/config".equals(relativePath)) {
                 return new Policy(false, AdminPermission.CONFIG_WRITE);
             }
-            if ("/admin/v1/kick".equals(path)) {
+            if ("/kick".equals(relativePath)) {
                 return new Policy(false, AdminPermission.PLAYER_KICK);
             }
-            if ("/admin/v1/reload/logic".equals(path)) {
+            if ("/reload/logic".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RELOAD_LOGIC);
             }
-            if ("/admin/v1/reload/scripts".equals(path)) {
+            if ("/reload/scripts".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RELOAD_SCRIPTS);
             }
-            if ("/admin/v1/restart".equals(path)) {
+            if ("/restart".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RESTART);
             }
-            if (path.startsWith("/admin/v1/tasks") || path.startsWith("/admin/v1/schedules")) {
+            if (relativePath.startsWith("/tasks")
+                    || relativePath.startsWith("/schedules")) {
                 return new Policy(false, AdminPermission.TASK_MANAGE);
             }
-            if (path.startsWith("/admin/v1/billing")) {
+            if (relativePath.startsWith("/billing")) {
                 return new Policy(false, AdminPermission.BILLING_MANAGE);
             }
-            // 只拦写操作；GET /admin/v1/ai/status 与 /usage 落末尾的 admin:read。
-            if (path.startsWith("/admin/v1/ai")) {
-                return new Policy(false, AdminPermission.AI_MANAGE);
-            }
-            if (path.startsWith("/admin/v1/roles")
-                    || (path.startsWith("/admin/v1/accounts/") && path.endsWith("/roles"))) {
+            if (relativePath.startsWith("/roles")
+                    || (relativePath.startsWith("/accounts/") && relativePath.endsWith("/roles"))) {
                 return new Policy(false, AdminPermission.ROLE_MANAGE);
             }
-            if (path.startsWith("/admin/v1/accounts")) {
+            if (relativePath.startsWith("/accounts")) {
                 return new Policy(false, AdminPermission.ACCOUNT_MANAGE);
             }
         }
