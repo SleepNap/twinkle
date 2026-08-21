@@ -14,7 +14,7 @@ import org.gms.hotreload.versioned.VersionGate;
  */
 public final class CombatSystem {
 
-    /** 未装备武器的默认物理攻击力（v83 徒手 watk 基数）。 */
+    /** 未装备武器的默认物理攻击力（v83 徒手 wAtk 基数）。 */
     public static final int BARE_HAND_WATK = 1;
 
     private final VersionGate versionGate;
@@ -28,14 +28,14 @@ public final class CombatSystem {
      *
      * @param attacker 攻击方（经 spi 接口）
      * @param target   目标怪物（稳定层数据对象）
-     * @param watk     武器攻击力（装备系统落地前由调用方给；徒手用 {@link #BARE_HAND_WATK}）
+     * @param wAtk     武器攻击力（装备系统落地前由调用方给；徒手用 {@link #BARE_HAND_WATK}）
      */
-    public DamageResult physicalAttack(CharacterState attacker, MapleMonster target, int watk) {
+    public DamageResult physicalAttack(CharacterState attacker, MapleMonster target, int wAtk) {
         if (versionGate.decide(attacker) != VersionDecision.ALLOW) {
             return DamageResult.blocked();
         }
         int damage = DamageCalculator.physicalDamage(
-                attacker.getStr(), attacker.getDex(), watk, 1.0, target.getData().getPdd());
+                attacker.getStrStat(), attacker.getDexStat(), wAtk, 1.0, target.getData().getPdd());
         target.takeDamage(damage);
         return new DamageResult(damage, target.isAlive());
     }

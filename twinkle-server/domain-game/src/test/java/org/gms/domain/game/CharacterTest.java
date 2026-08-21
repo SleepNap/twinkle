@@ -21,9 +21,9 @@ class CharacterTest {
         Character c = new Character(1);
 
         assertThat(c.getLevel()).isEqualTo(1);
-        assertThat(c.getStr()).isEqualTo((short) 12);
-        assertThat(c.getDex()).isEqualTo((short) 5);
-        assertThat(c.getLuk()).isEqualTo((short) 4);
+        assertThat(c.getStrStat()).isEqualTo((short) 12);
+        assertThat(c.getDexStat()).isEqualTo((short) 5);
+        assertThat(c.getLukStat()).isEqualTo((short) 4);
         assertThat(c.getHp()).isEqualTo(50);
         assertThat(c.getMaxHp()).isEqualTo(50);
         assertThat(c.getMp()).isEqualTo(5);

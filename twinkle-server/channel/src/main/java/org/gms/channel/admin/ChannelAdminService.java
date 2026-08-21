@@ -134,9 +134,9 @@ public final class ChannelAdminService implements AdminService {
         if (item instanceof Equip equip) {
             itemType = "equip";
             equipView = new EquipView(
-                    equip.getUpgradeSlots(), equip.getLevel(), equip.getStr(), equip.getDex(),
-                    equip.getIntStat(), equip.getLuk(), equip.getHp(), equip.getMp(), equip.getWatk(),
-                    equip.getMatk(), equip.getWdef(), equip.getMdef(), equip.getAcc(), equip.getAvoid(),
+                    equip.getUpgradeSlots(), equip.getLevel(), equip.getStrStat(), equip.getDexStat(),
+                    equip.getIntStat(), equip.getLukStat(), equip.getHp(), equip.getMp(), equip.getWAtk(),
+                    equip.getMAtk(), equip.getWDef(), equip.getMDef(), equip.getAcc(), equip.getAvoid(),
                     equip.getHands(), equip.getSpeed(), equip.getJump(), equip.getVicious(),
                     equip.getItemLevel(), equip.getItemExp(), equip.getRingId());
         } else if (item instanceof PetItem pet) {

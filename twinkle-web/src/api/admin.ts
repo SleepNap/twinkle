@@ -139,10 +139,10 @@ export interface AdminCharacterProfile {
   maxHp: number
   mp: number
   maxMp: number
-  str: number
-  dex: number
-  int: number
-  luk: number
+  strStat: number
+  dexStat: number
+  intStat: number
+  lukStat: number
   ap: number
   sp: string
   fame: number
@@ -180,14 +180,14 @@ export interface AdminInventoryItem {
   upgradeSlots: number
   itemLevel: number
   itemExp: number
-  str: number
-  dex: number
-  int: number
-  luk: number
-  watk: number
-  matk: number
-  wdef: number
-  mdef: number
+  strStat: number
+  dexStat: number
+  intStat: number
+  lukStat: number
+  wAtk: number
+  mAtk: number
+  wDef: number
+  mDef: number
   petName: string
   petLevel: number
 }

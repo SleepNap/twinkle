@@ -94,10 +94,10 @@ class LoginPacketFactoryTest {
         c.setHair(30000);
         c.setLevel(10);
         c.setJob(0);
-        c.setStr((short) 4);
-        c.setDex((short) 5);
+        c.setStrStat((short) 4);
+        c.setDexStat((short) 5);
         c.setIntStat((short) 4);
-        c.setLuk((short) 4);
+        c.setLukStat((short) 4);
         c.setHp((short) 50);
         c.setMp((short) 5);
         c.setMaxHp((short) 50);

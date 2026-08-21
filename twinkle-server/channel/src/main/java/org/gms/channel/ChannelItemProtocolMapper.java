@@ -24,9 +24,9 @@ public final class ChannelItemProtocolMapper {
         if (item instanceof Equip equip) {
             itemType = 1;
             equipStats = new V83EquipStats(
-                    equip.getUpgradeSlots(), equip.getLevel(), equip.getStr(), equip.getDex(), equip.getIntStat(),
-                    equip.getLuk(), equip.getHp(), equip.getMp(), equip.getWatk(), equip.getMatk(), equip.getWdef(),
-                    equip.getMdef(), equip.getAcc(), equip.getAvoid(), equip.getHands(), equip.getSpeed(),
+                    equip.getUpgradeSlots(), equip.getLevel(), equip.getStrStat(), equip.getDexStat(), equip.getIntStat(),
+                    equip.getLukStat(), equip.getHp(), equip.getMp(), equip.getWAtk(), equip.getMAtk(), equip.getWDef(),
+                    equip.getMDef(), equip.getAcc(), equip.getAvoid(), equip.getHands(), equip.getSpeed(),
                     equip.getJump(), equip.getVicious(), equip.getItemLevel(), equip.getItemExp());
         } else if (item instanceof PetItem pet) {
             petStats = new V83PetStats(

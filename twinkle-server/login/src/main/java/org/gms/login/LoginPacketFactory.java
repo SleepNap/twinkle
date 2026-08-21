@@ -258,7 +258,7 @@ public final class LoginPacketFactory {
     private static V83CharacterStats toProtocolStats(Character c) {
         return new V83CharacterStats(
                 c.getId().intValue(), c.getName(), c.getGender(), c.getSkinColor(), c.getFace(), c.getHair(),
-                c.getLevel(), c.getJob(), c.getStr(), c.getDex(), c.getIntStat(), c.getLuk(),
+                c.getLevel(), c.getJob(), c.getStrStat(), c.getDexStat(), c.getIntStat(), c.getLukStat(),
                 c.getHp(), c.getMaxHp(), c.getMp(), c.getMaxMp(), c.getAp(), c.getSp(),
                 c.getExp(), c.getFame(), c.getGachaExp(), c.getMap(), c.getSpawnPoint());
     }

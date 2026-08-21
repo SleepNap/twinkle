@@ -11,13 +11,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ItemTest {
 
     @Test
-    @DisplayName("新建物品默认数量 1")
+    @DisplayName("新建物品默认数量 1 且永不过期")
     void newItemDefaultsQuantityToOne() {
         Item item = new Item(2000000);
 
         assertThat(item.getId()).isEqualTo(2000000);
         assertThat(item.getQuantity()).isEqualTo((short) 1);
         assertThat(item.getPosition()).isEqualTo((short) 0);
+        assertThat(item.getExpiration()).isEqualTo(-1);
     }
 
     @Test
@@ -44,18 +45,18 @@ class ItemTest {
     void equipCopyCarriesEquipFields() {
         Equip equip = new Equip(1302000);
         equip.setUpgradeSlots((byte) 5);
-        equip.setWatk((short) 37);
-        equip.setStr((short) 4);
+        equip.setWAtk((short) 37);
+        equip.setStrStat((short) 4);
         equip.setPosition((short) 1);
 
         Equip copy = equip.copy();
-        copy.setWatk((short) 10);
+        copy.setWAtk((short) 10);
 
         assertThat(copy.getUpgradeSlots()).isEqualTo((byte) 5);
-        assertThat(copy.getStr()).isEqualTo((short) 4);
+        assertThat(copy.getStrStat()).isEqualTo((short) 4);
         assertThat(copy.getId()).isEqualTo(1302000);
-        assertThat(equip.getWatk()).isEqualTo((short) 37); // 原物不受副本修改影响
-        assertThat(copy.getWatk()).isEqualTo((short) 10);
+        assertThat(equip.getWAtk()).isEqualTo((short) 37); // 原物不受副本修改影响
+        assertThat(copy.getWAtk()).isEqualTo((short) 10);
     }
 
     @Test

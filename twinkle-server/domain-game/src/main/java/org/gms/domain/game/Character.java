@@ -48,9 +48,9 @@ public class Character implements CharacterState {
     private int level;
     private long exp;
     private long gachaExp;
-    private short str;
-    private short dex;
-    private short luk;
+    private short strStat;
+    private short dexStat;
+    private short lukStat;
     private short intStat;
     private int hp;
     private int mp;
@@ -255,9 +255,9 @@ public class Character implements CharacterState {
         // v83 新角色默认值
         this.level = 1;
         this.exp = 0;
-        this.str = 12;
-        this.dex = 5;
-        this.luk = 4;
+        this.strStat = 12;
+        this.dexStat = 5;
+        this.lukStat = 4;
         this.intStat = 4;
         this.hp = 50;
         this.mp = 5;
@@ -658,9 +658,9 @@ public class Character implements CharacterState {
         TradeItemSnapshot.PetSnapshot pet = null;
         if (item instanceof Equip value) {
             equip = new TradeItemSnapshot.EquipSnapshot(
-                    value.getUpgradeSlots(), value.getLevel(), value.getStr(), value.getDex(),
-                    value.getIntStat(), value.getLuk(), value.getHp(), value.getMp(), value.getWatk(),
-                    value.getMatk(), value.getWdef(), value.getMdef(), value.getAcc(), value.getAvoid(),
+                    value.getUpgradeSlots(), value.getLevel(), value.getStrStat(), value.getDexStat(),
+                    value.getIntStat(), value.getLukStat(), value.getHp(), value.getMp(), value.getWAtk(),
+                    value.getMAtk(), value.getWDef(), value.getMDef(), value.getAcc(), value.getAvoid(),
                     value.getHands(), value.getSpeed(), value.getJump(), value.getVicious(),
                     value.getItemLevel(), value.getItemExp(), value.getRingId());
         } else if (item instanceof PetItem value) {
@@ -694,16 +694,16 @@ public class Character implements CharacterState {
             Equip equip = new Equip(snapshot.itemId());
             equip.setUpgradeSlots(source.upgradeSlots());
             equip.setLevel(source.level());
-            equip.setStr(source.str());
-            equip.setDex(source.dex());
+            equip.setStrStat(source.strStat());
+            equip.setDexStat(source.dexStat());
             equip.setIntStat(source.intStat());
-            equip.setLuk(source.luk());
+            equip.setLukStat(source.lukStat());
             equip.setHp(source.hp());
             equip.setMp(source.mp());
-            equip.setWatk(source.watk());
-            equip.setMatk(source.matk());
-            equip.setWdef(source.wdef());
-            equip.setMdef(source.mdef());
+            equip.setWAtk(source.wAtk());
+            equip.setMAtk(source.mAtk());
+            equip.setWDef(source.wDef());
+            equip.setMDef(source.mDef());
             equip.setAcc(source.acc());
             equip.setAvoid(source.avoid());
             equip.setHands(source.hands());

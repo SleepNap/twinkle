@@ -12,7 +12,7 @@ class V83ItemPacketWriterTest {
 
     @Test
     void stackItem_writesPositionQuantityOwnerAndFlag() {
-        V83ItemSnapshot item = new V83ItemSnapshot(3, 2, 2000000, 0, 0, 25, "Hero", 7, null);
+        V83ItemSnapshot item = new V83ItemSnapshot(3, 2, 2000000, 0, -1, 25, "Hero", 7, null);
         ByteArrayOutPacket out = new ByteArrayOutPacket();
 
         V83ItemPacketWriter.write(out, item, true);
@@ -22,7 +22,7 @@ class V83ItemPacketWriterTest {
         assertThat(in.readByte()).isEqualTo((byte) 2);
         assertThat(in.readInt()).isEqualTo(2000000);
         assertThat(in.readByte()).isZero();
-        assertThat(in.readLong()).isEqualTo(V83FileTime.encode(-2));
+        assertThat(in.readLong()).isEqualTo(V83FileTime.encode(-1));
         assertThat(in.readShort()).isEqualTo((short) 25);
         assertThat(in.readString()).isEqualTo("Hero");
         assertThat(in.readShort()).isEqualTo((short) 7);
@@ -43,7 +43,7 @@ class V83ItemPacketWriterTest {
         assertThat(in.readByte()).isEqualTo((byte) 1);
         assertThat(in.readInt()).isEqualTo(1040002);
         assertThat(in.readByte()).isZero();
-        assertThat(in.readLong()).isEqualTo(V83FileTime.encode(-2));
+        assertThat(in.readLong()).isEqualTo(V83FileTime.encode(0));
         assertThat(in.readByte()).isEqualTo((byte) 7);
         assertThat(in.readByte()).isEqualTo((byte) 2);
         for (short expected = 1; expected <= 15; expected++) {

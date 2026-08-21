@@ -119,9 +119,9 @@ public final class LoginService {
         chr.setMaxHp((short) 50);
         chr.setMp((short) 5);
         chr.setMaxMp((short) 5);
-        chr.setStr((short) 12);
-        chr.setDex((short) 5);
-        chr.setLuk((short) 4);
+        chr.setStrStat((short) 12);
+        chr.setDexStat((short) 5);
+        chr.setLukStat((short) 4);
         chr.setIntStat((short) 4);
         chr.setFace(face);
         chr.setHair(hair);
@@ -158,7 +158,7 @@ public final class LoginService {
         item.setOwner("");
         item.setPetId(0);
         item.setFlag(0);
-        item.setExpiration(0);
+        item.setExpiration(-1);
         item.setGiftFrom("");
         inventoryItemRepository.insert(item);
     }

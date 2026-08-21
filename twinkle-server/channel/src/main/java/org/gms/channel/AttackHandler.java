@@ -158,8 +158,8 @@ public final class AttackHandler implements PacketHandler {
                 damages[i] = new int[]{0};
                 continue;
             }
-            int watk = CombatSystem.BARE_HAND_WATK;
-            int dmg = combatSystem.physicalAttack(chr, monster, watk).damage();
+            int wAtk = CombatSystem.BARE_HAND_WATK;
+            int dmg = combatSystem.physicalAttack(chr, monster, wAtk).damage();
             int[] lines = new int[t.damages.length];
             for (int j = 0; j < t.damages.length; j++) {
                 lines[j] = dmg;

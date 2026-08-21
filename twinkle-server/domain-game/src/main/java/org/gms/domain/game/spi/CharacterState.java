@@ -36,11 +36,11 @@ public interface CharacterState extends Versioned {
 
     // ---- 基础属性 ----
 
-    short getStr();
+    short getStrStat();
 
-    short getDex();
+    short getDexStat();
 
-    short getLuk();
+    short getLukStat();
 
     short getIntStat();
 

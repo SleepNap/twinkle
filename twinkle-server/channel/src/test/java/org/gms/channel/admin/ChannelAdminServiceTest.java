@@ -83,8 +83,8 @@ class ChannelAdminServiceTest {
         character.setName("Hero");
         Equip equip = new Equip(1_040_002);
         equip.setPosition((short) -5);
-        equip.setStr((short) 12);
-        equip.setWatk((short) 3);
+        equip.setStrStat((short) 12);
+        equip.setWAtk((short) 3);
         character.getInventory(InventoryType.EQUIP).putAtSlot((short) -5, equip);
         PetItem pet = new PetItem(5_000_000, 9001);
         pet.setPosition((short) 2);

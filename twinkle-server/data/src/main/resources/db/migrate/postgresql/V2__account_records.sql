@@ -1,7 +1,7 @@
 -- ============================================================
 -- PostgreSQL V2: account_records / character_records（登录/选角/存档）
 -- ============================================================
-CREATE TABLE account_records (
+CREATE TABLE IF NOT EXISTS account_records (
     id SERIAL PRIMARY KEY,
     name VARCHAR(13) NOT NULL DEFAULT '',
     password VARCHAR(128) NOT NULL DEFAULT '',
@@ -33,10 +33,10 @@ CREATE TABLE account_records (
     hwid VARCHAR(12) NOT NULL DEFAULT '',
     language INTEGER NOT NULL DEFAULT 3
 );
-CREATE UNIQUE INDEX idx_account_records_name ON account_records(name);
-CREATE INDEX idx_account_records_id_banned ON account_records(id, banned);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_records_name ON account_records(name);
+CREATE INDEX IF NOT EXISTS idx_account_records_id_banned ON account_records(id, banned);
 
-CREATE TABLE character_records (
+CREATE TABLE IF NOT EXISTS character_records (
     id SERIAL PRIMARY KEY,
     account_id INTEGER NOT NULL DEFAULT 0,
     world INTEGER NOT NULL DEFAULT 0,
@@ -44,9 +44,9 @@ CREATE TABLE character_records (
     level INTEGER NOT NULL DEFAULT 1,
     exp INTEGER NOT NULL DEFAULT 0,
     gacha_exp INTEGER NOT NULL DEFAULT 0,
-    str INTEGER NOT NULL DEFAULT 12,
-    dex INTEGER NOT NULL DEFAULT 5,
-    luk INTEGER NOT NULL DEFAULT 4,
+    str_stat INTEGER NOT NULL DEFAULT 12,
+    dex_stat INTEGER NOT NULL DEFAULT 5,
+    luk_stat INTEGER NOT NULL DEFAULT 4,
     int_stat INTEGER NOT NULL DEFAULT 4,
     hp INTEGER NOT NULL DEFAULT 50,
     mp INTEGER NOT NULL DEFAULT 5,
@@ -112,6 +112,6 @@ CREATE TABLE character_records (
     party_search SMALLINT NOT NULL DEFAULT 1,
     jail_expire BIGINT NOT NULL DEFAULT 0
 );
-CREATE INDEX idx_character_records_account_id ON character_records(account_id);
-CREATE INDEX idx_character_records_world ON character_records(world);
-CREATE INDEX idx_character_records_ranking_level ON character_records(level, exp);
+CREATE INDEX IF NOT EXISTS idx_character_records_account_id ON character_records(account_id);
+CREATE INDEX IF NOT EXISTS idx_character_records_world ON character_records(world);
+CREATE INDEX IF NOT EXISTS idx_character_records_ranking_level ON character_records(level, exp);

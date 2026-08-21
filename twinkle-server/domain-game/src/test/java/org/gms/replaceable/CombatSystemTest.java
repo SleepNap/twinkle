@@ -20,8 +20,8 @@ class CombatSystemTest {
 
     private static Character attacker(int str, int dex) {
         Character c = new Character(1L);
-        c.setStr((short) str);
-        c.setDex((short) dex);
+        c.setStrStat((short) str);
+        c.setDexStat((short) dex);
         return c;
     }
 
@@ -77,8 +77,8 @@ class CombatSystemTest {
     @DisplayName("版本门拒绝换代后的迟到攻击")
     void versionGateBlocksStaleAttack() {
         Character chr = new Character(versionGate.currentVersion());
-        chr.setStr((short) 50);
-        chr.setDex((short) 10);
+        chr.setStrStat((short) 50);
+        chr.setDexStat((short) 10);
         MapleMonster snail = new MapleMonster(snail(100, 0));
 
         versionGate.onReload();   // 逻辑换代

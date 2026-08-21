@@ -299,7 +299,7 @@ export function AccountsPage() {
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Snapshot label={t("accounts.levelAndJob")} value={`${characterQuery.data.character.level} / ${characterQuery.data.character.job}`} />
                     <Snapshot label="HP / MP" value={`${formatNumber(characterQuery.data.character.hp)} / ${formatNumber(characterQuery.data.character.mp)}`} hint={`${formatNumber(characterQuery.data.character.maxHp)} / ${formatNumber(characterQuery.data.character.maxMp)}`} />
-                    <Snapshot label="STR / DEX / INT / LUK" value={`${characterQuery.data.character.str} / ${characterQuery.data.character.dex} / ${characterQuery.data.character.int} / ${characterQuery.data.character.luk}`} />
+                    <Snapshot label="STR / DEX / INT / LUK" value={`${characterQuery.data.character.strStat} / ${characterQuery.data.character.dexStat} / ${characterQuery.data.character.intStat} / ${characterQuery.data.character.lukStat}`} />
                     <Snapshot label={t("accounts.mapAndSpawn")} value={`${characterQuery.data.character.map} / ${characterQuery.data.character.spawnPoint}`} />
                     <Snapshot label={t("accounts.meso")} value={formatNumber(characterQuery.data.currencies.meso)} />
                     <Snapshot label="NX Credit / Prepaid" value={`${formatNumber(characterQuery.data.currencies.nxCredit)} / ${formatNumber(characterQuery.data.currencies.nxPrepaid)}`} />
@@ -327,7 +327,7 @@ export function AccountsPage() {
                           <TableCell className="text-right tabular-nums">{formatNumber(item.quantity)}</TableCell>
                           <TableCell>{item.owner || "—"}</TableCell>
                           <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{equipmentStats(item)}</TableCell>
-                          <TableCell className="font-mono text-xs">{item.expiration > 0 ? item.expiration : "—"}</TableCell>
+                          <TableCell className="font-mono text-xs">{item.expiration === -1 ? t("accounts.neverExpires") : item.expiration}</TableCell>
                         </TableRow>
                       ))}</TableBody>
                     </Table>
@@ -354,7 +354,7 @@ export function AccountsPage() {
                     <Table>
                       <TableHeader><TableRow><TableHead>{t("accounts.skillId")}</TableHead><TableHead>{t("accounts.skillLevel")}</TableHead><TableHead>{t("accounts.masterLevel")}</TableHead><TableHead>{t("accounts.expiration")}</TableHead></TableRow></TableHeader>
                       <TableBody>{characterQuery.data.skills.map((skill) => (
-                        <TableRow key={skill.skillId}><TableCell className="font-mono">{skill.skillId}</TableCell><TableCell>{skill.level}</TableCell><TableCell>{skill.masterLevel}</TableCell><TableCell className="font-mono text-xs">{skill.expiration > 0 ? skill.expiration : "—"}</TableCell></TableRow>
+                        <TableRow key={skill.skillId}><TableCell className="font-mono">{skill.skillId}</TableCell><TableCell>{skill.level}</TableCell><TableCell>{skill.masterLevel}</TableCell><TableCell className="font-mono text-xs">{skill.expiration === -1 ? t("accounts.neverExpires") : skill.expiration}</TableCell></TableRow>
                       ))}</TableBody>
                     </Table>
                   ) : <EmptyState text={t("accounts.noSkills")} />}
@@ -405,10 +405,10 @@ function EmptyState({ text }: { text: string }) {
   return <p className="py-10 text-center text-sm text-muted-foreground">{text}</p>
 }
 
-function equipmentStats(item: { str: number; dex: number; int: number; luk: number; watk: number; matk: number }) {
+function equipmentStats(item: { strStat: number; dexStat: number; intStat: number; lukStat: number; wAtk: number; mAtk: number }) {
   const stats = [
-    ["STR", item.str], ["DEX", item.dex], ["INT", item.int], ["LUK", item.luk],
-    ["WATK", item.watk], ["MATK", item.matk],
+    ["STR", item.strStat], ["DEX", item.dexStat], ["INT", item.intStat], ["LUK", item.lukStat],
+    ["WATK", item.wAtk], ["MATK", item.mAtk],
   ].filter(([, value]) => value !== 0)
   return stats.length > 0 ? stats.map(([name, value]) => `${name} ${value}`).join(" · ") : "—"
 }

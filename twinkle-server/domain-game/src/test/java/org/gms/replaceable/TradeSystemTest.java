@@ -155,8 +155,8 @@ class TradeSystemTest {
         source.setGiftFrom("Bob");
         source.setUpgradeSlots((byte) 6);
         source.setLevel((short) 4);
-        source.setStr((short) 12);
-        source.setWatk((short) 99);
+        source.setStrStat((short) 12);
+        source.setWAtk((short) 99);
         source.setItemLevel((byte) 5);
         source.setItemExp(12_345L);
         source.setRingId(456);
@@ -180,8 +180,8 @@ class TradeSystemTest {
         assertThat(equip.getGiftFrom()).isEqualTo("Bob");
         assertThat(equip.getUpgradeSlots()).isEqualTo((byte) 6);
         assertThat(equip.getLevel()).isEqualTo((short) 4);
-        assertThat(equip.getStr()).isEqualTo((short) 12);
-        assertThat(equip.getWatk()).isEqualTo((short) 99);
+        assertThat(equip.getStrStat()).isEqualTo((short) 12);
+        assertThat(equip.getWAtk()).isEqualTo((short) 99);
         assertThat(equip.getItemLevel()).isEqualTo((byte) 5);
         assertThat(equip.getItemExp()).isEqualTo(12_345L);
         assertThat(equip.getRingId()).isEqualTo(456);

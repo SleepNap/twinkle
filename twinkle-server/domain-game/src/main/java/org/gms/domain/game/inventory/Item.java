@@ -28,8 +28,8 @@ public class Item {
     private int petId;
     private String owner;
     private int flag;
-    /** 过期时间（0 = 永不过期）。 */
-    private long expiration;
+    /** 过期时间（Unix 毫秒时间戳；-1 表示永不过期，0 不具有永久语义）。 */
+    private long expiration = -1;
     private String giftFrom;
 
     public Item(int id) {

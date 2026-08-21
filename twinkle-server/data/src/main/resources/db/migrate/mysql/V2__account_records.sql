@@ -1,7 +1,7 @@
 -- ============================================================
 -- MySQL V2: account_records / character_records（登录/选角/存档）
 -- ============================================================
-CREATE TABLE `account_records` (
+CREATE TABLE IF NOT EXISTS `account_records` (
     `id` INT(11) NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(13) NOT NULL DEFAULT '',
     `password` VARCHAR(128) NOT NULL DEFAULT '',
@@ -37,7 +37,7 @@ CREATE TABLE `account_records` (
     KEY `ranking1` (`id`, `banned`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE `character_records` (
+CREATE TABLE IF NOT EXISTS `character_records` (
     `id` INT(11) NOT NULL AUTO_INCREMENT,
     `account_id` INT(11) NOT NULL DEFAULT '0',
     `world` INT(11) NOT NULL DEFAULT '0',
@@ -45,9 +45,9 @@ CREATE TABLE `character_records` (
     `level` INT(11) NOT NULL DEFAULT '1',
     `exp` INT(11) NOT NULL DEFAULT '0',
     `gacha_exp` INT(11) NOT NULL DEFAULT '0',
-    `str` INT(11) NOT NULL DEFAULT '12',
-    `dex` INT(11) NOT NULL DEFAULT '5',
-    `luk` INT(11) NOT NULL DEFAULT '4',
+    `str_stat` INT(11) NOT NULL DEFAULT '12',
+    `dex_stat` INT(11) NOT NULL DEFAULT '5',
+    `luk_stat` INT(11) NOT NULL DEFAULT '4',
     `int_stat` INT(11) NOT NULL DEFAULT '4',
     `hp` INT(11) NOT NULL DEFAULT '50',
     `mp` INT(11) NOT NULL DEFAULT '5',

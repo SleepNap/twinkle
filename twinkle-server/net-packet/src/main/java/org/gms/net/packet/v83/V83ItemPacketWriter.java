@@ -112,7 +112,7 @@ public final class V83ItemPacketWriter {
     }
 
     private static long expiration(long timestamp) {
-        return V83FileTime.encode(timestamp <= 0 ? -2 : timestamp);
+        return V83FileTime.encode(timestamp);
     }
 
     private static boolean isRechargeable(int itemId) {

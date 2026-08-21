@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>对照真值来自参考项目公开公式（思路参考，非逐字复制）：
  * <ul>
- *   <li>伤害：{@code ceil((weaponMult×主属性+副属性)/100 × watk)}（Character.calculateMaxBaseDamage）</li>
+ *   <li>伤害：{@code ceil((weaponMult×主属性+副属性)/100 × wAtk)}（Character.calculateMaxBaseDamage）</li>
  *   <li>落点：整数线性插值（Foothold.calculateFooting）</li>
  * </ul>
  *
@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ParityReferenceTest {
 
     @Test
-    @DisplayName("伤害公式对照参考项目：ceil((weaponMult×主+副)/100×watk)")
+    @DisplayName("伤害公式对照参考项目：ceil((weaponMult×主+副)/100×wAtk)")
     void damageMatchesReferenceFormula() {
         // (1.0×50 + 10)/100 × 10 = 6
         assertThat(DamageCalculator.maxPhysical(50, 10, 10, 1.0)).isEqualTo(6);

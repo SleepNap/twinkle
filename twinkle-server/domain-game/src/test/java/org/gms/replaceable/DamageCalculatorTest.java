@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DamageCalculatorTest {
 
     @Test
-    @DisplayName("物理最大伤害公式：ceil((weaponMult×主属性+副属性)/100×watk)")
+    @DisplayName("物理最大伤害公式：ceil((weaponMult×主属性+副属性)/100×wAtk)")
     void maxPhysicalFormula() {
         // (1.0×50 + 10)/100 × 10 = 6
         assertThat(DamageCalculator.maxPhysical(50, 10, 10, 1.0)).isEqualTo(6);

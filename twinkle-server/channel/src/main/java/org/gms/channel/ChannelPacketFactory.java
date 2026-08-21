@@ -239,7 +239,7 @@ public final class ChannelPacketFactory {
     private static V83CharacterStats toProtocolStats(Character chr) {
         return new V83CharacterStats(
                 (int) chr.getId(), chr.getName(), chr.getGender(), chr.getSkinColor(), chr.getFace(), chr.getHair(),
-                chr.getLevel(), chr.getJob(), chr.getStr(), chr.getDex(), chr.getIntStat(), chr.getLuk(),
+                chr.getLevel(), chr.getJob(), chr.getStrStat(), chr.getDexStat(), chr.getIntStat(), chr.getLukStat(),
                 chr.getHp(), chr.getMaxHp(), chr.getMp(), chr.getMaxMp(), chr.getAp(), chr.getSp(),
                 chr.getExp(), chr.getFame(), chr.getGachaExp(), chr.getMap(), chr.getSpawnPoint());
     }

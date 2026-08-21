@@ -13,7 +13,7 @@ import lombok.Setter;
  * <p>字段与 {@code character_records} 表对齐（全 snake_case 列名；MyBatis-Flex 驼峰→下划线
  * 自动匹配，无需 @Column 显式标注）。映射选角列表展示 + 存档读写所需字段。
  *
- * <p>{@code int_stat} 对应原 {@code "int"} 关键字列（规范改名，消除关键字字段）。
+ * <p>四维属性统一使用 {@code *_stat} 列名；其中 {@code int_stat} 同时避免了 SQL 关键字 {@code int}。
  */
 @Table("character_records")
 @Getter
@@ -28,9 +28,9 @@ public class Character {
     private int level;
     private long exp;
     private long gachaExp;
-    private short str;
-    private short dex;
-    private short luk;
+    private short strStat;
+    private short dexStat;
+    private short lukStat;
     private short intStat;
     private short hp;
     private short mp;

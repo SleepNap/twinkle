@@ -166,8 +166,8 @@ class MyBatisFlexRepositoryTest {
         equip.setGiftFrom("");
         equip.setCashId(7001);
         equip.setUpgradeSlots(5);
-        equip.setStr(12);
-        equip.setWatk(3);
+        equip.setStrStat(12);
+        equip.setWAtk(3);
         equip.setItemLevel(4);
         equip.setItemExp(4567L);
         InventoryItemEntity pet = new InventoryItemEntity();
@@ -197,8 +197,9 @@ class MyBatisFlexRepositoryTest {
                 .singleElement().satisfies(saved -> {
             assertThat(saved.getCashId()).isEqualTo(7001);
             assertThat(saved.getUpgradeSlots()).isEqualTo(5);
-            assertThat(saved.getStr()).isEqualTo(12);
-            assertThat(saved.getWatk()).isEqualTo(3);
+            assertThat(saved.getStrStat()).isEqualTo(12);
+            assertThat(saved.getWAtk()).isEqualTo(3);
+            assertThat(saved.getExpiration()).isEqualTo(-1);
             assertThat(saved.getItemLevel()).isEqualTo(4);
             assertThat(saved.getItemExp()).isEqualTo(4567L);
         });

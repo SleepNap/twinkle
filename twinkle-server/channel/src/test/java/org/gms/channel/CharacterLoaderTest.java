@@ -41,9 +41,9 @@ class CharacterLoaderTest {
         db.setLevel(10);
         db.setExp(1234L);
         db.setGachaExp(5L);
-        db.setStr((short) 40);
-        db.setDex((short) 10);
-        db.setLuk((short) 10);
+        db.setStrStat((short) 40);
+        db.setDexStat((short) 10);
+        db.setLukStat((short) 10);
         db.setIntStat((short) 10);
         db.setHp((short) 300);
         db.setMp((short) 100);
@@ -117,8 +117,8 @@ class CharacterLoaderTest {
         assertThat(chr.getName()).isEqualTo("Hero");
         assertThat(chr.getLevel()).isEqualTo(10);
         assertThat(chr.getExp()).isEqualTo(1234L);
-        assertThat(chr.getStr()).isEqualTo((short) 40);
-        assertThat(chr.getDex()).isEqualTo((short) 10);
+        assertThat(chr.getStrStat()).isEqualTo((short) 40);
+        assertThat(chr.getDexStat()).isEqualTo((short) 10);
         assertThat(chr.getHp()).isEqualTo(300);
         assertThat(chr.getMp()).isEqualTo(100);
         assertThat(chr.getMaxHp()).isEqualTo(320);
@@ -149,8 +149,8 @@ class CharacterLoaderTest {
         InventoryItemEntity equipped = inventoryItem(1, 1040002, 1, -5, 1);
         equipped.setCashId(7001);
         equipped.setUpgradeSlots(5);
-        equipped.setStr(12);
-        equipped.setWatk(3);
+        equipped.setStrStat(12);
+        equipped.setWAtk(3);
         equipped.setItemLevel(4);
         equipped.setItemExp(4567L);
         InventoryItemEntity potion = inventoryItem(2, 2000000, 2, 3, 25);
@@ -194,8 +194,8 @@ class CharacterLoaderTest {
         assertThat(loadedEquip).isInstanceOf(Equip.class);
         assertThat(loadedEquip.getCashId()).isEqualTo(7001);
         assertThat(loadedEquip.getUpgradeSlots()).isEqualTo((byte) 5);
-        assertThat(loadedEquip.getStr()).isEqualTo((short) 12);
-        assertThat(loadedEquip.getWatk()).isEqualTo((short) 3);
+        assertThat(loadedEquip.getStrStat()).isEqualTo((short) 12);
+        assertThat(loadedEquip.getWAtk()).isEqualTo((short) 3);
         assertThat(loadedEquip.getItemLevel()).isEqualTo((byte) 4);
         assertThat(loadedEquip.getItemExp()).isEqualTo(4567L);
         assertThat(chr.getInventory(InventoryType.USE).getItem((short) 3).getId()).isEqualTo(2000000);
@@ -219,8 +219,8 @@ class CharacterLoaderTest {
         assertThat(savedEquip.getType()).isEqualTo(1);
         assertThat(savedEquip.getCashId()).isEqualTo(7001);
         assertThat(savedEquip.getUpgradeSlots()).isEqualTo(5);
-        assertThat(savedEquip.getStr()).isEqualTo(12);
-        assertThat(savedEquip.getWatk()).isEqualTo(3);
+        assertThat(savedEquip.getStrStat()).isEqualTo(12);
+        assertThat(savedEquip.getWAtk()).isEqualTo(3);
         assertThat(savedEquip.getItemLevel()).isEqualTo(4);
         assertThat(savedEquip.getItemExp()).isEqualTo(4567L);
         InventoryItemEntity savedPet = snapshot.stream()
