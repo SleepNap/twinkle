@@ -5,6 +5,7 @@ import org.gms.i18n.I18n;
 import org.gms.hotreload.versioned.VersionGate;
 
 import java.util.ArrayList;
+import java.time.Duration;
 import java.util.List;
 import java.util.function.LongConsumer;
 import java.util.function.LongPredicate;
@@ -81,5 +82,10 @@ public final class EntityReloadService {
     public ReloadResult reloadAllInFlight(LongPredicate interrupt) {
         List<Long> inFlight = new ArrayList<>(coordinator.inFlightEntities());
         return reload(inFlight, interrupt);
+    }
+
+    /** 等待当前全部在途实体操作自然完成。 */
+    public boolean awaitIdle(Duration timeout) throws InterruptedException {
+        return coordinator.awaitIdle(timeout);
     }
 }

@@ -9,7 +9,7 @@ import org.gms.data.repo.InventoryItemRepository;
 import org.gms.domain.game.Character;
 import org.gms.i18n.I18n;
 
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -41,6 +41,8 @@ public final class CharacterSaveQueue implements AutoCloseable {
     private final PlayerStorage playerStorage;
     private final ExecutorService singleWriter;
     private final ConcurrentMap<Long, Boolean> pending = new ConcurrentHashMap<>();
+    /** 最近一次落库失败的角色引用；关闭流程会同步重试，成功前禁止退出进程。 */
+    private final ConcurrentMap<Long, Character> failed = new ConcurrentHashMap<>();
 
     public CharacterSaveQueue(CharacterRepository repository, CharacterLoader loader, PlayerStorage playerStorage) {
         this(repository, null, null, loader, playerStorage);
@@ -90,7 +92,9 @@ public final class CharacterSaveQueue implements AutoCloseable {
             try {
                 persist(chr);
                 chr.clearDirty(savedVersion);
+                failed.remove(chr.getId());
             } catch (RuntimeException e) {
+                failed.put(chr.getId(), chr);
                 log.error(I18n.message("log.save.failed"), chr.getId(), e);
             } finally {
                 pending.remove(chr.getId());
@@ -149,9 +153,15 @@ public final class CharacterSaveQueue implements AutoCloseable {
         for (Character chr : playerStorage.all()) {
             if (chr.isDirty()) {
                 long savedVersion = chr.dirtyVersion();
-                persist(chr);
-                chr.clearDirty(savedVersion);
-                flushed++;
+                try {
+                    persist(chr);
+                    chr.clearDirty(savedVersion);
+                    failed.remove(chr.getId());
+                    flushed++;
+                } catch (RuntimeException e) {
+                    failed.put(chr.getId(), chr);
+                    throw e;
+                }
             }
         }
         return flushed;
@@ -187,9 +197,31 @@ public final class CharacterSaveQueue implements AutoCloseable {
             Thread.sleep(10);
         }
         if (pendingCount() > 0) {
+            List<Long> pendingIds = pending.keySet().stream().sorted().toList();
             log.warn(I18n.message("log.save.drain_timeout"), pendingCount());
+            throw new IllegalStateException(I18n.message("error.save.drain_timeout", pendingIds));
+        }
+
+        retryFailedSync();
+        if (!failed.isEmpty()) {
+            List<Long> failedIds = failedCharacterIds();
+            throw new IllegalStateException(I18n.message("error.save.persist_failed", failedIds));
         }
         log.info(I18n.message("log.save.drained"));
+    }
+
+    /** 关闭重试入口：断链后角色已离开在线表，必须保留引用直到确认落库。 */
+    private void retryFailedSync() {
+        for (Character chr : List.copyOf(failed.values())) {
+            long savedVersion = chr.dirtyVersion();
+            try {
+                persist(chr);
+                chr.clearDirty(savedVersion);
+                failed.remove(chr.getId(), chr);
+            } catch (RuntimeException e) {
+                log.error(I18n.message("log.save.sync_failed"), chr.getId(), e);
+            }
+        }
     }
 
     /** 当前待写角色数（观测，Sli.WRITE_QUEUE_DEPTH）。 */
@@ -197,9 +229,22 @@ public final class CharacterSaveQueue implements AutoCloseable {
         return pending.size();
     }
 
+    /** 最近落库失败且尚未重试成功的角色 id。 */
+    public List<Long> failedCharacterIds() {
+        return failed.keySet().stream().sorted().toList();
+    }
+
     /** 资源释放（进程关停）。 */
     @Override
     public void close() {
-        singleWriter.shutdownNow();
+        singleWriter.shutdown();
+        try {
+            if (!singleWriter.awaitTermination(5, TimeUnit.SECONDS)) {
+                singleWriter.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            singleWriter.shutdownNow();
+        }
     }
 }

@@ -135,7 +135,7 @@ export function AppShell() {
                     className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-foreground/80 transition-colors hover:bg-accent/50 hover:text-foreground"
                   >
                     <ChevronDown className={cn("size-4 transition-transform", isCollapsed && "-rotate-90")} />
-                    {t(group.label)}
+                    <span className="min-w-0 whitespace-nowrap text-left leading-5">{t(group.label)}</span>
                   </button>
                   {!isCollapsed && (
                     <div className="ml-3 flex flex-col gap-1 border-l pl-2">

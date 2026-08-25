@@ -3,6 +3,7 @@ package org.gms.httpapi.admin.v1.controller;
 import org.gms.httpapi.version.ApiRoutes;
 
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
@@ -11,15 +12,18 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
+import io.micronaut.http.annotation.QueryValue;
 import org.gms.data.config.DbConfigFacade;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.httpapi.application.admin.AdminApiService;
+import org.gms.httpapi.admin.AdminAuthFilter;
 import org.gms.i18n.I18nService;
 import org.gms.observability.HealthRegistry;
 import org.gms.service.admin.AdminService;
-import org.gms.service.intercoord.IntercoordService;
+import org.gms.service.channel.ChannelLifecycleService;
 import org.gms.service.network.GameNetworkService;
+import org.gms.service.shutdown.ClusterShutdownService;
 
 import java.util.List;
 import java.util.Map;
@@ -29,7 +33,7 @@ import java.util.Map;
  *
  * <p>能力覆盖任务文档第 1 节"Web 控制台"的后端面：
  * <ul>
- *   <li><b>频道状态</b>：{@code GET /admin/v1/channels}（经 {@link IntercoordService} 频道注册表）。</li>
+ *   <li><b>频道状态与启停</b>：{@code /admin/v1/channels}（经 {@link ChannelLifecycleService}）。</li>
  *   <li><b>在线玩家</b>：{@code GET /admin/v1/online}（③ 只读镜像）。</li>
  *   <li><b>配置热改</b>：{@code GET/POST /admin/v1/config}（走配置中心变更链路，DB 真值 + 版本广播）。</li>
  *   <li><b>运维操作</b>：踢下线 / 脚本重载 / 逻辑重载 / L4 重启——一律经 service 接口或 core 契约，
@@ -45,7 +49,8 @@ public final class AdminConsoleController {
 
     private final AdminApiService adminApiService;
     private final AdminService adminService;
-    private final IntercoordService intercoordService;
+    private final ChannelLifecycleService channelLifecycleService;
+    private final ClusterShutdownService clusterShutdownService;
     private final HealthRegistry healthRegistry;
     private final EntityReloadService reloadService;
     private final EntityReloadCoordinator reloadCoordinator;
@@ -54,14 +59,17 @@ public final class AdminConsoleController {
     private final GameNetworkService gameNetworkService;
 
     public AdminConsoleController(AdminApiService adminApiService, AdminService adminService,
-                                  IntercoordService intercoordService, HealthRegistry healthRegistry,
+                                  ChannelLifecycleService channelLifecycleService,
+                                  ClusterShutdownService clusterShutdownService,
+                                  HealthRegistry healthRegistry,
                                   EntityReloadService reloadService,
                                   EntityReloadCoordinator reloadCoordinator,
                                   DbConfigFacade configFacade, I18nService i18n,
                                   GameNetworkService gameNetworkService) {
         this.adminApiService = adminApiService;
         this.adminService = adminService;
-        this.intercoordService = intercoordService;
+        this.channelLifecycleService = channelLifecycleService;
+        this.clusterShutdownService = clusterShutdownService;
         this.healthRegistry = healthRegistry;
         this.reloadService = reloadService;
         this.reloadCoordinator = reloadCoordinator;
@@ -80,18 +88,56 @@ public final class AdminConsoleController {
                 "checks", healthRegistry.statuses());
     }
 
-    /** 频道状态列表（② 经 IntercoordService 频道注册表快照）。 */
+    /** 频道状态列表；single 读本地监听，split 经 coordinator RPC 汇总频道工作进程。 */
     @Get("/channels")
     public Map<String, Object> channels() {
-        Map<Integer, IntercoordService.ChannelInfo> snapshot = intercoordService.channels();
-        List<Map<String, Object>> channels = snapshot.values().stream()
-                .map(c -> Map.<String, Object>of(
-                        "channelId", c.channelId(),
-                        "host", c.host(),
-                        "port", c.port(),
-                        "onlineCount", c.onlineCount()))
-                .toList();
-        return Map.of("channels", channels);
+        return Map.of("channels", channelLifecycleService.statuses());
+    }
+
+    /** 异步启动指定频道的玩家监听。 */
+    @Post("/channels/{channelId}/start")
+    public HttpResponse<?> startChannel(@PathVariable int channelId) {
+        ChannelLifecycleService.CommandResult result = channelLifecycleService.requestStart(channelId);
+        return (result.accepted() ? HttpResponse.accepted() : HttpResponse.status(HttpStatus.CONFLICT))
+                .body(result);
+    }
+
+    /** 异步安全停止指定频道的玩家监听，频道工作进程和控制链路保持在线。 */
+    @Post("/channels/{channelId}/stop{?force}")
+    public HttpResponse<?> stopChannel(@PathVariable int channelId,
+                                       @QueryValue(defaultValue = "false") boolean force,
+                                       HttpRequest<?> request) {
+        request.setAttribute(AdminAuthFilter.AFTER_SUMMARY_ATTRIBUTE, "force=" + force);
+        ChannelLifecycleService.CommandResult result = channelLifecycleService.requestStop(channelId, force);
+        return (result.accepted() ? HttpResponse.accepted() : HttpResponse.status(HttpStatus.CONFLICT))
+                .body(result);
+    }
+
+    /** 安全存档后退出指定频道工作进程。 */
+    @Post("/channels/{channelId}/terminate{?force}")
+    public HttpResponse<?> terminateChannel(@PathVariable int channelId,
+                                            @QueryValue(defaultValue = "false") boolean force,
+                                            HttpRequest<?> request) {
+        request.setAttribute(AdminAuthFilter.AFTER_SUMMARY_ATTRIBUTE, "force=" + force);
+        ChannelLifecycleService.CommandResult result = channelLifecycleService.requestTerminate(channelId, force);
+        return (result.accepted() ? HttpResponse.accepted() : HttpResponse.status(HttpStatus.CONFLICT))
+                .body(result);
+    }
+
+    /** 两阶段关闭整个集群：排空频道、退出频道进程，最后退出管理进程。 */
+    @Post("/cluster/shutdown{?force}")
+    public HttpResponse<?> shutdownCluster(@QueryValue(defaultValue = "false") boolean force,
+                                           HttpRequest<?> request) {
+        request.setAttribute(AdminAuthFilter.AFTER_SUMMARY_ATTRIBUTE, "force=" + force);
+        ClusterShutdownService.CommandResult result = clusterShutdownService.requestShutdown(force);
+        return (result.accepted() ? HttpResponse.accepted() : HttpResponse.status(HttpStatus.CONFLICT))
+                .body(result);
+    }
+
+    /** 集群关停阶段；部分失败时管理 HTTP 保持在线供诊断和重试。 */
+    @Get("/cluster/shutdown/status")
+    public ClusterShutdownService.Status clusterShutdownStatus() {
+        return clusterShutdownService.status();
     }
 
     /** 在线玩家列表（③ 只读镜像）。 */

@@ -9,16 +9,20 @@ import org.gms.domain.game.Character;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.hotreload.versioned.DefaultVersionGate;
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 存档队列单测（架构 6.2 ② 单写 + 红线 17 增量 FLUSH）。
@@ -118,6 +122,36 @@ class CharacterSaveQueueTest {
                     Thread.currentThread().interrupt();
                     throw new IllegalStateException("存档测试被中断", e);
                 }
+            }
+        }
+    }
+
+    static final class FlakyRepo implements CharacterRepository {
+        final AtomicBoolean failing = new AtomicBoolean(true);
+
+        @Override
+        public List<org.gms.data.entity.Character> findByAccount(int accountId, int world) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<org.gms.data.entity.Character> findById(long id) {
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean existsByName(String name) {
+            return false;
+        }
+
+        @Override
+        public void insert(org.gms.data.entity.Character chr) {
+        }
+
+        @Override
+        public void save(org.gms.data.entity.Character chr) {
+            if (failing.get()) {
+                throw new IllegalStateException("database unavailable");
             }
         }
     }
@@ -258,6 +292,33 @@ class CharacterSaveQueueTest {
             assertThat(repo.saved).extracting(org.gms.data.entity.Character::getMeso)
                     .containsExactly(100, 200);
             assertThat(chr.isDirty()).isFalse();
+        }
+    }
+
+    @Test
+    void failedDisconnectedCharacterBlocksDrainUntilSynchronousRetrySucceeds() throws Exception {
+        I18n.install(new ResourceBundleI18nService("zh-CN"));
+        FlakyRepo repo = new FlakyRepo();
+        CharacterLoader loader = new CharacterLoader(new DefaultVersionGate());
+        PlayerStorage players = new PlayerStorage();
+        try (CharacterSaveQueue queue = new CharacterSaveQueue(repo, loader, players)) {
+            Character chr = newChar(17, 700);
+            chr.markDirty();
+            queue.save(chr);
+
+            assertThatThrownBy(queue::drain)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("17");
+            assertThat(queue.failedCharacterIds()).containsExactly(17L);
+            assertThat(chr.isDirty()).isTrue();
+
+            repo.failing.set(false);
+            queue.drain();
+
+            assertThat(queue.failedCharacterIds()).isEmpty();
+            assertThat(chr.isDirty()).isFalse();
+        } finally {
+            I18n.install(null);
         }
     }
 }

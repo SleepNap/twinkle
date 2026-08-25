@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { useI18n } from "@/i18n"
 
 export function ConfirmationDialog({
@@ -28,6 +29,7 @@ export function ConfirmationDialog({
   onConfirm,
   requireReason = false,
   confirmationText,
+  forceOption,
 }: {
   trigger?: ReactNode
   title: string
@@ -37,13 +39,15 @@ export function ConfirmationDialog({
   pending?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  onConfirm: (reason: string) => void
+  onConfirm: (reason: string, force: boolean) => void
   requireReason?: boolean
   confirmationText?: { label: string; expected: string }
+  forceOption?: { label: string; description: string }
 }) {
   const { t } = useI18n()
   const [reason, setReason] = useState("")
   const [confirmation, setConfirmation] = useState("")
+  const [force, setForce] = useState(false)
   const canConfirm = (!requireReason || reason.trim().length > 0)
     && (!confirmationText || confirmation === confirmationText.expected)
   return (
@@ -54,6 +58,7 @@ export function ConfirmationDialog({
           if (!nextOpen) {
             setReason("")
             setConfirmation("")
+            setForce(false)
           }
           onOpenChange?.(nextOpen)
         }
@@ -87,6 +92,21 @@ export function ConfirmationDialog({
             />
           </div>
         )}
+        {forceOption && (
+          <div className="flex items-start justify-between gap-4 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            <div className="grid gap-1">
+              <Label htmlFor="confirm-force">{forceOption.label}</Label>
+              <p className="text-xs text-muted-foreground">{forceOption.description}</p>
+            </div>
+            <Switch
+              id="confirm-force"
+              checked={force}
+              onCheckedChange={setForce}
+              disabled={pending}
+              aria-label={forceOption.label}
+            />
+          </div>
+        )}
         <DialogFooter>
           {!pending && (
             <DialogClose asChild>
@@ -95,7 +115,7 @@ export function ConfirmationDialog({
           )}
           <Button
             variant={destructive ? "destructive" : "default"}
-            onClick={() => onConfirm(reason.trim())}
+            onClick={() => onConfirm(reason.trim(), force)}
             disabled={pending || !canConfirm}
           >
             {pending && <Loader2 data-icon="inline-start" className="animate-spin" />}

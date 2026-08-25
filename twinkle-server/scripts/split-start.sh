@@ -59,9 +59,22 @@ done
 
 echo ""
 echo "==> split 档已启动：coordinator($COORD_PID) + $TWINKLE_CHANNEL_COUNT 频道进程"
-echo "    管理控制台: http://127.0.0.1:8080/admin/v1/health（HTTP 已监听所有网卡）"
-echo "    验证频道注册: curl http://127.0.0.1:8080/admin/v1/channels"
-echo "    停止: kill $COORD_PID ${PIDS[*]}"
+echo "    管理控制台: http://127.0.0.1:8686/admin/v1/health（HTTP 已监听所有网卡）"
+echo "    验证频道注册: curl http://127.0.0.1:8686/admin/v1/channels"
+echo "    停止: kill $COORD_PID（coordinator 会先安全关闭全部频道）"
 
-trap 'echo "==> 停止全部进程"; kill $COORD_PID "${PIDS[@]}" 2>/dev/null || true; wait' INT TERM
+shutdown_all() {
+  trap - INT TERM
+  echo "==> 安全停止全部进程：先通知 coordinator，由其排空并退出频道"
+  kill -TERM "$COORD_PID" 2>/dev/null || true
+  for _ in $(seq 1 40); do
+    kill -0 "$COORD_PID" 2>/dev/null || break
+    sleep 1
+  done
+  # coordinator 会经关闭协议退出频道；这里只兜底终止失联或超时的本机进程。
+  kill -TERM "${PIDS[@]}" 2>/dev/null || true
+  wait || true
+}
+
+trap shutdown_all INT TERM
 wait

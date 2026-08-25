@@ -12,10 +12,32 @@ export interface Channel {
   host: string
   port: number
   onlineCount: number
+  state: "RUNNING" | "STOPPED" | "STARTING" | "STOPPING" | "TERMINATING" | "FAILED" | "UNAVAILABLE"
+  topology: "EMBEDDED" | "DISTRIBUTED"
+  controllable: boolean
+  error?: string | null
 }
 
 export interface ChannelsResponse {
   channels: Channel[]
+}
+
+export interface ChannelCommandResponse {
+  accepted: boolean
+  status: Channel
+}
+
+export interface ClusterShutdownStatus {
+  phase: "RUNNING" | "DRAINING_CHANNELS" | "TERMINATING_CHANNELS" | "STOPPING_COORDINATOR" | "PARTIAL_FAILURE"
+  targetCount: number
+  completedCount: number
+  failedChannelIds: number[]
+  error?: string | null
+}
+
+export interface ClusterShutdownResponse {
+  accepted: boolean
+  status: ClusterShutdownStatus
 }
 
 export interface OnlinePlayer {
@@ -567,6 +589,24 @@ function contentType(response: Response) {
 export const adminApi = {
   health: (signal?: AbortSignal) => request<HealthResponse>("/health", { signal }),
   channels: (signal?: AbortSignal) => request<ChannelsResponse>("/channels", { signal }),
+  startChannel: (channelId: number, reason: string) =>
+    request<ChannelCommandResponse>(`/channels/${channelId}/start`, {
+      method: "POST",
+      body: "{}",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  stopChannel: (channelId: number, reason: string, force = false) =>
+    request<ChannelCommandResponse>(`/channels/${channelId}/stop?force=${force}`, {
+      method: "POST",
+      body: "{}",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  terminateChannel: (channelId: number, reason: string, force = false) =>
+    request<ChannelCommandResponse>(`/channels/${channelId}/terminate?force=${force}`, {
+      method: "POST",
+      body: "{}",
+      headers: { "X-Admin-Reason": reason },
+    }),
   online: (signal?: AbortSignal) => request<OnlineResponse>("/online", { signal }),
   config: (signal?: AbortSignal) => request<ConfigResponse>("/config", { signal }),
   setConfig: (key: string, value: string, reason: string) =>
@@ -614,6 +654,14 @@ export const adminApi = {
     request<GameNetworkStatus>("/restart/netty/status", { signal }),
   restartGameNetwork: (reason: string) =>
     request<GameNetworkRestartResponse>("/restart/netty", {
+      method: "POST",
+      body: "{}",
+      headers: { "X-Admin-Reason": reason },
+    }),
+  clusterShutdownStatus: (signal?: AbortSignal) =>
+    request<ClusterShutdownStatus>("/cluster/shutdown/status", { signal }),
+  shutdownCluster: (reason: string, force = false) =>
+    request<ClusterShutdownResponse>(`/cluster/shutdown?force=${force}`, {
       method: "POST",
       body: "{}",
       headers: { "X-Admin-Reason": reason },
@@ -743,6 +791,7 @@ export const adminQueryKeys = {
   inFlight: ["admin", "reload", "in-flight"] as const,
   restartPhase: ["admin", "restart", "phase"] as const,
   gameNetworkStatus: ["admin", "restart", "netty", "status"] as const,
+  clusterShutdownStatus: ["admin", "cluster", "shutdown", "status"] as const,
   apiRequestAudits: ["admin", "audits", "api-requests"] as const,
   toolExecutionAudits: ["admin", "audits", "tool-executions"] as const,
   tasks: ["admin", "tasks"] as const,

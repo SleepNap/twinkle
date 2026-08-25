@@ -43,6 +43,16 @@ twinkle:
     host: ${TWINKLE_COORDINATOR_HOST:127.0.0.1}
     port: ${TWINKLE_COORDINATOR_PORT:8510}
 
+  # ============== 进程与集群生命周期 ==============
+  admin:
+    restart:
+      exit: ${TWINKLE_ADMIN_RESTART_EXIT:true}
+    shutdown:
+      # 显式关闭集群或正常停止管理服务时，等待全部频道完成安全存档的最长时间。
+      timeout: ${TWINKLE_ADMIN_SHUTDOWN_TIMEOUT:30000}
+      # 测试环境可关闭真正的 JVM 退出；生产保持 true，由进程管理器决定是否再次启动。
+      exit: ${TWINKLE_ADMIN_SHUTDOWN_EXIT:true}
+
   # 服务器列表展示名（LoginServer 响应 SERVERLIST 用）
   server:
     # API 权限、审计与 Cursor 绑定使用的稳定 ID；生产环境必须显式配置且不得随展示名变化。

@@ -12,6 +12,7 @@ import org.gms.i18n.I18n;
 import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
 import org.gms.net.netty.internal.AdminRpcDispatcher;
+import org.gms.net.netty.internal.ChannelLifecycleRpcDispatcher;
 import org.gms.net.netty.internal.ChannelConnectionRegistry;
 import org.gms.net.netty.internal.CoordinatorFrameRouter;
 import org.gms.net.netty.internal.CoordinatorLink;
@@ -22,11 +23,13 @@ import org.gms.net.netty.internal.InternalProtocol;
 import org.gms.net.netty.internal.InternalServer;
 import org.gms.net.netty.internal.JsonCodec;
 import org.gms.net.netty.internal.RemoteAdminService;
+import org.gms.net.netty.internal.RemoteChannelLifecycleService;
 import org.gms.net.netty.internal.RemoteEventBus;
 import org.gms.net.netty.internal.RemoteIntercoordService;
 import org.gms.role.SplitChannelCondition;
 import org.gms.role.SplitCoordinatorCondition;
 import org.gms.service.admin.AdminService;
+import org.gms.service.channel.ChannelLifecycleService;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.net.InetSocketAddress;
@@ -82,6 +85,16 @@ public class SplitConfig {
     public AdminService adminService(CoordinatorLink coordinatorLink,
                                      @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
         return new RemoteAdminService(coordinatorLink, channelId);
+    }
+
+    /** 管理进程频道生命周期网络桩（按频道 ID 路由，不固定到默认频道）。 */
+    @Bean
+    @Singleton
+    @Requires(condition = SplitCoordinatorCondition.class)
+    @Primary
+    public ChannelLifecycleService channelLifecycleService(CoordinatorLink coordinatorLink,
+                                                           IntercoordService intercoordService) {
+        return new RemoteChannelLifecycleService(coordinatorLink, intercoordService);
     }
 
     /** coordinator 内部通信服务端（@Context 强制装配：构造期即启动；@Bean preDestroy 优雅关闭释放端口）。 */
@@ -160,8 +173,9 @@ public class SplitConfig {
     @Singleton
     @Requires(condition = SplitChannelCondition.class)
     public ChannelAdminRpcBinder channelAdminRpcBinder(CoordinatorLink channelCoordinatorLink,
-                                                       AdminService adminService) {
-        return new ChannelAdminRpcBinder(channelCoordinatorLink, adminService);
+                                                       AdminService adminService,
+                                                       ChannelLifecycleService channelLifecycleService) {
+        return new ChannelAdminRpcBinder(channelCoordinatorLink, adminService, channelLifecycleService);
     }
 
     // ==================== 启动装配 ====================
@@ -169,10 +183,18 @@ public class SplitConfig {
     /** 频道进程挂接 AdminService RPC 分发（管理进程运维操作落到频道真值）。 */
     @Singleton
     public static final class ChannelAdminRpcBinder {
-        public ChannelAdminRpcBinder(CoordinatorLink link, AdminService adminService) {
-            AdminRpcDispatcher dispatcher = new AdminRpcDispatcher(adminService);
-            link.addConnectListener(conn -> conn.onRpcRequest(env ->
-                    conn.replyRpc(env.messageId(), dispatcher.dispatch(env.request().method(), env.request().args()))));
+        public ChannelAdminRpcBinder(CoordinatorLink link, AdminService adminService,
+                                     ChannelLifecycleService channelLifecycleService) {
+            AdminRpcDispatcher adminDispatcher = new AdminRpcDispatcher(adminService);
+            ChannelLifecycleRpcDispatcher lifecycleDispatcher =
+                    new ChannelLifecycleRpcDispatcher(channelLifecycleService);
+            link.addConnectListener(conn -> conn.onRpcRequest(env -> {
+                String method = env.request().method();
+                InternalProtocol.RpcResponse response = lifecycleDispatcher.supports(method)
+                        ? lifecycleDispatcher.dispatch(method, env.request().args())
+                        : adminDispatcher.dispatch(method, env.request().args());
+                conn.replyRpc(env.messageId(), response);
+            }));
         }
     }
 }

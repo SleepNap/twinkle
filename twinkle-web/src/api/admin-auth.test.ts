@@ -73,7 +73,7 @@ describe("adminAuthApi", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     await expect(adminAuthApi.login("admin", "secret-123")).rejects.toThrow(
-      "无法连接管理接口，请确认后端已在 8080 端口启动。",
+      "无法连接管理接口，请确认后端已在 8686 端口启动。",
     )
     await expect(adminAuthApi.login("admin", "secret-123")).rejects.toMatchObject({
       name: "AbortError",

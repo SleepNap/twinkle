@@ -57,7 +57,7 @@ describe("adminApi", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")))
 
     await expect(adminApi.health()).rejects.toEqual(
-      new ApiError("无法连接管理接口，请确认后端已在 8080 端口启动。"),
+      new ApiError("无法连接管理接口，请确认后端已在 8686 端口启动。"),
     )
   })
 
@@ -140,6 +140,59 @@ describe("adminApi", () => {
       method: "POST",
       body: "{}",
       headers: expect.objectContaining({ "X-Admin-Reason": "开发环境重绑端口" }),
+    }))
+  })
+
+  it("按频道启停和退出进程并携带审计原因", async () => {
+    const status = {
+      channelId: 2,
+      host: "127.0.0.1",
+      port: 8585,
+      onlineCount: 0,
+      state: "STARTING",
+      topology: "DISTRIBUTED",
+      controllable: true,
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ accepted: true, status }))
+      .mockResolvedValueOnce(jsonResponse({ accepted: true, status: { ...status, state: "STOPPING" } }))
+      .mockResolvedValueOnce(jsonResponse({ accepted: true, status: { ...status, state: "TERMINATING" } }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.startChannel(2, "恢复频道")
+    await adminApi.stopChannel(2, "维护频道", true)
+    await adminApi.terminateChannel(2, "退出频道进程", true)
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/v1/channels/2/start", expect.objectContaining({
+      method: "POST",
+      body: "{}",
+      headers: expect.objectContaining({ "X-Admin-Reason": "恢复频道" }),
+    }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/admin/v1/channels/2/stop?force=true", expect.objectContaining({
+      method: "POST",
+      body: "{}",
+      headers: expect.objectContaining({ "X-Admin-Reason": "维护频道" }),
+    }))
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/admin/v1/channels/2/terminate?force=true", expect.objectContaining({
+      method: "POST",
+      body: "{}",
+      headers: expect.objectContaining({ "X-Admin-Reason": "退出频道进程" }),
+    }))
+  })
+
+  it("带审计原因关闭整个集群", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      accepted: true,
+      status: { phase: "DRAINING_CHANNELS", targetCount: 2, completedCount: 0, failedChannelIds: [] },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.shutdownCluster("计划维护", true)
+
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/cluster/shutdown?force=true", expect.objectContaining({
+      method: "POST",
+      body: "{}",
+      headers: expect.objectContaining({ "X-Admin-Reason": "计划维护" }),
     }))
   })
 

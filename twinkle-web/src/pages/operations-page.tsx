@@ -1,9 +1,9 @@
-import { Code2, DatabaseZap, RadioTower, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
+import { Code2, DatabaseZap, Power, RadioTower, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 
-import { adminApi, adminQueryKeys, type RestartPhaseResponse } from "@/api/admin"
+import { adminApi, adminQueryKeys, type ClusterShutdownStatus, type RestartPhaseResponse } from "@/api/admin"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-state"
@@ -34,10 +34,18 @@ const phaseLabelKeys: Record<RestartPhaseResponse["phase"], MessageKey> = {
   RESTARTING: "phase.RESTARTING", RESTORED: "phase.RESTORED", FAILED: "phase.FAILED",
 }
 
+const clusterPhaseLabelKeys: Record<ClusterShutdownStatus["phase"], MessageKey> = {
+  RUNNING: "clusterPhase.RUNNING",
+  DRAINING_CHANNELS: "clusterPhase.DRAINING_CHANNELS",
+  TERMINATING_CHANNELS: "clusterPhase.TERMINATING_CHANNELS",
+  STOPPING_COORDINATOR: "clusterPhase.STOPPING_COORDINATOR",
+  PARTIAL_FAILURE: "clusterPhase.PARTIAL_FAILURE",
+}
+
 export function OperationsPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
-  const [dialog, setDialog] = useState<"scripts" | "logic" | "wz" | "netty" | "restart" | null>(null)
+  const [dialog, setDialog] = useState<"scripts" | "logic" | "wz" | "netty" | "restart" | "shutdown" | null>(null)
   const inFlight = useQuery({
     queryKey: adminQueryKeys.inFlight,
     queryFn: ({ signal }) => adminApi.inFlight(signal),
@@ -74,6 +82,11 @@ export function OperationsPage() {
   const gameNetworkStatus = useQuery({
     queryKey: adminQueryKeys.gameNetworkStatus,
     queryFn: ({ signal }) => adminApi.gameNetworkStatus(signal),
+    refetchInterval: 2_000,
+  })
+  const clusterShutdownStatus = useQuery({
+    queryKey: adminQueryKeys.clusterShutdownStatus,
+    queryFn: ({ signal }) => adminApi.clusterShutdownStatus(signal),
     refetchInterval: 2_000,
   })
   const wzMutation = useMutation({
@@ -113,14 +126,27 @@ export function OperationsPage() {
     },
     onError: (error) => toast.error(t("operations.nettyRestartFailed"), { description: error.message }),
   })
+  const clusterShutdownMutation = useMutation({
+    mutationFn: ({ reason, force }: { reason: string; force: boolean }) => adminApi.shutdownCluster(reason, force),
+    onSuccess: () => {
+      toast.success(t("operations.shutdownAccepted"), {
+        description: t("operations.shutdownAcceptedDescription"),
+      })
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.clusterShutdownStatus })
+      setDialog(null)
+    },
+    onError: (error) => toast.error(t("operations.shutdownFailed"), { description: error.message }),
+  })
 
-  const firstError = inFlight.error ?? restartPhase.error ?? gameNetworkStatus.error
+  const firstError = inFlight.error ?? restartPhase.error ?? gameNetworkStatus.error ?? clusterShutdownStatus.error
   const isRefreshing = inFlight.isFetching || restartPhase.isFetching || gameNetworkStatus.isFetching
+    || clusterShutdownStatus.isFetching
 
   function refreshAll() {
     void inFlight.refetch()
     void restartPhase.refetch()
     void gameNetworkStatus.refetch()
+    void clusterShutdownStatus.refetch()
   }
 
   return (
@@ -144,7 +170,7 @@ export function OperationsPage() {
 
       {firstError && <QueryError error={firstError} retry={refreshAll} />}
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label={t("operations.actions")}>
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label={t("operations.actions")}>
         <Card>
           <CardHeader>
             <CardTitle>{t("operations.scriptTitle")}</CardTitle>
@@ -174,6 +200,7 @@ export function OperationsPage() {
           </CardHeader>
           <CardContent>
             <ConfirmationDialog
+              key={dialog === "shutdown" ? "shutdown-open" : "shutdown-closed"}
               open={dialog === "wz"}
               onOpenChange={(open) => setDialog(open ? "wz" : null)}
               trigger={<Button variant="outline" className="w-full">{t("operations.reloadWz")}</Button>}
@@ -250,9 +277,35 @@ export function OperationsPage() {
             />
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.shutdownTitle")}</CardTitle>
+            <CardDescription>{t("operations.shutdownDescription")}</CardDescription>
+            <CardAction><Power className="size-4 text-destructive" /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <ConfirmationDialog
+              open={dialog === "shutdown"}
+              onOpenChange={(open) => setDialog(open ? "shutdown" : null)}
+              trigger={<Button variant="destructive" className="w-full">{t("operations.requestShutdown")}</Button>}
+              title={t("operations.requestShutdownTitle")}
+              description={t("operations.requestShutdownDescription")}
+              confirmLabel={t("operations.confirmShutdown")}
+              destructive
+              pending={clusterShutdownMutation.isPending}
+              requireReason
+              forceOption={{
+                label: t("shutdown.forceLabel"),
+                description: t("shutdown.forceDescription"),
+              }}
+              onConfirm={(reason, force) => clusterShutdownMutation.mutate({ reason, force })}
+            />
+          </CardContent>
+        </Card>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-3">
+      <section className="grid gap-3 lg:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>{t("operations.nettyStatusTitle")}</CardTitle>
@@ -275,6 +328,38 @@ export function OperationsPage() {
                   port: gameNetworkStatus.data.channelPort,
                   state: gameNetworkStatus.data.channelRunning ? t("operations.running") : t("operations.stopped"),
                 })}</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">{t("operations.phaseUnavailable")}</span>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.clusterStatusTitle")}</CardTitle>
+            <CardDescription>{t("operations.clusterStatusDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {clusterShutdownStatus.isPending ? (
+              <Skeleton className="h-7 w-24" />
+            ) : clusterShutdownStatus.data ? (
+              <>
+                <Badge variant={clusterShutdownStatus.data.phase === "PARTIAL_FAILURE" ? "destructive" : "secondary"}>
+                  {t(clusterPhaseLabelKeys[clusterShutdownStatus.data.phase])}
+                </Badge>
+                <span>{t("operations.clusterProgress", {
+                  completed: clusterShutdownStatus.data.completedCount,
+                  total: clusterShutdownStatus.data.targetCount,
+                })}</span>
+                {clusterShutdownStatus.data.failedChannelIds.length > 0 && (
+                  <span className="text-destructive">{t("operations.clusterFailedChannels", {
+                    ids: clusterShutdownStatus.data.failedChannelIds.join(", "),
+                  })}</span>
+                )}
+                {clusterShutdownStatus.data.error && (
+                  <span className="text-destructive">{clusterShutdownStatus.data.error}</span>
+                )}
               </>
             ) : (
               <span className="text-muted-foreground">{t("operations.phaseUnavailable")}</span>

@@ -68,6 +68,19 @@ class AdminAccessPolicyTest {
     }
 
     @Test
+    void channelLifecycle_requiresRestartPermission() {
+        AdminAccessPolicy.Policy start = policy.resolve(HttpMethod.POST, "/admin/v1/channels/2/start");
+        AdminAccessPolicy.Policy stop = policy.resolve(HttpMethod.POST, "/admin/v1/channels/2/stop");
+        AdminAccessPolicy.Policy terminate = policy.resolve(
+                HttpMethod.POST, "/admin/v1/channels/2/terminate");
+        AdminAccessPolicy.Policy shutdown = policy.resolve(HttpMethod.POST, "/admin/v1/cluster/shutdown");
+        assertThat(start.requiredPermission()).isEqualTo(AdminPermission.RESTART);
+        assertThat(stop.requiredPermission()).isEqualTo(AdminPermission.RESTART);
+        assertThat(terminate.requiredPermission()).isEqualTo(AdminPermission.RESTART);
+        assertThat(shutdown.requiredPermission()).isEqualTo(AdminPermission.RESTART);
+    }
+
+    @Test
     void billingWrite_requiresBillingManage() {
         AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/billing/accounts/1/adjust");
         assertThat(p.requiredPermission()).isEqualTo(AdminPermission.BILLING_MANAGE);

@@ -35,7 +35,11 @@ public final class AdminAccessPolicy {
             if ("/reload/wz".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RELOAD_WZ);
             }
-            if ("/restart".equals(relativePath) || "/restart/netty".equals(relativePath)) {
+            if ("/restart".equals(relativePath) || "/restart/netty".equals(relativePath)
+                    || "/cluster/shutdown".equals(relativePath)
+                    || (relativePath.startsWith("/channels/")
+                    && (relativePath.endsWith("/start") || relativePath.endsWith("/stop")
+                    || relativePath.endsWith("/terminate")))) {
                 return new Policy(false, AdminPermission.RESTART);
             }
             if (relativePath.startsWith("/tasks")
