@@ -2,7 +2,9 @@
 <Configuration packages="org.apache.logging.log4j.core.config">
     <Properties>
         <!-- 开发期：人读模式。MDC 字段契约见 core MdcKeys（traceId/channelId/playerId）。 -->
-        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [%t] [%c{1.}] - %m%n</Property>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%5p] [%t] [%c{1.}] ==&gt; %m%n</Property>
+        <!-- 默认不输出 MyBatis mapper SQL；开发排查时设置 TWINKLE_SQL_LOG_LEVEL=DEBUG。 -->
+        <Property name="SQL_LOG_LEVEL">${env:TWINKLE_SQL_LOG_LEVEL:-INFO}</Property>
         <!-- 结构化布局（架构 12.3，M3 启用）：
              把 LOG_PATTERN 换成 JsonTemplateLayout，并给 Console Appender 换用 JSON 模板，
              统一输出 ts/level/traceId/channelId/playerId/module。示例：
@@ -20,7 +22,9 @@
             <AppenderRef ref="Console"/>
         </Root>
         <Logger name="org.gms" level="DEBUG"/>
+        <Logger name="org.gms.data.mapper" level="${SQL_LOG_LEVEL}"/>
         <Logger name="io.micronaut" level="INFO"/>
+        <Logger name="io.micronaut.runtime.Micronaut" level="WARN"/>
         <Logger name="com.mybatisflex" level="INFO"/>
     </Loggers>
 </Configuration>

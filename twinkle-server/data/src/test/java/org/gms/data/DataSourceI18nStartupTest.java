@@ -32,7 +32,7 @@ class DataSourceI18nStartupTest {
             assertThat(context.getBean(DataSource.class)).isNotNull();
             assertThat(I18n.locale()).isEqualTo(Locale.US);
             assertThat(I18n.message("log.migrate.applied"))
-                    .isEqualTo("Applying migration V{}: {}");
+                    .isEqualTo("[Database] Applying migration V{}: {}");
         }
     }
 }

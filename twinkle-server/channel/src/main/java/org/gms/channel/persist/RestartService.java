@@ -56,4 +56,34 @@ public final class RestartService {
                 saveQueue::flushAllSync,  // FLUSH_DIRTY：同步落库脏角色（红线 17，确保重启前落盘）
                 restartProcess);          // RESTARTING
     }
+
+    /**
+     * 只重启频道 Netty，不退出 JVM。先停止接入和现有连接，让断链存档进入队列，再排空、
+     * 增量落盘并重新监听；无论成功失败都会恢复游戏 tick，避免 Web 仍在而游戏循环永久暂停。
+     */
+    public void restartNetwork(Runnable stopNetwork, Runnable startNetwork) {
+        try {
+            coordinator.beginRestart(
+                    () -> {
+                        tickScheduler.pause();
+                        stopNetwork.run();
+                        entityReloadService.reloadAllInFlight(id -> true);
+                        try {
+                            saveQueue.drain();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException(I18n.message("error.restart.drain_interrupted"), e);
+                        }
+                    },
+                    saveQueue::flushAllSync,
+                    startNetwork);
+        } finally {
+            tickScheduler.resume();
+        }
+        if (coordinator.phase() == RestartCoordinator.Phase.FAILED) {
+            throw new IllegalStateException(
+                    I18n.message("error.restart.network_failed"), coordinator.lastFailure());
+        }
+        coordinator.reset();
+    }
 }

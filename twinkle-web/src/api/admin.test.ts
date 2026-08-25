@@ -119,6 +119,30 @@ describe("adminApi", () => {
     }))
   })
 
+  it("带审计原因单独重启游戏 Netty", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      accepted: true,
+      status: {
+        phase: "RESTARTING",
+        loginRunning: false,
+        loginPort: 8484,
+        channelRunning: false,
+        channelId: 1,
+        channelPort: 8584,
+        error: null,
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await adminApi.restartGameNetwork("开发环境重绑端口")
+
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/restart/netty", expect.objectContaining({
+      method: "POST",
+      body: "{}",
+      headers: expect.objectContaining({ "X-Admin-Reason": "开发环境重绑端口" }),
+    }))
+  })
+
   it("生成带审计原因的临时密码", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       generated: true,

@@ -67,6 +67,7 @@ public final class MigrationRunner {
      * 执行所有未应用的迁移。返回本次新增的版本数。
      */
     public int run() throws SQLException {
+        long startedAt = System.nanoTime();
         ensureVersionTable();
         TreeMap<Integer, String> files = discoverMigrations();
         if (files.isEmpty()) {
@@ -75,12 +76,14 @@ public final class MigrationRunner {
         }
 
         int applied = 0;
+        int alreadyApplied = 0;
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             for (var entry : files.entrySet()) {
                 int version = entry.getKey();
                 String name = entry.getValue();
                 if (isApplied(conn, version)) {
+                    alreadyApplied++;
                     continue;
                 }
                 log.info(I18n.message("log.migrate.applied"), version, name);
@@ -97,11 +100,8 @@ public final class MigrationRunner {
             }
             conn.commit();
         }
-        if (applied == 0) {
-            log.info(I18n.message("log.migrate.up_to_date"), files.size());
-        } else {
-            log.info(I18n.message("log.migrate.total_applied"), applied);
-        }
+        long elapsedMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+        log.info(I18n.message("log.migrate.summary"), files.size(), alreadyApplied, applied, elapsedMillis);
         return applied;
     }
 

@@ -62,6 +62,12 @@ class AdminAccessPolicyTest {
     }
 
     @Test
+    void nettyRestart_requiresRestartPermission() {
+        AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/restart/netty");
+        assertThat(p.requiredPermission()).isEqualTo(AdminPermission.RESTART);
+    }
+
+    @Test
     void billingWrite_requiresBillingManage() {
         AdminAccessPolicy.Policy p = policy.resolve(HttpMethod.POST, "/admin/v1/billing/accounts/1/adjust");
         assertThat(p.requiredPermission()).isEqualTo(AdminPermission.BILLING_MANAGE);

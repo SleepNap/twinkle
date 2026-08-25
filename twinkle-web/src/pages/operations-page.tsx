@@ -1,4 +1,4 @@
-import { Code2, DatabaseZap, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
+import { Code2, DatabaseZap, RadioTower, RefreshCw, RotateCcw, ScrollText, TriangleAlert } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -37,7 +37,7 @@ const phaseLabelKeys: Record<RestartPhaseResponse["phase"], MessageKey> = {
 export function OperationsPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
-  const [dialog, setDialog] = useState<"scripts" | "logic" | "wz" | "restart" | null>(null)
+  const [dialog, setDialog] = useState<"scripts" | "logic" | "wz" | "netty" | "restart" | null>(null)
   const inFlight = useQuery({
     queryKey: adminQueryKeys.inFlight,
     queryFn: ({ signal }) => adminApi.inFlight(signal),
@@ -71,6 +71,11 @@ export function OperationsPage() {
     },
     onError: (error) => toast.error(t("operations.logicFailed"), { description: error.message }),
   })
+  const gameNetworkStatus = useQuery({
+    queryKey: adminQueryKeys.gameNetworkStatus,
+    queryFn: ({ signal }) => adminApi.gameNetworkStatus(signal),
+    refetchInterval: 2_000,
+  })
   const wzMutation = useMutation({
     mutationFn: (reason: string) => adminApi.reloadWz(reason),
     onSuccess: (result) => {
@@ -97,13 +102,25 @@ export function OperationsPage() {
     },
     onError: (error) => toast.error(t("operations.restartFailed"), { description: error.message }),
   })
+  const nettyRestartMutation = useMutation({
+    mutationFn: (reason: string) => adminApi.restartGameNetwork(reason),
+    onSuccess: () => {
+      toast.success(t("operations.nettyRestartAccepted"), {
+        description: t("operations.nettyRestartAcceptedDescription"),
+      })
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.gameNetworkStatus })
+      setDialog(null)
+    },
+    onError: (error) => toast.error(t("operations.nettyRestartFailed"), { description: error.message }),
+  })
 
-  const firstError = inFlight.error ?? restartPhase.error
-  const isRefreshing = inFlight.isFetching || restartPhase.isFetching
+  const firstError = inFlight.error ?? restartPhase.error ?? gameNetworkStatus.error
+  const isRefreshing = inFlight.isFetching || restartPhase.isFetching || gameNetworkStatus.isFetching
 
   function refreshAll() {
     void inFlight.refetch()
     void restartPhase.refetch()
+    void gameNetworkStatus.refetch()
   }
 
   return (
@@ -127,7 +144,7 @@ export function OperationsPage() {
 
       {firstError && <QueryError error={firstError} retry={refreshAll} />}
 
-      <section className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4" aria-label={t("operations.actions")}>
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label={t("operations.actions")}>
         <Card>
           <CardHeader>
             <CardTitle>{t("operations.scriptTitle")}</CardTitle>
@@ -193,6 +210,27 @@ export function OperationsPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>{t("operations.nettyRestartTitle")}</CardTitle>
+            <CardDescription>{t("operations.nettyRestartDescription")}</CardDescription>
+            <CardAction><RadioTower className="size-4 text-amber-600" /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <ConfirmationDialog
+              open={dialog === "netty"}
+              onOpenChange={(open) => setDialog(open ? "netty" : null)}
+              trigger={<Button variant="outline" className="w-full">{t("operations.restartNetty")}</Button>}
+              title={t("operations.restartNettyTitle")}
+              description={t("operations.restartNettyDescription")}
+              confirmLabel={t("operations.confirmRestart")}
+              pending={nettyRestartMutation.isPending}
+              requireReason
+              onConfirm={(reason) => nettyRestartMutation.mutate(reason)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>{t("operations.restartTitle")}</CardTitle>
             <CardDescription>{t("operations.restartDescription")}</CardDescription>
             <CardAction><RotateCcw className="size-4 text-destructive" /></CardAction>
@@ -214,7 +252,36 @@ export function OperationsPage() {
         </Card>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-[1fr_2fr]">
+      <section className="grid gap-3 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("operations.nettyStatusTitle")}</CardTitle>
+            <CardDescription>{t("operations.nettyStatusDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {gameNetworkStatus.isPending ? (
+              <Skeleton className="h-7 w-24" />
+            ) : gameNetworkStatus.data ? (
+              <>
+                <Badge variant={gameNetworkStatus.data.phase === "FAILED" ? "destructive" : "secondary"}>
+                  {gameNetworkStatus.data.phase}
+                </Badge>
+                <span>{t("operations.loginPortStatus", {
+                  port: gameNetworkStatus.data.loginPort,
+                  state: gameNetworkStatus.data.loginRunning ? t("operations.running") : t("operations.stopped"),
+                })}</span>
+                <span>{t("operations.channelPortStatus", {
+                  id: gameNetworkStatus.data.channelId,
+                  port: gameNetworkStatus.data.channelPort,
+                  state: gameNetworkStatus.data.channelRunning ? t("operations.running") : t("operations.stopped"),
+                })}</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">{t("operations.phaseUnavailable")}</span>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>{t("operations.phaseTitle")}</CardTitle>

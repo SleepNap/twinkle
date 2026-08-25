@@ -79,6 +79,8 @@ twinkle:
 log4j2:
   configurationFile: log4j2.xml
 
+# MyBatis SQL 调试日志默认关闭；开发排查时设置 TWINKLE_SQL_LOG_LEVEL=DEBUG。
+
 # ============== Micronaut HTTP（管理进程用，默认监听所有网卡） ==============
 # 不配置 host 时 Micronaut/Netty 按端口绑定所有本机地址；/api 与 /internal 统一走 API Key，
 # /admin 走管理员会话 + RBAC。部署侧仍应使用 TLS、反向代理和防火墙控制入口。

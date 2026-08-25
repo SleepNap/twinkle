@@ -4,8 +4,11 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.HandlerRegistry;
@@ -27,7 +30,8 @@ public final class LoginServer implements AutoCloseable {
     private final HeartbeatConfig heartbeatConfig;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
-    private Channel serverChannel;
+    private volatile Channel serverChannel;
+    private ChannelGroup clientChannels;
 
     public LoginServer(HandlerRegistry registry) {
         this(registry, HeartbeatConfig.defaults());
@@ -43,32 +47,67 @@ public final class LoginServer implements AutoCloseable {
      *
      * @param port 监听端口（v83 客户端经典登录端口 8484；0 = 动态分配，测试用）
      */
-    public void start(int port) {
-        bossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
-        workerGroup = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
-        ServerBootstrap bootstrap = new ServerBootstrap();
-        bootstrap.group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel.class)
-                .childHandler(new V83ServerInitializer(registry, null, heartbeatConfig));
-        serverChannel = bootstrap.bind(port).syncUninterruptibly().channel();
-        log.info(I18n.message("log.login.server_started"), port);
+    public synchronized void start(int port) {
+        if (isRunning()) {
+            throw new IllegalStateException("LoginServer is already running");
+        }
+        EventLoopGroup newBossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+        EventLoopGroup newWorkerGroup = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
+        ChannelGroup newClientChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+        try {
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            bootstrap.group(newBossGroup, newWorkerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new V83ServerInitializer(registry, null, heartbeatConfig, newClientChannels));
+            Channel newServerChannel = bootstrap.bind(port).syncUninterruptibly().channel();
+            bossGroup = newBossGroup;
+            workerGroup = newWorkerGroup;
+            clientChannels = newClientChannels;
+            serverChannel = newServerChannel;
+        } catch (RuntimeException e) {
+            newClientChannels.close().syncUninterruptibly();
+            newBossGroup.shutdownGracefully().syncUninterruptibly();
+            newWorkerGroup.shutdownGracefully().syncUninterruptibly();
+            throw e;
+        }
     }
 
     public int boundPort() {
-        return serverChannel == null ? -1 : ((java.net.InetSocketAddress) serverChannel.localAddress()).getPort();
+        Channel current = serverChannel;
+        return current == null ? -1 : ((java.net.InetSocketAddress) current.localAddress()).getPort();
+    }
+
+    public boolean isRunning() {
+        Channel current = serverChannel;
+        return current != null && current.isActive();
+    }
+
+    /** 停止接入、关闭现有客户端连接并释放独立 EventLoop；可再次调用 {@link #start(int)}。 */
+    public synchronized void stop() {
+        boolean hadResources = serverChannel != null || clientChannels != null || bossGroup != null || workerGroup != null;
+        if (serverChannel != null) {
+            serverChannel.close().syncUninterruptibly();
+            serverChannel = null;
+        }
+        if (clientChannels != null) {
+            clientChannels.close().syncUninterruptibly();
+            clientChannels = null;
+        }
+        if (bossGroup != null) {
+            bossGroup.shutdownGracefully().syncUninterruptibly();
+            bossGroup = null;
+        }
+        if (workerGroup != null) {
+            workerGroup.shutdownGracefully().syncUninterruptibly();
+            workerGroup = null;
+        }
+        if (hadResources) {
+            log.info(I18n.message("log.login.server_stopped"));
+        }
     }
 
     @Override
     public void close() {
-        if (serverChannel != null) {
-            serverChannel.close().syncUninterruptibly();
-        }
-        if (bossGroup != null) {
-            bossGroup.shutdownGracefully().syncUninterruptibly();
-        }
-        if (workerGroup != null) {
-            workerGroup.shutdownGracefully().syncUninterruptibly();
-        }
-        log.info(I18n.message("log.login.server_stopped"));
+        stop();
     }
 }

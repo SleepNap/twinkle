@@ -121,6 +121,21 @@ export interface RestartResponse extends RestartPhaseResponse {
   accepted: true
 }
 
+export interface GameNetworkStatus {
+  phase: "RUNNING" | "RESTARTING" | "FAILED"
+  loginRunning: boolean
+  loginPort: number
+  channelRunning: boolean
+  channelId: number
+  channelPort: number
+  error?: string | null
+}
+
+export interface GameNetworkRestartResponse {
+  accepted: boolean
+  status: GameNetworkStatus
+}
+
 export interface AdminRole {
   id: number
   roleCode: string
@@ -595,6 +610,14 @@ export const adminApi = {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),
+  gameNetworkStatus: (signal?: AbortSignal) =>
+    request<GameNetworkStatus>("/restart/netty/status", { signal }),
+  restartGameNetwork: (reason: string) =>
+    request<GameNetworkRestartResponse>("/restart/netty", {
+      method: "POST",
+      body: "{}",
+      headers: { "X-Admin-Reason": reason },
+    }),
   apiRequestAudits: async (limit = 100, signal?: AbortSignal) =>
     normalizeAuditPage<ApiRequestAudit>(
       await request<Partial<AuditPage<ApiRequestAudit>>>(`/audits/api-requests?limit=${limit}`, { signal }),
@@ -719,6 +742,7 @@ export const adminQueryKeys = {
   config: ["admin", "config"] as const,
   inFlight: ["admin", "reload", "in-flight"] as const,
   restartPhase: ["admin", "restart", "phase"] as const,
+  gameNetworkStatus: ["admin", "restart", "netty", "status"] as const,
   apiRequestAudits: ["admin", "audits", "api-requests"] as const,
   toolExecutionAudits: ["admin", "audits", "tool-executions"] as const,
   tasks: ["admin", "tasks"] as const,

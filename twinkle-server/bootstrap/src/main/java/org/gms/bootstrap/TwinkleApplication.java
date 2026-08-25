@@ -27,6 +27,8 @@ import io.micronaut.runtime.Micronaut;
  */
 public final class TwinkleApplication {
 
+    private static final long STARTED_AT_NANOS = System.nanoTime();
+
     public static void main(String[] args) {
         // Micronaut 启动：从 classpath 加载 application.properties（含 twinkle.profile）。
         // 是否分进程由 profile 与外部启动脚本决定，Micronaut 启动 API 不感知进程边界。
@@ -34,5 +36,10 @@ public final class TwinkleApplication {
     }
 
     private TwinkleApplication() {
+    }
+
+    static String startupElapsedSeconds() {
+        double seconds = (System.nanoTime() - STARTED_AT_NANOS) / 1_000_000_000.0d;
+        return String.format(java.util.Locale.ROOT, "%.3f", seconds);
     }
 }

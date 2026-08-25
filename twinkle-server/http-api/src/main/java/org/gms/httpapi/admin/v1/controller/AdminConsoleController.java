@@ -19,6 +19,7 @@ import org.gms.i18n.I18nService;
 import org.gms.observability.HealthRegistry;
 import org.gms.service.admin.AdminService;
 import org.gms.service.intercoord.IntercoordService;
+import org.gms.service.network.GameNetworkService;
 
 import java.util.List;
 import java.util.Map;
@@ -50,12 +51,14 @@ public final class AdminConsoleController {
     private final EntityReloadCoordinator reloadCoordinator;
     private final DbConfigFacade configFacade;
     private final I18nService i18n;
+    private final GameNetworkService gameNetworkService;
 
     public AdminConsoleController(AdminApiService adminApiService, AdminService adminService,
                                   IntercoordService intercoordService, HealthRegistry healthRegistry,
                                   EntityReloadService reloadService,
                                   EntityReloadCoordinator reloadCoordinator,
-                                  DbConfigFacade configFacade, I18nService i18n) {
+                                  DbConfigFacade configFacade, I18nService i18n,
+                                  GameNetworkService gameNetworkService) {
         this.adminApiService = adminApiService;
         this.adminService = adminService;
         this.intercoordService = intercoordService;
@@ -64,6 +67,7 @@ public final class AdminConsoleController {
         this.reloadCoordinator = reloadCoordinator;
         this.configFacade = configFacade;
         this.i18n = i18n;
+        this.gameNetworkService = gameNetworkService;
     }
 
     // ---- 频道状态 / 在线玩家 / 健康 ----
@@ -192,5 +196,21 @@ public final class AdminConsoleController {
     @Get("/restart/phase")
     public Map<String, Object> restartPhase() {
         return Map.of("phase", adminService.restartPhase().name());
+    }
+
+    /** 仅重启游戏 Netty（登录服与本地频道服），Micronaut HTTP 保持在线。 */
+    @Post("/restart/netty")
+    public HttpResponse<?> restartNetty() {
+        boolean accepted = gameNetworkService.requestRestart();
+        GameNetworkService.Status status = gameNetworkService.status();
+        return (accepted ? HttpResponse.accepted() : HttpResponse.status(HttpStatus.CONFLICT)).body(Map.of(
+                "accepted", accepted,
+                "status", status));
+    }
+
+    /** 游戏 Netty 独立生命周期状态。 */
+    @Get("/restart/netty/status")
+    public GameNetworkService.Status restartNettyStatus() {
+        return gameNetworkService.status();
     }
 }

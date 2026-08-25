@@ -35,7 +35,7 @@ public final class AdminAccessPolicy {
             if ("/reload/wz".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RELOAD_WZ);
             }
-            if ("/restart".equals(relativePath)) {
+            if ("/restart".equals(relativePath) || "/restart/netty".equals(relativePath)) {
                 return new Policy(false, AdminPermission.RESTART);
             }
             if (relativePath.startsWith("/tasks")

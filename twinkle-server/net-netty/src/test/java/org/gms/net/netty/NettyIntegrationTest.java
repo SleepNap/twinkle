@@ -26,6 +26,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NettyIntegrationTest {
 
     @Test
+    void serverCanStopAndBindTheSamePortAgain() throws Exception {
+        LoginServer server = new LoginServer(new HandlerRegistry());
+        server.start(0);
+        int port = server.boundPort();
+        try {
+            assertThat(readHello(port)).hasSize(16);
+
+            server.stop();
+            assertThat(server.isRunning()).isFalse();
+
+            server.start(port);
+            assertThat(server.isRunning()).isTrue();
+            assertThat(server.boundPort()).isEqualTo(port);
+            assertThat(readHello(port)).hasSize(16);
+        } finally {
+            server.close();
+        }
+    }
+
+    @Test
     void helloHandshakeAndEncryptedRoundTrip() throws Exception {
         // 服务端：注册一个回包 handler（WHISPER → 回 PING + 字符串）。
         // 注意：不能再用 PONG——NetworkSession 已把 PONG 作为传输心跳在分发前拦截（事故报告阶段 B）。
@@ -87,6 +107,13 @@ class NettyIntegrationTest {
             }
         } finally {
             server.close();
+        }
+    }
+
+    private static byte[] readHello(int port) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", port);
+             DataInputStream in = new DataInputStream(socket.getInputStream())) {
+            return in.readNBytes(16);
         }
     }
 }

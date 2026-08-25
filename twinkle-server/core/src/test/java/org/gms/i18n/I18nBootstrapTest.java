@@ -22,6 +22,6 @@ class I18nBootstrapTest {
 
         assertThat(I18n.locale()).isEqualTo(Locale.US);
         assertThat(I18n.message("log.data.init"))
-                .isEqualTo("Initializing data source: {}");
+                .isEqualTo("[Database] Connecting data source: {}");
     }
 }

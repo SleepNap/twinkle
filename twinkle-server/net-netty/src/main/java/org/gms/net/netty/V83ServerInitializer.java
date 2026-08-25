@@ -2,6 +2,7 @@ package org.gms.net.netty;
 
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.gms.net.encryption.CipherPair;
@@ -22,24 +23,34 @@ public final class V83ServerInitializer extends ChannelInitializer<SocketChannel
     private final HandlerRegistry registry;
     private final DisconnectListener disconnectListener;
     private final HeartbeatConfig heartbeatConfig;
+    private final ChannelGroup clientChannels;
 
     public V83ServerInitializer(HandlerRegistry registry) {
-        this(registry, null, HeartbeatConfig.defaults());
+        this(registry, null, HeartbeatConfig.defaults(), null);
     }
 
     public V83ServerInitializer(HandlerRegistry registry, DisconnectListener disconnectListener) {
-        this(registry, disconnectListener, HeartbeatConfig.defaults());
+        this(registry, disconnectListener, HeartbeatConfig.defaults(), null);
     }
 
     public V83ServerInitializer(HandlerRegistry registry, DisconnectListener disconnectListener,
                                 HeartbeatConfig heartbeatConfig) {
+        this(registry, disconnectListener, heartbeatConfig, null);
+    }
+
+    public V83ServerInitializer(HandlerRegistry registry, DisconnectListener disconnectListener,
+                                HeartbeatConfig heartbeatConfig, ChannelGroup clientChannels) {
         this.registry = registry;
         this.disconnectListener = disconnectListener;
         this.heartbeatConfig = heartbeatConfig;
+        this.clientChannels = clientChannels;
     }
 
     @Override
     protected void initChannel(SocketChannel ch) {
+        if (clientChannels != null) {
+            clientChannels.add(ch);
+        }
         CipherPair ciphers = new CipherPair(PacketSession.MAPLE_VERSION);
         ChannelPipeline p = ch.pipeline();
         // 仅 readerIdle 驱动探测（不再用 allIdle——allIdle 会被服务端持续发包重置，永不触发）

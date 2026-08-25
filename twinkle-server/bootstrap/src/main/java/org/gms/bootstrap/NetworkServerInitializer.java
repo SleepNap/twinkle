@@ -45,8 +45,8 @@ public final class NetworkServerInitializer {
                                     @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
         // channel.host 是 v83 SERVER_IP 回包下发给客户端的频道地址，不是 Netty 监听地址。
         loginHandlers.register(registry, serverName, resolveChannelIpv4(channelHost), channelPort);
-        log.info(I18n.message("log.bootstrap.login_handlers_registered"));
         loginServer.start(port);
+        log.info(I18n.message("log.bootstrap.login_started"), loginServer.boundPort());
     }
 
     private static byte[] resolveChannelIpv4(String host) {
