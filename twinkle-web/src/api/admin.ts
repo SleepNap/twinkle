@@ -560,7 +560,13 @@ export const adminApi = {
       body: JSON.stringify({ key, value }),
       headers: { "X-Admin-Reason": reason },
     }),
-  inFlight: (signal?: AbortSignal) => request<InFlightResponse>("/reload/in-flight", { signal }),
+  inFlight: async (signal?: AbortSignal) => {
+    const response = await request<Partial<InFlightResponse>>("/reload/in-flight", { signal })
+    return {
+      inFlightCount: response.inFlightCount ?? 0,
+      entities: Array.isArray(response.entities) ? response.entities : [],
+    }
+  },
   restartPhase: (signal?: AbortSignal) =>
     request<RestartPhaseResponse>("/restart/phase", { signal }),
   kick: (characterId: number, reason: string) =>
@@ -589,10 +595,16 @@ export const adminApi = {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),
-  apiRequestAudits: (limit = 100, signal?: AbortSignal) =>
-    request<AuditPage<ApiRequestAudit>>(`/audits/api-requests?limit=${limit}`, { signal }),
-  toolExecutionAudits: (limit = 100, signal?: AbortSignal) =>
-    request<AuditPage<ToolExecutionAudit>>(`/audits/tool-executions?limit=${limit}`, { signal }),
+  apiRequestAudits: async (limit = 100, signal?: AbortSignal) =>
+    normalizeAuditPage<ApiRequestAudit>(
+      await request<Partial<AuditPage<ApiRequestAudit>>>(`/audits/api-requests?limit=${limit}`, { signal }),
+      limit,
+    ),
+  toolExecutionAudits: async (limit = 100, signal?: AbortSignal) =>
+    normalizeAuditPage<ToolExecutionAudit>(
+      await request<Partial<AuditPage<ToolExecutionAudit>>>(`/audits/tool-executions?limit=${limit}`, { signal }),
+      limit,
+    ),
   tasks: (limit = 100, signal?: AbortSignal) =>
     request<TasksResponse>(`/tasks?limit=${limit}`, { signal }),
   schedules: (signal?: AbortSignal) => request<SchedulesResponse>("/schedules", { signal }),
@@ -715,4 +727,12 @@ export const adminQueryKeys = {
   accounts: (query: string, status: string, offset: number) => ["admin", "accounts", query, status, offset] as const,
   account: (accountId: number) => ["admin", "account", accountId] as const,
   character: (accountId: number, characterId: number) => ["admin", "account", accountId, "character", characterId] as const,
+}
+
+function normalizeAuditPage<T>(response: Partial<AuditPage<T>>, requestedLimit: number): AuditPage<T> {
+  return {
+    total: response.total ?? 0,
+    limit: response.limit ?? requestedLimit,
+    records: Array.isArray(response.records) ? response.records : [],
+  }
 }

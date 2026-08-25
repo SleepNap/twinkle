@@ -136,7 +136,9 @@ export function BillingPage() {
               </TableBody>
             </Table>
           ) : (
-            <p className="py-10 text-center text-sm text-muted-foreground">{t("billing.unavailable")}</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              {accountsQuery.error ? t("billing.unavailable") : t("billing.accountsEmpty")}
+            </p>
           )}
         </CardContent>
       </Card>

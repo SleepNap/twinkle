@@ -61,6 +61,25 @@ describe("adminApi", () => {
     )
   })
 
+  it("后端省略空的在途实体集合时归一化为空数组", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ inFlightCount: 0 })))
+
+    await expect(adminApi.inFlight()).resolves.toEqual({
+      inFlightCount: 0,
+      entities: [],
+    })
+  })
+
+  it("后端省略空的审计记录集合时归一化为空数组", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ total: 0, limit: 50 })))
+
+    await expect(adminApi.apiRequestAudits(100)).resolves.toEqual({
+      total: 0,
+      limit: 50,
+      records: [],
+    })
+  })
+
   it("拒绝成功状态下的非 JSON 响应", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("ok", {
       status: 200,

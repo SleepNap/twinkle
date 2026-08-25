@@ -99,8 +99,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const billingApi = {
-  accounts: (signal?: AbortSignal) =>
-    request<{ accounts: BillingAccountSummary[] }>("/billing/accounts", { signal }),
+  accounts: async (signal?: AbortSignal) => {
+    const response = await request<{ accounts?: BillingAccountSummary[] }>("/billing/accounts", { signal })
+    return { accounts: Array.isArray(response.accounts) ? response.accounts : [] }
+  },
   account: (accountId: number, signal?: AbortSignal) =>
     request<BillingAccountDetail>(`/billing/accounts/${accountId}`, { signal }),
   adjust: (accountId: number, amount: number, note: string | undefined, reason: string) =>
@@ -115,10 +117,14 @@ export const billingApi = {
       body: JSON.stringify({ planId }),
       headers: { "X-Admin-Reason": reason },
     }),
-  transactions: (accountId: number, signal?: AbortSignal) =>
-    request<{ transactions: PointTransaction[] }>(`/billing/transactions?accountId=${accountId}`, { signal }),
-  plans: (signal?: AbortSignal) =>
-    request<{ plans: SubscriptionPlan[] }>("/billing/plans", { signal }),
+  transactions: async (accountId: number, signal?: AbortSignal) => {
+    const response = await request<{ transactions?: PointTransaction[] }>(`/billing/transactions?accountId=${accountId}`, { signal })
+    return { transactions: Array.isArray(response.transactions) ? response.transactions : [] }
+  },
+  plans: async (signal?: AbortSignal) => {
+    const response = await request<{ plans?: SubscriptionPlan[] }>("/billing/plans", { signal })
+    return { plans: Array.isArray(response.plans) ? response.plans : [] }
+  },
   upsertPlan: (plan: Partial<SubscriptionPlan> & { planCode: string }, reason: string) =>
     request<SubscriptionPlan>("/billing/plans", {
       method: "POST",

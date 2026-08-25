@@ -42,4 +42,40 @@ describe("workspace tabs", () => {
       { routePath: "/accounts", href: "/accounts?offset=20" },
     ])
   })
+
+  it("keeps the only tab open and does not navigate", () => {
+    const tabs = [{ routePath: "/", href: "/" }]
+
+    expect(removeOpenTab(tabs, "/", "/")).toEqual({
+      tabs,
+      navigateTo: null,
+    })
+  })
+
+  it("closes an inactive tab without changing the active route", () => {
+    const tabs = [
+      { routePath: "/", href: "/" },
+      { routePath: "/players", href: "/players?name=alice" },
+    ]
+
+    expect(removeOpenTab(tabs, "/players", "/")).toEqual({
+      tabs: [tabs[0]],
+      navigateTo: null,
+    })
+  })
+
+  it("normalizes malformed, cross-origin and mismatched saved hrefs", () => {
+    const validPaths = new Set(["/", "/accounts", "/players"])
+
+    expect(parseOpenTabs("not-json", "http://127.0.0.1:5173", validPaths)).toEqual([])
+    expect(parseOpenTabs(JSON.stringify([
+      { routePath: "/accounts", href: "https://evil.example/accounts?offset=20" },
+      { routePath: "/players", href: "/accounts?name=alice" },
+      { routePath: "/", href: "/?welcome=true#status" },
+    ]), "http://127.0.0.1:5173", validPaths)).toEqual([
+      { routePath: "/accounts", href: "/accounts" },
+      { routePath: "/players", href: "/players" },
+      { routePath: "/", href: "/?welcome=true#status" },
+    ])
+  })
 })
