@@ -39,8 +39,8 @@ public final class RemoteIntercoordService implements IntercoordService {
     // ---- 定位表 ----
 
     @Override
-    public void registerPlayer(long playerId, int channelId) {
-        rpcVoid("registerPlayer", playerId, channelId);
+    public void registerPlayer(long playerId, int worldId, int ownerChannelId) {
+        rpcVoid("registerPlayer", playerId, worldId, ownerChannelId);
     }
 
     @Override
@@ -51,6 +51,25 @@ public final class RemoteIntercoordService implements IntercoordService {
     @Override
     public void movePlayer(long playerId, int channelId) {
         rpcVoid("movePlayer", playerId, channelId);
+    }
+
+    @Override
+    public void beginChannelTransfer(long playerId, int sourceChannelId, int targetChannelId) {
+        rpcVoid("beginChannelTransfer", playerId, sourceChannelId, targetChannelId);
+    }
+
+    @Override
+    public void updatePlayerActivity(long playerId, PlayerActivity activity) {
+        rpcVoid("updatePlayerActivity", playerId, activity);
+    }
+
+    @Override
+    public Optional<PlayerPresence> presence(long playerId) {
+        InternalProtocol.RpcResponse resp = rpc("presence", playerId);
+        if (resp == null || !resp.ok() || "null".equals(resp.value())) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(JsonCodec.decode(resp.value(), PlayerPresence.class.getName()));
     }
 
     @Override
@@ -71,6 +90,16 @@ public final class RemoteIntercoordService implements IntercoordService {
         }
         Integer n = JsonCodec.decode(resp.value(), Integer.class.getName());
         return n == null ? 0 : n;
+    }
+
+    @Override
+    public int sessionsOnChannel(int channelId) {
+        return rpcInt("sessionsOnChannel", channelId);
+    }
+
+    @Override
+    public int onlineInWorld(int worldId) {
+        return rpcInt("onlineInWorld", worldId);
     }
 
     // ---- 频道注册 ----
@@ -154,6 +183,15 @@ public final class RemoteIntercoordService implements IntercoordService {
 
     private void rpcVoid(String method, Object... args) {
         rpc(method, args);
+    }
+
+    private int rpcInt(String method, Object... args) {
+        InternalProtocol.RpcResponse resp = rpc(method, args);
+        if (resp == null || !resp.ok()) {
+            return 0;
+        }
+        Integer value = JsonCodec.decode(resp.value(), Integer.class.getName());
+        return value == null ? 0 : value;
     }
 
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {

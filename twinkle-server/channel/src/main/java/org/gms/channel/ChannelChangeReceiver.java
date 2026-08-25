@@ -6,14 +6,13 @@ import org.gms.event.ReliableReceiver;
 import org.gms.i18n.I18n;
 import org.gms.message.ChangeChannelRequest;
 import org.gms.message.MessageTargets;
-import org.gms.service.intercoord.IntercoordService;
 
 /**
  * 换频道接收端（架构 4.7 CC 迁移跨进程：目标频道消费 {@code ChangeChannelRequest}）。
  *
  * <p>老频道发 CC 请求（经可靠总线，携带 streamId/seq/messageId）→ coordinator 路由 →
  * 目标频道本类收到 → {@link ReliableReceiver} 恰好一次判定（bus_stream 持久化去重，重启重投
- * 不重复迁移）→ 定位表确认迁移（幂等）+ 存档准备。
+ * 不重复迁移）→ 目标频道确认已收到迁移意图。
  *
  * <p>客户端随后重连目标频道端口 → {@link PlayerLoggedinHandler} 从 DB 加载最新存档进图
  * （老频道已同步存档 + 清图下线）。CC 迁移不掉数据、不重复的核心：可靠总线 + DB 真值。
@@ -24,16 +23,11 @@ import org.gms.service.intercoord.IntercoordService;
 @Log4j2
 public final class ChannelChangeReceiver {
 
-
-
     private final int channelId;
-    private final IntercoordService intercoord;
     private final ReliableReceiver reliableReceiver;
 
-    public ChannelChangeReceiver(int channelId, IntercoordService intercoord,
-                                 ReliableReceiver reliableReceiver, EventBus eventBus) {
+    public ChannelChangeReceiver(int channelId, ReliableReceiver reliableReceiver, EventBus eventBus) {
         this.channelId = channelId;
-        this.intercoord = intercoord;
         this.reliableReceiver = reliableReceiver;
         // 订阅本频道 CC 请求流（可靠投递经 ReliableDelivery 携带序号）
         eventBus.subscribe(MessageTargets.channel(channelId), ChangeChannelRequest.class, this::onChangeChannel);
@@ -49,8 +43,8 @@ public final class ChannelChangeReceiver {
     }
 
     private void apply(ChangeChannelRequest req) {
-        // 定位表确认迁移（幂等：目标频道 = 本频道）
-        intercoord.movePlayer(req.playerId(), channelId);
+        // 此时客户端尚未连入目标频道，不得提前转移 Presence 的连接属主。
+        // PlayerLoggedinHandler 完成目标会话认领并发 PlayerOnline 后才最终登记。
         log.info(I18n.message("log.channel.change.received"),
                 req.playerId(), channelId, req.fromChannel(), req.reason());
     }

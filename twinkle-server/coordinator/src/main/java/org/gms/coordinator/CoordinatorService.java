@@ -25,8 +25,8 @@ public final class CoordinatorService implements IntercoordService {
     }
 
     @Override
-    public void registerPlayer(long playerId, int channelId) {
-        locationTable.register(playerId, channelId);
+    public void registerPlayer(long playerId, int worldId, int ownerChannelId) {
+        locationTable.register(playerId, worldId, ownerChannelId);
     }
 
     @Override
@@ -40,6 +40,21 @@ public final class CoordinatorService implements IntercoordService {
     }
 
     @Override
+    public void beginChannelTransfer(long playerId, int sourceChannelId, int targetChannelId) {
+        locationTable.beginChannelTransfer(playerId, sourceChannelId, targetChannelId);
+    }
+
+    @Override
+    public void updatePlayerActivity(long playerId, PlayerActivity activity) {
+        locationTable.updateActivity(playerId, activity);
+    }
+
+    @Override
+    public Optional<PlayerPresence> presence(long playerId) {
+        return locationTable.presence(playerId);
+    }
+
+    @Override
     public Optional<Integer> locate(long playerId) {
         return locationTable.locate(playerId);
     }
@@ -47,6 +62,16 @@ public final class CoordinatorService implements IntercoordService {
     @Override
     public int onlineOnChannel(int channelId) {
         return locationTable.onlineOnChannel(channelId);
+    }
+
+    @Override
+    public int sessionsOnChannel(int channelId) {
+        return locationTable.sessionsOnChannel(channelId);
+    }
+
+    @Override
+    public int onlineInWorld(int worldId) {
+        return locationTable.onlineInWorld(worldId);
     }
 
     @Override

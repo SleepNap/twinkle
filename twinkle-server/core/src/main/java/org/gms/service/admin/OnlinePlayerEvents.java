@@ -1,5 +1,7 @@
 package org.gms.service.admin;
 
+import org.gms.service.intercoord.IntercoordService.PlayerActivity;
+
 /**
  * 在线状态变更事件（架构 M3-1 数据三路第③路：事件驱动快照的载荷）。
  *
@@ -17,6 +19,14 @@ public final class OnlinePlayerEvents {
 
     /** 玩家下线。 */
     public record PlayerOffline(long characterId) {
+    }
+
+    /**
+     * 玩家仍在大区在线，仅切换频道内活动状态；商城/MTS 不得伪装成 PlayerOffline。
+     * ownerChannelId 始终是持有 TCP 会话的频道。
+     */
+    public record PlayerActivityChanged(long characterId, int worldId, int ownerChannelId,
+                                        PlayerActivity activity) {
     }
 
     /** 事件广播目标（精确匹配，EventBus 订阅用）。 */

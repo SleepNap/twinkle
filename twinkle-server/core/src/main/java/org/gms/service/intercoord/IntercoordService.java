@@ -14,22 +14,62 @@ import java.util.Optional;
  */
 public interface IntercoordService {
 
-    // ---- 定位表（player → channel） ----
+    // ---- 大区在线 Presence（player → world + 连接属主频道 + 活动状态） ----
 
-    /** 玩家进图/换频道后登记定位。 */
-    void registerPlayer(long playerId, int channelId);
+    /**
+     * 玩家首次进图或完成频道迁移后登记大区在线态。
+     *
+     * <p>{@code ownerChannelId} 表示持有 TCP 会话的频道进程，不等于玩家一定在该频道地图内。
+     */
+    void registerPlayer(long playerId, int worldId, int ownerChannelId);
 
-    /** 玩家下线注销（幂等）。 */
+    /** 单世界兼容入口；新代码应显式传 worldId。 */
+    default void registerPlayer(long playerId, int ownerChannelId) {
+        registerPlayer(playerId, 0, ownerChannelId);
+    }
+
+    /** 玩家真正断开并离开大区时注销（幂等）；进入商城/MTS 不得调用。 */
     void unregisterPlayer(long playerId);
 
-    /** 玩家换频道更新定位。 */
+    /** 玩家完成换频道、目标频道已接管 TCP 会话后更新属主。 */
     void movePlayer(long playerId, int channelId);
 
-    /** 查询玩家所在频道（在线则 present）。 */
+    /**
+     * 开始换频道：旧频道仍是连接属主，玩家退出地图/频道游戏表，但保持大区在线。
+     * 目标频道只有在客户端重连并完成认领后才能成为新属主。
+     */
+    void beginChannelTransfer(long playerId, int sourceChannelId, int targetChannelId);
+
+    /** 在同一频道 TCP 连接上切换活动状态（商城/MTS/返回频道）。 */
+    void updatePlayerActivity(long playerId, PlayerActivity activity);
+
+    /** 查询完整大区在线态。 */
+    Optional<PlayerPresence> presence(long playerId);
+
+    /** 查询持有玩家 TCP 会话的频道（商城/MTS 中仍 present）。 */
     Optional<Integer> locate(long playerId);
 
-    /** 某频道在线玩家数。 */
+    /** 某频道内实际游戏玩家数（只统计 IN_CHANNEL，不含商城/MTS/迁移中）。 */
     int onlineOnChannel(int channelId);
+
+    /** 某频道持有的 TCP 会话数（包含商城/MTS/迁移中）。 */
+    int sessionsOnChannel(int channelId);
+
+    /** 某大区在线玩家数（包含频道、商城、MTS 和迁移中）。 */
+    int onlineInWorld(int worldId);
+
+    /** 玩家在大区内的活动位置；物理连接始终由 ownerChannelId 指向的频道持有。 */
+    enum PlayerActivity {
+        IN_CHANNEL,
+        CASH_SHOP,
+        MTS,
+        CHANNEL_TRANSITION
+    }
+
+    /** 大区在线真值；targetChannelId 仅在 CHANNEL_TRANSITION 时非空。 */
+    record PlayerPresence(long playerId, int worldId, int ownerChannelId,
+                          PlayerActivity activity, Integer targetChannelId) {
+    }
 
     // ---- 频道注册 ----
 

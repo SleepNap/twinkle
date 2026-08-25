@@ -4,6 +4,7 @@ import org.gms.domain.game.Character;
 import org.gms.event.EventBus;
 import org.gms.net.packet.PacketSession;
 import org.gms.service.admin.OnlinePlayerEvents;
+import org.gms.service.intercoord.IntercoordService.PlayerActivity;
 
 /**
  * 频道在线事件发布（架构 M3-1 数据三路第③路：频道进程推变更 → 管理进程只读镜像）。
@@ -28,6 +29,12 @@ public final class ChannelEventPublisher {
     /** 玩家断链/下线（DisconnectListener 注销前调用）。 */
     public void playerOffline(long characterId) {
         bus.send(OnlinePlayerEvents.TARGET, new OnlinePlayerEvents.PlayerOffline(characterId));
+    }
+
+    /** 玩家保持大区在线，只在同一频道 TCP 会话上切换游戏/商城/MTS 状态。 */
+    public void playerActivity(long characterId, int worldId, int ownerChannelId, PlayerActivity activity) {
+        bus.send(OnlinePlayerEvents.TARGET,
+                new OnlinePlayerEvents.PlayerActivityChanged(characterId, worldId, ownerChannelId, activity));
     }
 
     /** 从会话取角色 id 并发下线事件（断链回调用）。 */

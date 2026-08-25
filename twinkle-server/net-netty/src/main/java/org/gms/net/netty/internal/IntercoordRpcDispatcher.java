@@ -46,7 +46,7 @@ public final class IntercoordRpcDispatcher {
         return switch (method) {
             // ---- 定位表 ----
             case "registerPlayer" -> {
-                intercoord.registerPlayer(longArg(args, 0), intArg(args, 1));
+                intercoord.registerPlayer(longArg(args, 0), intArg(args, 1), intArg(args, 2));
                 yield "null";
             }
             case "unregisterPlayer" -> {
@@ -57,11 +57,25 @@ public final class IntercoordRpcDispatcher {
                 intercoord.movePlayer(longArg(args, 0), intArg(args, 1));
                 yield "null";
             }
+            case "beginChannelTransfer" -> {
+                intercoord.beginChannelTransfer(longArg(args, 0), intArg(args, 1), intArg(args, 2));
+                yield "null";
+            }
+            case "updatePlayerActivity" -> {
+                intercoord.updatePlayerActivity(longArg(args, 0), playerActivityArg(args, 1));
+                yield "null";
+            }
+            case "presence" -> {
+                Optional<IntercoordService.PlayerPresence> r = intercoord.presence(longArg(args, 0));
+                yield r.map(JsonCodec::encode).orElse("null");
+            }
             case "locate" -> {
                 Optional<Integer> r = intercoord.locate(longArg(args, 0));
                 yield r.map(String::valueOf).orElse("null");
             }
             case "onlineOnChannel" -> String.valueOf(intercoord.onlineOnChannel(intArg(args, 0)));
+            case "sessionsOnChannel" -> String.valueOf(intercoord.sessionsOnChannel(intArg(args, 0)));
+            case "onlineInWorld" -> String.valueOf(intercoord.onlineInWorld(intArg(args, 0)));
             // ---- 频道注册 ----
             case "registerChannel" -> {
                 intercoord.registerChannel(intArg(args, 0), strArg(args, 1), intArg(args, 2), intArg(args, 3));
@@ -108,6 +122,10 @@ public final class IntercoordRpcDispatcher {
 
     private static long longArg(String[] args, int i) {
         return args == null || i >= args.length ? 0L : JsonCodec.decode(args[i], Long.class.getName());
+    }
+
+    private static IntercoordService.PlayerActivity playerActivityArg(String[] args, int i) {
+        return JsonCodec.decode(args[i], IntercoordService.PlayerActivity.class.getName());
     }
 
     /** 单一属主存储的 value 是任意 Object：保持 JSON 字符串（跨进程不重建原类型，读端按需解析）。 */

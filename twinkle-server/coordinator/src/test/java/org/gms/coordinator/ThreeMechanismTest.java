@@ -38,6 +38,40 @@ class ThreeMechanismTest {
         assertThat(svc.onlineOnChannel(2)).isZero();
     }
 
+    @Test
+    void worldPresenceKeepsChannelConnectionWhilePlayerIsInCashShop() {
+        svc.registerPlayer(1001, 3, 7);
+
+        svc.updatePlayerActivity(1001, IntercoordService.PlayerActivity.CASH_SHOP);
+
+        assertThat(svc.presence(1001)).hasValueSatisfying(presence -> {
+            assertThat(presence.worldId()).isEqualTo(3);
+            assertThat(presence.ownerChannelId()).isEqualTo(7);
+            assertThat(presence.activity()).isEqualTo(IntercoordService.PlayerActivity.CASH_SHOP);
+        });
+        assertThat(svc.locate(1001)).contains(7);
+        assertThat(svc.onlineInWorld(3)).isEqualTo(1);
+        assertThat(svc.sessionsOnChannel(7)).isEqualTo(1);
+        assertThat(svc.onlineOnChannel(7)).isZero();
+    }
+
+    @Test
+    void channelTransferKeepsOldOwnerUntilTargetChannelClaimsSession() {
+        svc.registerPlayer(1001, 3, 7);
+
+        svc.beginChannelTransfer(1001, 7, 9);
+
+        assertThat(svc.locate(1001)).contains(7);
+        assertThat(svc.presence(1001).orElseThrow().targetChannelId()).isEqualTo(9);
+        assertThat(svc.onlineOnChannel(7)).isZero();
+        assertThat(svc.sessionsOnChannel(7)).isEqualTo(1);
+
+        svc.registerPlayer(1001, 3, 9);
+        assertThat(svc.locate(1001)).contains(9);
+        assertThat(svc.presence(1001).orElseThrow().activity())
+                .isEqualTo(IntercoordService.PlayerActivity.IN_CHANNEL);
+    }
+
     // ---- 频道注册 ----
 
     @Test

@@ -12,6 +12,7 @@ import org.gms.channel.AttackHandler;
 import org.gms.channel.BuddyHandler;
 import org.gms.channel.ChangeChannelHandler;
 import org.gms.channel.ChannelChangeReceiver;
+import org.gms.channel.ChannelActivityService;
 import org.gms.channel.ChannelHandlerRegistrar;
 import org.gms.channel.ChannelMapManager;
 import org.gms.channel.ChannelMessageSubscriber;
@@ -149,6 +150,20 @@ public class ChannelConfig {
         return new ChannelEventPublisher(eventBus);
     }
 
+    /** 商城/MTS 采用北斗模式：保留频道 TCP Session，只退出地图和频道游戏玩家表。 */
+    @Bean
+    @Singleton
+    public ChannelActivityService channelActivityService(
+            @Property(name = "twinkle.net.world.id", defaultValue = "0") int worldId,
+            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
+            PlayerStorage playerStorage,
+            PlayerSessionRegistry playerSessionRegistry,
+            org.gms.channel.persist.CharacterSaveQueue characterSaveQueue,
+            ChannelEventPublisher eventPublisher) {
+        return new ChannelActivityService(worldId, channelId, playerStorage, playerSessionRegistry,
+                characterSaveQueue, eventPublisher);
+    }
+
     @Bean
     @Singleton
     public AdminService adminService(PlayerStorage playerStorage, PlayerSessionRegistry playerSessionRegistry,
@@ -201,7 +216,7 @@ public class ChannelConfig {
                 new UseItemHandler(itemSystem, gameData),
                 new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
                 new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry,
-                        characterSaveQueue),
+                        playerStorage, characterSaveQueue),
                 new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository),
                 new MoveLifeHandler(leaseService, playerSessionRegistry),
                 new GeneralChatHandler(playerSessionRegistry));
@@ -225,20 +240,21 @@ public class ChannelConfig {
     @Singleton
     public ChannelChangeReceiver channelChangeReceiver(
             @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            IntercoordService intercoordService,
             org.gms.event.ReliableReceiver reliableReceiver,
             EventBus eventBus) {
-        return new ChannelChangeReceiver(channelId, intercoordService, reliableReceiver, eventBus);
+        return new ChannelChangeReceiver(channelId, reliableReceiver, eventBus);
     }
 
     /** 玩家定位绑定（进图/下线经事件更新定位表，架构 4.4）。 */
     @Bean
+    @Context
     @Singleton
     public ChannelLocationBinder channelLocationBinder(
+            @Property(name = "twinkle.net.world.id", defaultValue = "0") int worldId,
             @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
             IntercoordService intercoordService,
             EventBus eventBus) {
-        return new ChannelLocationBinder(channelId, intercoordService, eventBus);
+        return new ChannelLocationBinder(worldId, channelId, intercoordService, eventBus);
     }
 
     /**

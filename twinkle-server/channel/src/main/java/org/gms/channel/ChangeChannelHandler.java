@@ -33,19 +33,27 @@ public final class ChangeChannelHandler implements PacketHandler {
     private final IntercoordService intercoord;
     private final ReliableEventBus reliableBus;
     private final PlayerSessionRegistry sessions;
+    private final PlayerStorage players;
     private final CharacterSaveQueue saveQueue;
 
     public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
                                 PlayerSessionRegistry sessions) {
-        this(channelId, intercoord, reliableBus, sessions, null);
+        this(channelId, intercoord, reliableBus, sessions, null, null);
     }
 
     public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
                                 PlayerSessionRegistry sessions, CharacterSaveQueue saveQueue) {
+        this(channelId, intercoord, reliableBus, sessions, null, saveQueue);
+    }
+
+    public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
+                                PlayerSessionRegistry sessions, PlayerStorage players,
+                                CharacterSaveQueue saveQueue) {
         this.channelId = channelId;
         this.intercoord = intercoord;
         this.reliableBus = reliableBus;
         this.sessions = sessions;
+        this.players = players;
         this.saveQueue = saveQueue;
     }
 
@@ -86,12 +94,17 @@ public final class ChangeChannelHandler implements PacketHandler {
         log.info(I18n.message("log.channel.change.request"), chr.getName(), channelId, targetId, req.reason());
         reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req);
 
-        // 迁移执行（M4 单进程内：定位表更新 + 地图清理 + 会话注销（compare-and-remove））
-        intercoord.movePlayer(chr.getId(), targetId);
+        // 开始迁移：旧频道仍是 TCP 属主；目标频道只有在客户端重连并完成 PlayerLoggedin 后
+        // 才能登记为新属主，避免“尚未连接目标频道但定位已过去”的幽灵在线。
+        intercoord.beginChannelTransfer(chr.getId(), channelId, targetId);
         if (chr.getMapObject() != null) {
             chr.getMapObject().removeCharacter(chr);
         }
+        if (players != null) {
+            players.remove(chr);
+        }
         sessions.unregister(chr.getId(), session);
+        session.transition(SessionStage.CHANNEL_TRANSITION);
         // 玩家重连目标频道端口 → PlayerLoggedinHandler 重新进图（v83 loading 界面）
         log.info(I18n.message("log.channel.change.complete"), chr.getName(), targetId, targetId);
     }

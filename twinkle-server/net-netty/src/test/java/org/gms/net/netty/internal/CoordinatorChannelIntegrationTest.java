@@ -58,8 +58,14 @@ class CoordinatorChannelIntegrationTest {
 
             // ---- RPC 定位 ----
             RemoteIntercoordService remote = new RemoteIntercoordService(link);
-            remote.registerPlayer(1001, 5);
+            remote.registerPlayer(1001, 2, 5);
             assertThat(remote.locate(1001)).contains(5);
+            remote.updatePlayerActivity(1001, IntercoordService.PlayerActivity.MTS);
+            assertThat(remote.presence(1001).orElseThrow().activity())
+                    .isEqualTo(IntercoordService.PlayerActivity.MTS);
+            assertThat(remote.onlineInWorld(2)).isEqualTo(1);
+            assertThat(remote.sessionsOnChannel(5)).isEqualTo(1);
+            assertThat(remote.onlineOnChannel(5)).isZero();
 
             // ---- EVENT 路由：频道 A 发悄悄话 → coordinator 路由回本频道 ----
             RemoteEventBus remoteBus = new RemoteEventBus(channelBus, link);
