@@ -8,6 +8,7 @@ import org.gms.hotreload.versioned.VersionDecision;
 import org.gms.hotreload.versioned.VersionGate;
 
 import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -41,11 +42,11 @@ public final class ItemSystem {
             ItemData data = gameData.item(itemId);
             if (item == null || item.itemId() != itemId || data == null
                     || item.expiration() > 0 && item.expiration() <= now) return false;
-            long hp = healing(data, "hp", "hpr", state.getMaxHp());
-            long mp = healing(data, "mp", "mpr", state.getMaxMp());
+            long hp = healing(data, "hp", "hpr", state.effectiveMaxHp());
+            long mp = healing(data, "mp", "mpr", state.effectiveMaxMp());
             if (hp == 0 && mp == 0 || !state.removeTradeItems(List.of(item))) return false;
-            state.setHp((int) Math.min(state.getMaxHp(), state.getHp() + hp));
-            state.setMp((int) Math.min(state.getMaxMp(), state.getMp() + mp));
+            state.setHp((int) Math.min(state.effectiveMaxHp(), state.getHp() + hp));
+            state.setMp((int) Math.min(state.effectiveMaxMp(), state.getMp() + mp));
             state.markDirty();
             return true;
         }
@@ -109,6 +110,14 @@ public final class ItemSystem {
             return false;
         }
         ItemData data = gameData.item(itemId);
+        if (itemId / 1000000 == 1) {
+            if (data == null || data.getEquipment() == null || data.getEquipment().cash() || quantity > 32767) return false;
+            synchronized (state) {
+                if (versionGate.decide(state) != VersionDecision.ALLOW
+                        || !state.canAddItems(Map.of(itemId, quantity), Map.of(itemId, 1))) return false;
+                return state.addTradeItems(Collections.nCopies(quantity, EquipmentSystem.createItem(data)), Map.of(itemId, 1));
+            }
+        }
         int slotMax = data != null && data.getSlotMax() > 0 ? data.getSlotMax() : DEFAULT_SLOT_MAX;
         return state.addItem(itemId, quantity, slotMax);
     }

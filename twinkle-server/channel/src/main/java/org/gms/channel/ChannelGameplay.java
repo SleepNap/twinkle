@@ -10,6 +10,7 @@ import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.ProgressionSystem;
 import org.gms.replaceable.AvatarSystem;
 import org.gms.replaceable.ControlsSystem;
+import org.gms.replaceable.EquipmentSystem;
 import org.gms.wz.WzResourceRegistry;
 import java.time.Clock;
 import org.gms.tick.TickHandler;
@@ -33,9 +34,11 @@ public final class ChannelGameplay implements AutoCloseable {
         ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC(), sessions);
         AvatarHandler avatars = new AvatarHandler(sessions, new AvatarSystem(progression::accepts), data, Clock.systemUTC());
         ControlsHandler controls = new ControlsHandler(sessions, new ControlsSystem(progression::accepts, data), Clock.systemUTC());
+        EquipmentService equipment = new EquipmentService(new EquipmentSystem(progression::accepts, data), sessions, Clock.systemUTC());
         long sweepTicks = scheduler.ticksFor(1000);
         this.expiration = count -> { if (count % sweepTicks == 0) {
             drops.expire(); parties.refresh(); sessions.all().forEach(skills::expire); sessions.all().forEach(avatars::refresh);
+            sessions.all().forEach(equipment::refresh);
         } };
         MapTransitionService transitions = new MapTransitionService(maps::getMap, monsters, leases, channelId, sessions);
         NpcShopHandler shops = new NpcShopHandler(shopCatalog, data, items);
@@ -47,6 +50,7 @@ public final class ChannelGameplay implements AutoCloseable {
             var character = GameplaySession.character(session);
             if (character != null && character.getParty() != 0) { character.setParty(0); character.markDirty(); }
             controls.initialize(session);
+            equipment.initialize(session);
         }, 2);
         handlers.register(RecvOpcode.PARTY_OPERATION, parties);
         handlers.register(RecvOpcode.MULTI_CHAT, parties::chat);
@@ -73,7 +77,7 @@ public final class ChannelGameplay implements AutoCloseable {
             sessions.visibility().enter(session);
             drops.enter(session);
         }, 2);
-        handlers.register(RecvOpcode.ITEM_MOVE, new InventoryMoveHandler(items, drops));
+        handlers.register(RecvOpcode.ITEM_MOVE, new InventoryMoveHandler(items, drops, equipment, sessions));
         handlers.register(RecvOpcode.ITEM_PICKUP, new ItemPickupHandler(drops));
         handlers.register(RecvOpcode.NPC_SHOP, shops);
         handlers.replace(RecvOpcode.NPC_TALK, new NpcTalkHandler(scripts, items, quests, transitions, shops), 2);

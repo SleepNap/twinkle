@@ -11,10 +11,15 @@ import org.gms.replaceable.ItemSystem;
 public final class InventoryMoveHandler implements PacketHandler {
     private final ItemSystem items;
     private final GroundDropService drops;
+    private final EquipmentService equipment;
+    private final PlayerSessionRegistry sessions;
 
-    public InventoryMoveHandler(ItemSystem items, GroundDropService drops) {
+    public InventoryMoveHandler(ItemSystem items, GroundDropService drops,
+                                EquipmentService equipment, PlayerSessionRegistry sessions) {
         this.items = items;
         this.drops = drops;
+        this.equipment = equipment;
+        this.sessions = sessions;
     }
 
     @Override
@@ -29,6 +34,15 @@ public final class InventoryMoveHandler implements PacketHandler {
             int quantity = packet.readShort();
             if (type == InventoryType.UNDEFINED) return;
             synchronized (character) {
+                if (sessions.get(character.getId()) != session || !GameplaySession.canAct(session, character)) return;
+                if (source < 0 || target < 0) {
+                    if (type == InventoryType.EQUIP) equipment.move(session, source, target, quantity);
+                    return;
+                }
+                if (type == InventoryType.EQUIP && target > 0) {
+                    if (quantity < 0 || quantity > 1) return;
+                    quantity = 1;
+                }
                 var before = GameplayPackets.inventory(character, type);
                 boolean changed = target == 0 ? drops.drop(character, inventoryType, source, quantity)
                         : items.moveItem(character, inventoryType, source, target, quantity);

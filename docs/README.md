@@ -18,7 +18,7 @@
 ## 当前分布
 
 - `planned/` — 尚未开工的设计。
-- `in-progress/` — 正在推进的路线图与收尾工作（Web 控制台、后端结构收敛与模型重构）。
+- `in-progress/` — 正在推进的路线图与收尾工作（游戏封包迁移与玩法补齐、Web 控制台、后端结构收敛与模型重构）。
 - `archived/` — 已完成的历史文档，按主题分子目录：
   - `archived/ops/` — 运维操作手册
   - `archived/security/` — 安全加固
@@ -33,5 +33,6 @@
 后端 Maven 模块收敛、强类型契约、`PlayerCharacter`/`GameAccountRecord` 命名与聚合拆分方案见
 [`in-progress/backend-structure-refactor.md`](in-progress/backend-structure-refactor.md)。
 
-游戏内功能的已实现范围、客户端待验收项与下一步路线见
-[`in-progress/gameplay-roadmap.md`](in-progress/gameplay-roadmap.md)。
+游戏功能的迁移批次、已实现范围、自动验证记录与下一步路线以
+[`in-progress/gameplay-roadmap.md`](in-progress/gameplay-roadmap.md) 为准。
+截至 2026-09-06 已接入四批迁移，最新一批为装备穿脱与属性；下一步继续战斗相关封包，客户端联调与完整场景后续统一验证。

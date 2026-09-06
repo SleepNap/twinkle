@@ -28,14 +28,14 @@ public final class CombatSystem {
      *
      * @param attacker 攻击方（经 spi 接口）
      * @param target   目标怪物（稳定层数据对象）
-     * @param wAtk     武器攻击力（装备系统落地前由调用方给；徒手用 {@link #BARE_HAND_WATK}）
+     * @param wAtk     装备攻击力（未提供加成时使用 {@link #BARE_HAND_WATK}）
      */
     public DamageResult physicalAttack(CharacterState attacker, MapleMonster target, int wAtk) {
         if (versionGate.decide(attacker) != VersionDecision.ALLOW) {
             return DamageResult.blocked();
         }
         int damage = DamageCalculator.physicalDamage(
-                attacker.getStrStat(), attacker.getDexStat(), wAtk, 1.0, target.getData().getPdd());
+                attacker.totalStr(), attacker.totalDex(), wAtk, 1.0, target.getData().getPdd());
         target.takeDamage(damage);
         return new DamageResult(damage, target.isAlive());
     }

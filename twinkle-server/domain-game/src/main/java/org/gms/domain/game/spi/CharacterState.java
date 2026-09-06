@@ -18,6 +18,15 @@ import java.util.List;
  */
 public interface CharacterState extends Versioned {
 
+    /** 装备增量不写回基础属性，避免重登、换频道或重复换装累计加成。 */
+    public default EquipmentStats equipmentStats() { return EquipmentStats.EMPTY; }
+    public default int totalStr() { return Math.max(0, Math.min(32767, getStrStat() + equipmentStats().str())); }
+    public default int totalDex() { return Math.max(0, Math.min(32767, getDexStat() + equipmentStats().dex())); }
+    public default int totalInt() { return Math.max(0, Math.min(32767, getIntStat() + equipmentStats().intelligence())); }
+    public default int totalLuk() { return Math.max(0, Math.min(32767, getLukStat() + equipmentStats().luk())); }
+    public default int effectiveMaxHp() { return (int) Math.max(1, Math.min(30000, (long) getMaxHp() + equipmentStats().hp())); }
+    public default int effectiveMaxMp() { return (int) Math.max(0, Math.min(30000, (long) getMaxMp() + equipmentStats().mp())); }
+
     /** 原子移动/堆叠背包槽位；未实现的独立状态适配器明确拒绝。 */
     public default boolean moveInventoryItem(byte type, short source, short target, int quantity, int slotMax) {
         return false;

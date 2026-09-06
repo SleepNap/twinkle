@@ -51,7 +51,7 @@ public class Inventory {
     }
 
     /**
-     * 按指定槽位放入（已穿戴装备用负槽位：-5 帽 / -6 脸饰 / -7 / -11 武器）。
+     * 按指定槽位放入（已穿戴装备用负槽位：-1 帽 / -2 脸饰 / -7 鞋 / -11 武器）。
      * 不回写 position（调用方已设）；同槽位覆盖。加载存档时用。
      */
     public void putAtSlot(short slot, Item item) {

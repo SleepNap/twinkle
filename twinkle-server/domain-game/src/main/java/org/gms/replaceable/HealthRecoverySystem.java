@@ -40,7 +40,7 @@ public final class HealthRecoverySystem {
         if (versionGate.decide(state) != VersionDecision.ALLOW) {
             return false;
         }
-        int maxHp = state.getMaxHp();
+        int maxHp = state.effectiveMaxHp();
         int hp = state.getHp();
         if (hp >= maxHp) {
             return true;

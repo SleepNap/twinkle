@@ -81,7 +81,7 @@ public final class MapTransitionService {
         character.getMapObject().removeCharacter(character);
         Long generation = session.getAttr("sessionGeneration");
         if (leases != null && generation != null) leases.onDisconnect(character.getId(), session.sessionId(), generation);
-        if (revive) character.setHp(Math.min(character.getMaxHp(), 50));
+        if (revive) character.setHp(Math.min(character.effectiveMaxHp(), 50));
         character.setMap(mapId);
         character.setSpawnPoint(destination.getId());
         character.setX(destination.getX());

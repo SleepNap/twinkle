@@ -91,9 +91,9 @@ public final class NpcConversationHost implements Cm {
     @Override public int getLevel() { return chr.getLevel(); }
     @Override public int getJob() { return chr.getJob(); }
     @Override public int getHp() { return chr.getHp(); }
-    @Override public int getMaxHp() { return chr.getMaxHp(); }
+    @Override public int getMaxHp() { return chr.effectiveMaxHp(); }
     @Override public int getMp() { return chr.getMp(); }
-    @Override public int getMaxMp() { return chr.getMaxMp(); }
+    @Override public int getMaxMp() { return chr.effectiveMaxMp(); }
     @Override public int getMapId() { return chr.getMap(); }
     @Override public long getId() { return chr.getId(); }
 

@@ -4,6 +4,7 @@ import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.map.MapNpc;
+import org.gms.domain.game.spi.EquipmentState.SlotMove;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.OutPacket;
@@ -79,11 +80,28 @@ public final class GameplayPackets {
         return result;
     }
 
+    /** v83 换装使用移动操作及末尾重算标志；字段布局核对北斗 PacketCreator.modifyInventory。 */
+    public static OutPacket equipmentMoves(List<SlotMove> moves, Map<Short, V83ItemSnapshot> boundItems) {
+        OutPacket packet = packet(SendOpcode.INVENTORY_OPERATION);
+        packet.writeBool(true).writeByte(moves.size() + 2 * boundItems.size());
+        for (SlotMove move : moves) {
+            packet.writeByte(2).writeByte(1).writeShort(move.source()).writeShort(move.target());
+        }
+        new TreeMap<>(boundItems).forEach((slot, item) -> {
+            packet.writeByte(3).writeByte(1).writeShort(slot);
+            packet.writeByte(0).writeByte(1).writeShort(slot);
+            V83ItemPacketWriter.write(packet, item, false);
+        });
+        packet.writeByte(!boundItems.isEmpty() ? 2 : moves.getLast().source() < 0 ? 1 : 2);
+        return packet;
+    }
+
     /** 按完整实例投影计算增删，避免仅以 itemId 比较丢失装备、宠物及期限属性。 */
     public static List<OutPacket> inventoryChanges(InventoryType type,
                                                   Map<Short, V83ItemSnapshot> before,
                                                   Map<Short, V83ItemSnapshot> after) {
         List<ByteArrayOutPacket> changes = new ArrayList<>();
+        List<Boolean> equippedRemovals = new ArrayList<>();
         before.forEach((slot, item) -> {
             if (!item.equals(after.get(slot))) {
                 ByteArrayOutPacket change = new ByteArrayOutPacket();
@@ -91,6 +109,7 @@ public final class GameplayPackets {
                 change.writeByte(type.getType());
                 change.writeShort(slot);
                 changes.add(change);
+                equippedRemovals.add(slot < 0);
             }
         });
         after.forEach((slot, item) -> {
@@ -101,6 +120,7 @@ public final class GameplayPackets {
                 change.writeShort(slot);
                 V83ItemPacketWriter.write(change, item, false);
                 changes.add(change);
+                equippedRemovals.add(false);
             }
         });
         List<OutPacket> packets = new ArrayList<>();
@@ -110,6 +130,7 @@ public final class GameplayPackets {
             packet.writeBool(true);
             packet.writeByte(batch.size());
             batch.forEach(change -> packet.writeBytes(change.getBytes()));
+            if (equippedRemovals.subList(start, start + batch.size()).contains(true)) packet.writeByte(2);
             packets.add(packet);
         }
         return packets;

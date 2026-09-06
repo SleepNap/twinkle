@@ -50,6 +50,14 @@ public final class PlayerPresencePackets {
         return GameplayPackets.packet(SendOpcode.REMOVE_PLAYER_FROM_MAP).writeInt((int) id);
     }
 
+    /** 外观更新复用生成角色的编码器；尚未实现的三类戒指段为空。 */
+    public static OutPacket changedLook(PlayerCharacter character) {
+        OutPacket packet = GameplayPackets.packet(SendOpcode.UPDATE_CHAR_LOOK);
+        packet.writeInt((int) character.getId()).writeByte(1);
+        V83CharacterPacketWriter.writeLook(packet, look(character), false);
+        return packet.skip(3).writeInt(0);
+    }
+
     public static OutPacket expression(long id, int expression) {
         return GameplayPackets.packet(SendOpcode.FACIAL_EXPRESSION).writeInt((int) id).writeInt(expression);
     }

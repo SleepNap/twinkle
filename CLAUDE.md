@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **热更新、扩展性好的冒险岛后台（MapleStory v83 服务端）**。参考项目：北斗（`E:\LocalGit\GitHub\BeiDou-Server`，GPL，只作理解、禁止逐字复制）。
 
-**M0-M6 全部完成**（2026-08-09）：当前已收敛为 13 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
+**M0-M6 基础架构里程碑已完成**（2026-08-09），不代表全部游戏玩法完成。当前已收敛为 13 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
+
+**游戏封包迁移进度**（2026-09-06）：已接入四批功能，最新一批为装备穿脱与属性。范围包括基础玩法、同屏角色与动作、操作设置与详情、队伍聊天、手动金币掉落，以及装备校验/交换、派生属性、外观和期限处理。第一、二批全量验证通过；第四批编译及 54 项定向检查通过（含 7 条架构规则），新增 16 项装备回归。下一步是战斗与死亡结算，客户端联调及完整场景后续统一验证。逐项实现边界、提交记录、验证记录与旧开发库重建要求以 [游戏路线图](docs/in-progress/gameplay-roadmap.md) 为准。
 
 **Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、能力目录、审计日志、任务监控和 API 文档入口；配置热改、踢下线、按在线角色临时监听封包、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。封包监听支持收发方向、include/exclude opcode 过滤和实时启停，使用频道会话内 4 MiB 有界环形窗口，不写日志/数据库，凭证类 opcode 强制不采集，独立权限为 `admin.packet:trace`。HTTP 路由由 `micronaut-openapi` 生成机器契约和 Swagger UI，第三方公共契约另按主版本冻结。进程级 `ThreadManager` 统一使用命名虚拟线程执行独立后台任务并提供执行器计数快照；`BackgroundTaskRegistry` 提供有界执行历史、真实异步运行、排队/执行耗时、调度启停、立即运行与失败重试，监控 API 已预留后续持久化和集群聚合字段。完整范围见 `docs/in-progress/console-roadmap.md`。**控制台强鉴权 + RBAC + 不可抵赖审计已落地**：所有 `/admin/vN` 由 `AdminAuthFilter` 统一保护（账号 BCrypt 登录 + DB session token），可配置角色表 + 写操作 reason 审计。
 
@@ -18,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **`ARCHITECTURE.md` 是唯一权威规范**——设计决策、模块划分、运行拓扑均以该文档为准，改动前必须先读。所有文档、注释使用中文。
 
-各里程碑进度、遗留与"完成范围诚实标注"见共享记忆 `.claude/memory/twinkle-project-context.md` 与 `docs/archived/tasks/` 任务文档（根 CLAUDE.md 不复述逐项明细）。
+当前游戏进度以 `docs/in-progress/gameplay-roadmap.md` 为准。历史里程碑与当时的完成边界见共享记忆 `.claude/memory/twinkle-project-context.md` 和 `docs/archived/tasks/`，归档中的遗留项不直接作为当前待办。
 
 ## 常用命令
 

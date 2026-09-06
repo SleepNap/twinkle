@@ -17,6 +17,8 @@ import org.gms.domain.game.quest.QuestChange;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.domain.game.spi.AvatarState;
 import org.gms.domain.game.spi.ControlsState;
+import org.gms.domain.game.spi.EquipmentState;
+import org.gms.domain.game.spi.EquipmentStats;
 import org.gms.domain.game.control.ControlSettings;
 import org.gms.domain.game.spi.TradeItemSnapshot;
 
@@ -43,7 +45,61 @@ import java.util.Set;
  */
 @Getter
 @Setter
-public class PlayerCharacter implements BuffState, AvatarState, ControlsState {
+public class PlayerCharacter implements BuffState, AvatarState, ControlsState, EquipmentState {
+
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private volatile EquipmentStats equipmentStats = EquipmentStats.EMPTY;
+
+    @Override public EquipmentStats equipmentStats() { return equipmentStats; }
+    @Override public void setEquipmentStats(EquipmentStats stats) { equipmentStats = Objects.requireNonNull(stats); }
+    @Override public int equipmentSlotLimit() { return getInventory(InventoryType.EQUIP).getSlotLimit(); }
+
+    @Override public synchronized Map<Short, TradeItemSnapshot> equipmentItems() {
+        Map<Short, TradeItemSnapshot> result = new HashMap<>();
+        for (Item item : getInventory(InventoryType.EQUIP).items()) {
+            TradeItemSnapshot snapshot = toTradeSnapshot(InventoryType.EQUIP, item, item.getQuantity());
+            if (snapshot != null) result.put(item.getPosition(), snapshot);
+        }
+        return Map.copyOf(result);
+    }
+
+    /** 先在副本中完整验证槽位计划，再搬动原实例，任何失败均不产生部分写入。 */
+    @Override public synchronized boolean applyEquipmentMoves(Map<Short, TradeItemSnapshot> expected,
+                                                              List<SlotMove> moves, Set<Short> bindSlots) {
+        if (moves.isEmpty() || !equipmentItems().equals(expected)) return false;
+        Inventory bag = getInventory(InventoryType.EQUIP);
+        Map<Short, Item> planned = new HashMap<>();
+        bag.items().forEach(item -> planned.put(item.getPosition(), item));
+        for (SlotMove move : moves) {
+            if (move.source() == 0 || move.target() == 0 || move.source() == move.target()
+                    || move.source() < -150 || move.target() < -150
+                    || move.source() > bag.getSlotLimit() || move.target() > bag.getSlotLimit()) return false;
+            Item source = planned.get(move.source()), target = planned.get(move.target());
+            if (!(source instanceof Equip) || source.getQuantity() != 1
+                    || target != null && (!(target instanceof Equip) || target.getQuantity() != 1)) return false;
+            planned.put(move.target(), source);
+            if (target == null) planned.remove(move.source()); else planned.put(move.source(), target);
+        }
+        if (bindSlots.stream().anyMatch(slot -> slot >= 0 || !(planned.get(slot) instanceof Equip))) return false;
+        for (Item item : bag.items()) bag.removeItem(item.getPosition());
+        planned.forEach((slot, item) -> {
+            item.setPosition(slot);
+            if (bindSlots.contains(slot)) item.setFlag(item.getFlag() | 8); // v83 不可交易标志
+            bag.putAtSlot(slot, item);
+        });
+        markDirty();
+        return true;
+    }
+
+    @Override public synchronized boolean removeEquipment(Map<Short, TradeItemSnapshot> expected, Set<Short> slots) {
+        if (slots.isEmpty() || !equipmentItems().equals(expected)) return false;
+        Inventory bag = getInventory(InventoryType.EQUIP);
+        if (slots.stream().anyMatch(slot -> slot >= 0 || !(bag.getItem(slot) instanceof Equip))) return false;
+        slots.forEach(bag::removeItem);
+        markDirty();
+        return true;
+    }
 
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
@@ -573,6 +629,11 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState {
         if (quantity <= 0) {
             return false;
         }
+        // 按编号扣除只作用于背包；已穿戴装备必须先走换装入口，不能留下过期的属性投影。
+        long available = inventory.mutableInventories().values().stream().flatMap(inv -> inv.items().stream())
+                .filter(item -> item.getPosition() > 0 && item.getId() == itemId)
+                .mapToLong(Item::getQuantity).sum();
+        if (available < quantity) return false;
         int remaining = quantity;
         for (InventoryType type : InventoryType.values()) {
             Inventory inv = inventory.mutableInventories().get(type);
@@ -580,7 +641,7 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState {
                 continue;
             }
             for (Item item : List.copyOf(inv.items())) {
-                if (item.getId() != itemId) {
+                if (item.getId() != itemId || item.getPosition() <= 0) {
                     continue;
                 }
                 int take = Math.min(item.getQuantity(), remaining);

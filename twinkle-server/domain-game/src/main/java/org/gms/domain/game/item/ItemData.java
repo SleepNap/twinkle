@@ -26,6 +26,8 @@ public class ItemData implements java.io.Serializable {
     private int slotMax = 100;
     private boolean tradeBlock;
     private int reqLevel;
+    /** 仅真实装备定义设置；普通 Item.wz 道具不具有穿戴条件。 */
+    private EquipmentData equipment;
 
     @Getter(AccessLevel.NONE)
     private final Map<String, Integer> stats = new HashMap<>();
