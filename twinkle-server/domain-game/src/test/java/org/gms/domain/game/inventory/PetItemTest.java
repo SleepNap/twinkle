@@ -1,6 +1,6 @@
 package org.gms.domain.game.inventory;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.spi.TradeItemSnapshot;
 import org.junit.jupiter.api.Test;
 
@@ -21,8 +21,8 @@ class PetItemTest {
 
     @Test
     void copyAndTradePreserveCompletePetState() {
-        Character sender = character(1L);
-        Character receiver = character(2L);
+        PlayerCharacter sender = character(1L);
+        PlayerCharacter receiver = character(2L);
         PetItem pet = pet();
         sender.getInventory(InventoryType.CASH).putAtSlot((short) 2, pet);
 
@@ -44,8 +44,8 @@ class PetItemTest {
         assertThat(received.getAttribute()).isEqualTo((short) 5);
     }
 
-    private static Character character(long id) {
-        Character character = new Character(1L);
+    private static PlayerCharacter character(long id) {
+        PlayerCharacter character = new PlayerCharacter(1L);
         character.setId(id);
         return character;
     }

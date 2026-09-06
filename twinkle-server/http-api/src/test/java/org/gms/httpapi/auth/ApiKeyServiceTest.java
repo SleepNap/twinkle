@@ -1,7 +1,7 @@
 package org.gms.httpapi.auth;
 
-import org.gms.data.entity.ApiKeyRecord;
-import org.gms.data.repo.ApiKeyRepository;
+import org.gms.persistence.entity.ApiKeyRecord;
+import org.gms.persistence.repo.ApiKeyRepository;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.i18n.I18n;
 import org.gms.i18n.ResourceBundleI18nService;

@@ -1,8 +1,8 @@
 package org.gms.httpapi.execution;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.ToolExecutionAudit;
-import org.gms.data.repo.ToolExecutionAuditRepository;
+import org.gms.persistence.entity.ToolExecutionAudit;
+import org.gms.persistence.repo.ToolExecutionAuditRepository;
 import org.gms.httpapi.auth.ApiPrincipal;
 import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.identity.ServerIdentity;
@@ -34,7 +34,7 @@ public final class ToolExecutionService {
     private final ToolCatalogService catalogService;
     private final ServerHealthTool healthTool;
     private final OnlinePlayerPageService onlineTool;
-    private final PlayerInventoryTool inventoryTool;
+    private final CharacterInventoryTool inventoryTool;
     private final ToolExecutionAuditRepository auditRepository;
     private final ApiRateLimiter rateLimiter;
     private final Metrics metrics;
@@ -45,7 +45,7 @@ public final class ToolExecutionService {
 
     public ToolExecutionService(ToolCatalogService catalogService, ServerHealthTool healthTool,
                                 OnlinePlayerPageService onlineTool,
-                                PlayerInventoryTool inventoryTool,
+                                CharacterInventoryTool inventoryTool,
                                 ToolExecutionAuditRepository auditRepository,
                                 ApiRateLimiter rateLimiter, Metrics metrics,
                                 ServerIdentity serverIdentity) {

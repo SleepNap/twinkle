@@ -15,6 +15,7 @@
     <description>公共底座：DI、EventBus、配置门面、调度、插件框架、热更新、RestartCoordinator</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- Micronaut 注入（编译时 DI） -->
         <dependency>
             <groupId>io.micronaut</groupId>

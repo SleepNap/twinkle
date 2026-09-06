@@ -51,12 +51,12 @@ public final class RemoteAdminService implements AdminService {
     }
 
     @Override
-    public PlayerInventory inventorySnapshot(long characterId) {
+    public CharacterInventory inventorySnapshot(long characterId) {
         InternalProtocol.RpcResponse response = rpc("inventorySnapshot", characterId);
         if (response == null || !response.ok() || "null".equals(response.value())) {
             return null;
         }
-        return JsonCodec.decode(response.value(), PlayerInventory.class.getName());
+        return JsonCodec.decode(response.value(), CharacterInventory.class.getName());
     }
 
     @Override
@@ -73,10 +73,12 @@ public final class RemoteAdminService implements AdminService {
     public PacketTrace.Catalog packetTraceCatalog() {
         InternalProtocol.RpcResponse response = rpc("packetTraceCatalog");
         if (response == null || !response.ok()) {
-            return AdminService.super.packetTraceCatalog();
+            return new PacketTrace.Catalog(java.util.List.of(), java.util.Set.of(), java.util.Set.of());
         }
         PacketTrace.Catalog catalog = JsonCodec.decode(response.value(), PacketTrace.Catalog.class.getName());
-        return catalog == null ? AdminService.super.packetTraceCatalog() : catalog;
+        return catalog == null
+                ? new PacketTrace.Catalog(java.util.List.of(), java.util.Set.of(), java.util.Set.of())
+                : catalog;
     }
 
     @Override

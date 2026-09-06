@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;

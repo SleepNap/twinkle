@@ -11,7 +11,7 @@ import org.gms.hotreload.versioned.Versioned;
  * <p>演示可替换层的三条纪律：
  * <ol>
  *   <li><b>经接口访问稳定层</b>：只依赖 {@link CharacterState}（spi 接口），不碰
- *       {@code org.gms.domain.game.Character} 具体类（红线 11 / ArchUnit 规则 3 强制，防 CCE）。</li>
+ *       {@code org.gms.domain.game.PlayerCharacter} 具体类（红线 11 / ArchUnit 规则 3 强制，防 CCE）。</li>
  *   <li><b>逻辑无状态化</b>：无字段（除注入的 versionGate 依赖），不持有跨操作状态
  *       （红线 12，热重载安全前提）。"从接口读 → 计算 → 经接口写回"。</li>
  *   <li><b>写前过版本门</b>：{@link VersionGate#decide(Versioned)} 判定逻辑版本，

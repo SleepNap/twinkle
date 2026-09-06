@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Inventory;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
@@ -82,7 +82,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
             session.close(I18n.message("error.interaction.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.interaction.not_in_map"));
             return;
@@ -103,17 +103,17 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     /* ---------- 子动作 ---------- */
 
-    private void create(PacketSession session, Character chr) {
+    private void create(PacketSession session, PlayerCharacter chr) {
         // CREATE 后客户端再发 INVITE 指定目标；此处不建交易（等待 INVITE 带目标）
     }
 
-    private void invite(PacketSession session, Character chr, InPacket packet) {
+    private void invite(PacketSession session, PlayerCharacter chr, InPacket packet) {
         long targetId = packet.readInt();
         PacketSession target = sessions.get(targetId);
         if (target == null || target == session) {
             return;
         }
-        Character targetChr = target.getAttr("character");
+        PlayerCharacter targetChr = target.getAttr("character");
         if (targetChr == null) {
             return;
         }
@@ -132,7 +132,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         target.send(tradeInvite(chr));
     }
 
-    private void decline(PacketSession session, Character chr) {
+    private void decline(PacketSession session, PlayerCharacter chr) {
         Trade trade = session.getAttr(TRADE_ATTR);
         if (trade == null) {
             return;
@@ -147,7 +147,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         endOperations(trade);
     }
 
-    private void visit(PacketSession session, Character chr) {
+    private void visit(PacketSession session, PlayerCharacter chr) {
         Trade trade = session.getAttr(TRADE_ATTR);
         if (trade == null) {
             return;
@@ -163,7 +163,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         session.send(tradeStart(session, trade, number(session, trade)));
     }
 
-    private void exit(PacketSession session, Character chr) {
+    private void exit(PacketSession session, PlayerCharacter chr) {
         Trade trade = session.getAttr(TRADE_ATTR);
         if (trade == null) {
             return;
@@ -182,7 +182,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         endOperations(trade);
     }
 
-    private void setItems(PacketSession session, Character chr, InPacket packet) {
+    private void setItems(PacketSession session, PlayerCharacter chr, InPacket packet) {
         Trade trade = session.getAttr(TRADE_ATTR);
         if (trade == null) {
             return;
@@ -211,7 +211,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         }
     }
 
-    private void setMeso(PacketSession session, Character chr, InPacket packet) {
+    private void setMeso(PacketSession session, PlayerCharacter chr, InPacket packet) {
         Trade trade = session.getAttr(TRADE_ATTR);
         if (trade == null) {
             return;
@@ -230,7 +230,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         }
     }
 
-    private void confirm(PacketSession session, Character chr) {
+    private void confirm(PacketSession session, PlayerCharacter chr) {
         Trade trade = session.getAttr(TRADE_ATTR);
         if (trade == null) {
             return;
@@ -262,7 +262,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
     /* ---------- 发包 ---------- */
 
     /** 邀请：byte INVITE + 3 + string 名字 + 4B。 */
-    private static OutPacket tradeInvite(Character chr) {
+    private static OutPacket tradeInvite(PlayerCharacter chr) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.PLAYER_INTERACTION.getValue());
         p.writeByte(ACTION_INVITE);
@@ -273,7 +273,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
     }
 
     /** 对方进房：byte VISIT + 1 + addCharLook + string 名字。 */
-    private static OutPacket tradePartnerAdd(Character chr) {
+    private static OutPacket tradePartnerAdd(PlayerCharacter chr) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.PLAYER_INTERACTION.getValue());
         p.writeByte(ACTION_VISIT);
@@ -285,7 +285,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     /** 进窗口：byte ROOM + 3 + 2 + number + [number==1 对方] + 本方 + 0xFF。 */
     private static OutPacket tradeStart(PacketSession session, Trade trade, byte number) {
-        Character me = session.getAttr("character");
+        PlayerCharacter me = session.getAttr("character");
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.PLAYER_INTERACTION.getValue());
         p.writeByte(5);                     // ROOM
@@ -293,7 +293,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
         p.writeByte(2);
         p.writeByte(number);
         if (number == 1) {
-            Character partner = partnerOf(session, trade);
+            PlayerCharacter partner = partnerOf(session, trade);
             p.writeByte(0);
             V83CharacterPacketWriter.writeLook(p, toProtocolLook(partner), false);
             p.writeString(partner.getName());
@@ -348,18 +348,18 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     /** 本会话在交易里的编号（0=发起方/1=接受方，按 TradeSide 首尾判定）。 */
     private static byte number(PacketSession session, Trade trade) {
-        Character me = session.getAttr("character");
+        PlayerCharacter me = session.getAttr("character");
         return trade.sideOf(me) == trade.getFirst() ? (byte) 0 : (byte) 1;
     }
 
-    private static Character partnerOf(PacketSession session, Trade trade) {
-        Character me = session.getAttr("character");
+    private static PlayerCharacter partnerOf(PacketSession session, Trade trade) {
+        PlayerCharacter me = session.getAttr("character");
         TradeSide my = trade.sideOf(me);
         TradeSide partner = my == trade.getFirst() ? trade.getSecond() : trade.getFirst();
-        return (Character) partner.getTrader();
+        return (PlayerCharacter) partner.getTrader();
     }
 
-    private static V83CharacterLook toProtocolLook(Character chr) {
+    private static V83CharacterLook toProtocolLook(PlayerCharacter chr) {
         List<V83EquippedItem> equipped = new ArrayList<>();
         for (Item item : chr.getInventory(InventoryType.EQUIP).items()) {
             if (item.getPosition() < 0) {
@@ -378,8 +378,8 @@ public final class PlayerInteractionHandler implements PacketHandler {
         if (reloadCoordinator == null) {
             return;
         }
-        Character first = (Character) trade.getFirst().getTrader();
-        Character second = (Character) trade.getSecond().getTrader();
+        PlayerCharacter first = (PlayerCharacter) trade.getFirst().getTrader();
+        PlayerCharacter second = (PlayerCharacter) trade.getSecond().getTrader();
         reloadCoordinator.endOperation(first.getId());
         reloadCoordinator.endOperation(second.getId());
     }

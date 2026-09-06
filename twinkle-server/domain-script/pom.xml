@@ -15,6 +15,7 @@
     <description>GraalVM 脚本引擎（宿主对象契约 cm/qm/em/rm/im 接口化）。独立库引入，配 EnableJVMCI 全速</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- GraalVM JS：org.graalvm.js:js 是 pom 聚合器（不含 jar），真正带语言实现的是
              js-language + truffle-runtime（Truffle 运行时）。js 聚合 POM 的依赖等价于显式引入这两个。
              版本须与 JDK 的 GraalVM compiler 精确匹配（红线 16 JDK 21：21.0.11 ↔ 23.1.11）。

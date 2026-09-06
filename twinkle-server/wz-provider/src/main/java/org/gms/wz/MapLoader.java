@@ -81,7 +81,15 @@ public final class MapLoader {
                     if ("m".equals(l.getString("type").orElse(""))) {
                         map.addSpawnPoint(fillSpawnPoint(l));
                     }
-                    // 'n' = NPC，第一片不建结构，忽略
+                    if ("n".equals(l.getString("type").orElse("")) && l.getInt("hide").orElse(0) == 0) {
+                        // NPC 使用独立正数区间，保留 WZ life 索引以便热重载后对象身份稳定。
+                        int objectId = Math.addExact(1_000_000, Integer.parseInt(idx));
+                        map.putNpc(new org.gms.domain.game.map.MapNpc(objectId,
+                                Integer.parseInt(l.getString("id").orElse("0")),
+                                l.getInt("x").orElse(0), l.getInt("cy").orElse(l.getInt("y").orElse(0)),
+                                l.getInt("fh").orElse(0), l.getInt("rx0").orElse(0),
+                                l.getInt("rx1").orElse(0), l.getInt("f").orElse(0) != 1));
+                    }
                 }));
 
         return map;
@@ -107,6 +115,9 @@ public final class MapLoader {
                 p.getInt("y").orElse(0));
         p.getInt("tm").ifPresent(portal::setTargetMapId);
         p.getString("tn").ifPresent(portal::setTargetPortalName);
+        String script = p.getString("script").orElse("");
+        portal.setScript(!script.isBlank());
+        portal.setScriptName(script);
         return portal;
     }
 

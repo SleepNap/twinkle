@@ -1,5 +1,7 @@
 package org.gms.event;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * 可靠投递扩展接口（架构 4.5：跨进程携带单一属主序号）。
  *
@@ -20,5 +22,6 @@ public interface ReliableDelivery {
      * @param target    投递目标（逻辑名）
      * @param payload   负载
      */
-    <T> void sendReliable(String streamId, long seq, String messageId, String target, T payload);
+    <T> CompletableFuture<Void> sendReliable(String streamId, long seq, String messageId,
+                                              String target, T payload);
 }

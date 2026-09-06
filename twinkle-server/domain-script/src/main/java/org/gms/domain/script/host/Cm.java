@@ -8,7 +8,7 @@ import org.gms.i18n.I18n;
  * <p>脚本通过 {@code cm} 访问角色信息（等级/职业/HP/MP/位置等）并驱动对话
  * （M3-5：兼容 v83 脚本写法 + 北斗 nextlevel 写法）。
  * 实现类在 channel（NpcConversationHost）；脚本只依赖此接口，
- * 不直接触碰 {@code org.gms.domain.game.Character} 具体类（红线 11/12）。
+ * 不直接触碰 {@code org.gms.domain.game.PlayerCharacter} 具体类（红线 11/12）。
  *
  * <p>方法签名按 v83 脚本兼容约定命名，参数与返回值用基本类型/字符串，避免宿主复杂对象泄漏。
  * 对话/能力方法为 default（不破坏既有只读实现）；真实实现（channel 宿主）覆盖。

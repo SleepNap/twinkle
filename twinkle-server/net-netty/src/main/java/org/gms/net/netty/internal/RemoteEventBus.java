@@ -52,30 +52,43 @@ public final class RemoteEventBus implements EventBus, ReliableDelivery {
 
     @Override
     public <T> CompletableFuture<Void> send(String target, T payload) {
-        return forward(target, payload, null, null, null);
+        return forward(target, payload, null, null, null, false);
     }
 
     @Override
-    public <T> void sendReliable(String streamId, long seq, String messageId, String target, T payload) {
-        forward(target, payload, streamId, seq, messageId);
+    public <T> CompletableFuture<Void> sendReliable(String streamId, long seq, String messageId,
+                                                     String target, T payload) {
+        return forward(target, payload, streamId, seq, messageId, true);
     }
 
     private <T> CompletableFuture<Void> forward(String target, T payload,
-                                                String streamId, Long seq, String messageId) {
-        // 1) 本地派发（本进程订阅者）
-        local.send(target, payload);
-        // 2) 跨进程转发 coordinator（低频控制消息，架构 4.5）；未连接仅本地派发（单频道可玩）
+                                                String streamId, Long seq, String messageId,
+                                                boolean requireRemote) {
+        // 普通事件允许断链时退化为进程内派发。可靠事件必须先由 coordinator
+        // 接受后再路由回来，否则“本地已经生效但 outbox 仍为 PENDING”会在重试时重复执行。
+        if (!requireRemote) {
+            local.send(target, payload);
+        }
+        // 跨进程转发 coordinator（低频控制消息，架构 4.5）
         InternalConnection conn = link.connection();
         if (conn == null) {
             log.debug(I18n.message("log.eventbus.coordinator_unconnected"), target);
+            if (requireRemote) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("Coordinator is not connected"));
+            }
             return CompletableFuture.completedFuture(null);
         }
         InternalProtocol.EventPayload event = new InternalProtocol.EventPayload(
                 target, JsonCodec.typeName(payload), JsonCodec.encode(payload), streamId, seq, messageId);
         DefaultInternalFrame frame = new DefaultInternalFrame(InternalFrame.MessageType.EVENT,
                 conn.nextMessageId(), JsonCodec.encode(event));
-        conn.send(frame);
-        return CompletableFuture.completedFuture(null);
+        return conn.sendAsync(frame);
+    }
+
+    /** 每次建立或重建 coordinator 连接后触发，用于重投仍为 PENDING/DELIVERED 的 outbox。 */
+    public void addReconnectListener(Runnable listener) {
+        link.addConnectListener(ignored -> listener.run());
     }
 
     @Override

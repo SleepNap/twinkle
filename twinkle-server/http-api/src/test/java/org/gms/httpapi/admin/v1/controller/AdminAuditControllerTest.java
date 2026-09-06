@@ -1,9 +1,9 @@
 package org.gms.httpapi.admin.v1.controller;
 
-import org.gms.data.entity.ApiRequestAudit;
-import org.gms.data.entity.ToolExecutionAudit;
-import org.gms.data.repo.ApiRequestAuditRepository;
-import org.gms.data.repo.ToolExecutionAuditRepository;
+import org.gms.persistence.entity.ApiRequestAudit;
+import org.gms.persistence.entity.ToolExecutionAudit;
+import org.gms.persistence.repo.ApiRequestAuditRepository;
+import org.gms.persistence.repo.ToolExecutionAuditRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

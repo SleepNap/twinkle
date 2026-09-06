@@ -15,6 +15,7 @@
     <description>Netty IO（客户端 v83 协议 + 内部通信复用，不依赖业务）</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- Netty 4.2（虚拟线程）：transport + codec + handler -->
         <dependency>
             <groupId>io.netty</groupId>

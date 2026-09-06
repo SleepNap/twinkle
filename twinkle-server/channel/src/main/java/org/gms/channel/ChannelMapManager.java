@@ -30,17 +30,27 @@ public final class ChannelMapManager implements WzReloadParticipant {
     }
 
     private final WzResourceRegistry resources;
+    private final String participantName;
     private final ConcurrentMap<Integer, MapleMap> maps = new ConcurrentHashMap<>();
 
     public ChannelMapManager(WzResourceRegistry resources) {
+        this(resources, null);
+    }
+
+    public ChannelMapManager(WzResourceRegistry resources, Integer channelId) {
         this.resources = resources;
+        this.participantName = channelId == null ? "channel-maps" : "channel-maps:" + channelId;
     }
 
     /** 取地图（不存在报错——架构 6.4：读不到即报错）。 */
     public MapleMap getMap(int mapId) {
-        return maps.computeIfAbsent(mapId,
-                id -> resources.resource(WzResources.MAPS).get(id)
-                        .orElseThrow(() -> new IllegalArgumentException(I18n.message("error.map.not_found", id))));
+        return maps.computeIfAbsent(mapId, id -> {
+            MapleMap template = resources.resource(WzResources.MAPS).get(id)
+                    .orElseThrow(() -> new IllegalArgumentException(I18n.message("error.map.not_found", id)));
+            MapleMap runtime = new MapleMap();
+            runtime.replaceWzData(template);
+            return runtime;
+        });
     }
 
     /**
@@ -50,7 +60,7 @@ public final class ChannelMapManager implements WzReloadParticipant {
      */
     @Override
     public String name() {
-        return "channel-maps";
+        return participantName;
     }
 
     @Override

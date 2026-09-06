@@ -48,13 +48,15 @@ public final class InProcessEventBus implements EventBus, ReliableDelivery {
     }
 
     @Override
-    public <T> void sendReliable(String streamId, long seq, String messageId, String target, T payload) {
+    public <T> CompletableFuture<Void> sendReliable(String streamId, long seq, String messageId,
+                                                     String target, T payload) {
         // 进程内可靠投递：直接本地派发（接收侧 ReliableReceiver 用 outbox/bus_stream 判定恰好一次；
         // 序号经 outbox 行传递——InProcessEventBus 不做网络，接收侧从发送方 outbox 读序号）。
         // 本实现无网络转发，携带的序号仅供接收侧 ReliableReceiver 判序（发送方已落 outbox）。
         if (payload != null) {
             dispatch(target, payload);
         }
+        return CompletableFuture.completedFuture(null);
     }
 
     private <T> void dispatch(String target, T payload) {

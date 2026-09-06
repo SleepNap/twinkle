@@ -1,7 +1,7 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
+import org.gms.persistence.entity.GameAccountRecord;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
 import org.gms.i18n.I18n;
@@ -34,7 +34,7 @@ public final class CheckCharNameHandler implements PacketHandler {
             session.close(I18n.message("error.check_char_name.outside_stage"));
             return;
         }
-        Account account = session.getAttr("account");
+        GameAccountRecord account = session.getAttr("account");
         if (account == null) {
             session.close(I18n.message("error.check_char_name.not_logged_in"));
             return;

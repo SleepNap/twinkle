@@ -1,8 +1,8 @@
 package org.gms.httpapi.auth;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.ApiRequestAudit;
-import org.gms.data.repo.ApiRequestAuditRepository;
+import org.gms.persistence.entity.ApiRequestAudit;
+import org.gms.persistence.repo.ApiRequestAuditRepository;
 import org.gms.i18n.I18n;
 
 /** 审计写入失败不改变业务响应，但会写错误日志供运维修复。 */

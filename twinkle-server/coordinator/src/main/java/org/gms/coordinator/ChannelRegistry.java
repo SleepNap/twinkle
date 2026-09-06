@@ -19,18 +19,34 @@ public final class ChannelRegistry {
     private final ConcurrentMap<Integer, ChannelInfo> channels = new ConcurrentHashMap<>();
 
     /** 频道登记信息（M4 进程内：在线会话数；M6 扩展 host:port 端点）。 */
-    public record ChannelInfo(int channelId, String host, int port, int onlineCount) {
+    public record ChannelInfo(int channelId, String host, int port, int onlineCount, String workerId) {
+        public ChannelInfo(int channelId, String host, int port, int onlineCount) {
+            this(channelId, host, port, onlineCount, "");
+        }
     }
 
     /** 频道上报（启动/心跳更新）。 */
     public void register(int channelId, String host, int port, int onlineCount) {
-        channels.put(channelId, new ChannelInfo(channelId, host, port, onlineCount));
+        register(channelId, host, port, onlineCount, "");
+    }
+
+    public void register(int channelId, String host, int port, int onlineCount, String workerId) {
+        validate(channelId, host, port);
+        channels.compute(channelId, (id, existing) -> {
+            String owner = workerId == null ? "" : workerId;
+            if (existing != null && !existing.workerId().isBlank() && !owner.isBlank()
+                    && !existing.workerId().equals(owner)) {
+                throw new IllegalStateException("Channel " + channelId + " is already owned by worker "
+                        + existing.workerId());
+            }
+            return new ChannelInfo(channelId, host, port, onlineCount, owner);
+        });
     }
 
     /** 频道心跳续期（更新在线数）。 */
     public void heartbeat(int channelId, int onlineCount) {
         channels.computeIfPresent(channelId, (k, info) ->
-                new ChannelInfo(k, info.host(), info.port(), onlineCount));
+                new ChannelInfo(k, info.host(), info.port(), onlineCount, info.workerId()));
     }
 
     /** 频道下线注销（幂等）。 */
@@ -51,5 +67,13 @@ public final class ChannelRegistry {
     /** 已登记频道数。 */
     public int count() {
         return channels.size();
+    }
+
+    private static void validate(int channelId, String host, int port) {
+        if (channelId < 1 || channelId > 256) {
+            throw new IllegalArgumentException("channelId must be representable by v83 (1..256): " + channelId);
+        }
+        if (host == null || host.isBlank()) throw new IllegalArgumentException("channel host is blank");
+        if (port < 1 || port > 65535) throw new IllegalArgumentException("channel port out of range: " + port);
     }
 }

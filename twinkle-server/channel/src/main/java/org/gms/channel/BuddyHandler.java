@@ -1,9 +1,9 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.BuddyListEntity;
-import org.gms.data.repo.BuddyListRepository;
-import org.gms.domain.game.Character;
+import org.gms.persistence.entity.BuddyListEntity;
+import org.gms.persistence.repo.BuddyListRepository;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.EventBus;
 import org.gms.i18n.I18n;
 import org.gms.message.BuddyRequest;
@@ -59,7 +59,7 @@ public final class BuddyHandler implements PacketHandler {
             session.close(I18n.message("error.buddy.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.buddy.not_in_map"));
             return;
@@ -99,7 +99,7 @@ public final class BuddyHandler implements PacketHandler {
     }
 
     /** 本频道内的好友动作（收到总线投递的跨频道请求也走这里）。 */
-    public void applyLocal(Character chr, BuddyRequest req, String buddyName) {
+    public void applyLocal(PlayerCharacter chr, BuddyRequest req, String buddyName) {
         switch (req.action()) {
             case ADD_REQUEST -> {
                 // 单一属主：buddylist 表持久化（PENDING），双方都写
@@ -169,7 +169,7 @@ public final class BuddyHandler implements PacketHandler {
 
     private Long resolveIdByName(String name) {
         for (PacketSession s : sessions.all()) {
-            Character c = s.getAttr("character");
+            PlayerCharacter c = s.getAttr("character");
             if (c != null && c.getName().equals(name)) {
                 return c.getId();
             }

@@ -1,7 +1,7 @@
 package org.gms.login;
 
-import org.gms.data.entity.Character;
-import org.gms.data.entity.InventoryItemEntity;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.entity.InventoryItemEntity;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
@@ -10,6 +10,8 @@ import org.gms.net.packet.v83.V83CharacterLook;
 import org.gms.net.packet.v83.V83CharacterPacketWriter;
 import org.gms.net.packet.v83.V83CharacterStats;
 import org.gms.net.packet.v83.V83EquippedItem;
+import org.gms.net.packet.v83.V83ChannelId;
+import org.gms.net.packet.v83.V83WorldId;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,10 +82,23 @@ public final class LoginPacketFactory {
 
     /* ---------- 服务器列表（SendOpcode.SERVERLIST 0x0A） ---------- */
 
+    /** 客户端频道条目；channelId 是真实稳定 ID，不是列表下标。 */
+    public record ServerChannel(int channelId, int onlineCount) {
+    }
+
     /**
-     * 单个服务器条目。M1 单世界单频道简化。
+     * 单频道兼容入口；动态列表使用三参数重载。
      */
     public static OutPacket serverList(int serverId, String serverName) {
+        return serverList(serverId, serverName, List.of(new ServerChannel(1, 100)));
+    }
+
+    /** 单世界服务器列表；允许频道 ID 稀疏，条目明确携带真实 wire ID。 */
+    public static OutPacket serverList(int serverId, String serverName, List<ServerChannel> channels) {
+        V83WorldId.validate(serverId);
+        if (channels.size() > 255) {
+            throw new IllegalArgumentException("v83 supports at most 255 channel entries");
+        }
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.SERVERLIST.getValue());
         p.writeByte(serverId);
@@ -95,12 +110,15 @@ public final class LoginPacketFactory {
         p.writeByte(100);
         p.writeByte(0);
         p.writeByte(0);
-        p.writeByte(1);             // 频道数（M1 单频道）
-        p.writeString(serverName + "-1");
-        p.writeInt(100);            // 频道容量
-        p.writeByte(serverId);
-        p.writeByte(0);             // channelId - 1
-        p.writeBool(false);         // 非成人频道
+        p.writeByte(channels.size());
+        for (ServerChannel channel : channels) {
+            V83ChannelId.validateInternal(channel.channelId());
+            p.writeString(serverName + "-" + channel.channelId());
+            p.writeInt(Math.max(0, channel.onlineCount()));
+            p.writeByte(serverId);
+            p.writeByte(V83ChannelId.toWire(channel.channelId()));
+            p.writeBool(false);
+        }
         p.writeShort(0);
         return p;
     }
@@ -122,13 +140,13 @@ public final class LoginPacketFactory {
      *
      * @param equippedByChar 角色 id → 已穿戴装备（inventory_items position&lt;0 行，可为空）
      */
-    public static OutPacket charList(List<Character> characters, int serverId, int status,
+    public static OutPacket charList(List<PlayerCharacterRecord> characters, int serverId, int status,
                                      Map<Long, List<InventoryItemEntity>> equippedByChar) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.CHARLIST.getValue());
         p.writeByte(status);
         p.writeByte(characters.size());
-        for (Character c : characters) {
+        for (PlayerCharacterRecord c : characters) {
             List<InventoryItemEntity> equipped = equippedByChar == null
                     ? null : equippedByChar.get(c.getId());
             addCharEntry(p, c, equipped);
@@ -174,7 +192,7 @@ public final class LoginPacketFactory {
      *
      * @param equipped 新角色已穿戴装备（建角默认装备，客户端立即显示全身外观）
      */
-    public static OutPacket addNewCharEntry(Character c, List<InventoryItemEntity> equipped) {
+    public static OutPacket addNewCharEntry(PlayerCharacterRecord c, List<InventoryItemEntity> equipped) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.ADD_NEW_CHAR_ENTRY.getValue());
         p.writeByte(0);
@@ -185,7 +203,7 @@ public final class LoginPacketFactory {
     /**
      * 新建角色条目（无装备，兼容旧调用）。
      */
-    public static OutPacket addNewCharEntry(Character c) {
+    public static OutPacket addNewCharEntry(PlayerCharacterRecord c) {
         return addNewCharEntry(c, null);
     }
 
@@ -220,14 +238,15 @@ public final class LoginPacketFactory {
      * 查看所有角色：单个 world 的角色列表段（总览头之后逐 world 发）。
      * 每条目用 viewall=true 布局（无普通列表的额外 1 字节，思路参考 BeiDou showAllCharacterInfo）。
      */
-    public static OutPacket showAllCharacterInfo(int worldId, List<Character> characters,
+    public static OutPacket showAllCharacterInfo(int worldId, List<PlayerCharacterRecord> characters,
                                                  Map<Long, List<InventoryItemEntity>> equippedByChar) {
+        V83WorldId.validate(worldId);
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.VIEW_ALL_CHAR.getValue());
         p.writeByte(0);             // 段标记
         p.writeByte(worldId);
         p.writeByte(characters.size());
-        for (Character c : characters) {
+        for (PlayerCharacterRecord c : characters) {
             List<InventoryItemEntity> equipped = equippedByChar == null
                     ? null : equippedByChar.get(c.getId());
             addCharEntry(p, c, equipped, true);
@@ -238,11 +257,11 @@ public final class LoginPacketFactory {
 
     /* ---------- 角色条目编码（addCharStats + addCharLook + rank） ---------- */
 
-    private static void addCharEntry(OutPacket p, Character c, List<InventoryItemEntity> equipped) {
+    private static void addCharEntry(OutPacket p, PlayerCharacterRecord c, List<InventoryItemEntity> equipped) {
         addCharEntry(p, c, equipped, false);
     }
 
-    private static void addCharEntry(OutPacket p, Character c, List<InventoryItemEntity> equipped, boolean viewall) {
+    private static void addCharEntry(OutPacket p, PlayerCharacterRecord c, List<InventoryItemEntity> equipped, boolean viewall) {
         V83CharacterPacketWriter.writeStats(p, toProtocolStats(c));
         V83CharacterPacketWriter.writeLook(p, toProtocolLook(c, equipped), false);
         if (!viewall) {
@@ -255,7 +274,7 @@ public final class LoginPacketFactory {
         p.writeInt(c.getJobRankMove());
     }
 
-    private static V83CharacterStats toProtocolStats(Character c) {
+    private static V83CharacterStats toProtocolStats(PlayerCharacterRecord c) {
         return new V83CharacterStats(
                 c.getId().intValue(), c.getName(), c.getGender(), c.getSkinColor(), c.getFace(), c.getHair(),
                 c.getLevel(), c.getJob(), c.getStrStat(), c.getDexStat(), c.getIntStat(), c.getLukStat(),
@@ -263,7 +282,7 @@ public final class LoginPacketFactory {
                 c.getExp(), c.getFame(), c.getGachaExp(), c.getMap(), c.getSpawnPoint());
     }
 
-    private static V83CharacterLook toProtocolLook(Character c, List<InventoryItemEntity> equipped) {
+    private static V83CharacterLook toProtocolLook(PlayerCharacterRecord c, List<InventoryItemEntity> equipped) {
         List<V83EquippedItem> items = new ArrayList<>();
         if (equipped != null) {
             for (InventoryItemEntity item : equipped) {

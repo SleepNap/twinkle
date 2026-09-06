@@ -22,13 +22,15 @@ import org.gms.service.intercoord.IntercoordService;
  * <p>M6 分布式时本订阅改由网络 EventBus 实现驱动（接口不变），派发逻辑同构。
  */
 @Log4j2
-public final class ChannelMessageSubscriber {
+public final class ChannelMessageSubscriber implements AutoCloseable {
 
 
 
     private final int channelId;
     private final IntercoordService intercoord;
     private final PlayerSessionRegistry sessions;
+    private final AutoCloseable whisperSubscription;
+    private final AutoCloseable noticeSubscription;
 
     public ChannelMessageSubscriber(int channelId, IntercoordService intercoord,
                                     PlayerSessionRegistry sessions, EventBus eventBus) {
@@ -36,8 +38,10 @@ public final class ChannelMessageSubscriber {
         this.intercoord = intercoord;
         this.sessions = sessions;
         // 订阅本频道精确 target：跨频道悄悄话/公告投递
-        eventBus.subscribe(MessageTargets.channel(channelId), WhisperRequest.class, this::deliverWhisper);
-        eventBus.subscribe(MessageTargets.channel(channelId), NoticeMessage.class, this::deliverNotice);
+        whisperSubscription = eventBus.subscribe(MessageTargets.channel(channelId), WhisperRequest.class,
+                this::deliverWhisper);
+        noticeSubscription = eventBus.subscribe(MessageTargets.channel(channelId), NoticeMessage.class,
+                this::deliverNotice);
     }
 
     private void deliverWhisper(WhisperRequest req) {
@@ -59,5 +63,19 @@ public final class ChannelMessageSubscriber {
             s.send(packet);
         }
         log.info(I18n.message("log.channel.notice_received"), channelId, notice.content());
+    }
+
+    @Override
+    public void close() {
+        closeQuietly(whisperSubscription);
+        closeQuietly(noticeSubscription);
+    }
+
+    private static void closeQuietly(AutoCloseable subscription) {
+        try {
+            subscription.close();
+        } catch (Exception e) {
+            log.warn("Failed to cancel channel message subscription", e);
+        }
     }
 }

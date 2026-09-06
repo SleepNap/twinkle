@@ -34,7 +34,7 @@ Twinkle 使用 Java 21 重写传统冒险岛服务端的运行底座，重点解
 
 ## 架构概览
 
-Twinkle 的进程边界由运行配置决定。`single` / `standalone` 将全部角色装配在一个 JVM 中；`split-channel` / `split-realm` 则使用一个管理进程协调多个频道进程，业务代码不因部署方式改变。
+Twinkle 的进程边界由运行配置决定。`single` / `standalone` 将全部角色装配在一个 JVM 中；`split-channel` 使用一个管理进程协调多个 channel worker，每个 worker 可通过 `TWINKLE_WORKER_CHANNELS=1:8584,8:9000` 托管一个或多个频道。频道 ID 是 `1..256` 内可稀疏的稳定标识，不等于列表下标或端口偏移。所有角色运行同一份 `target/twinkle-server.jar`，多进程来自多次启动，不是分别打包。
 
 ```mermaid
 flowchart TB
@@ -73,13 +73,13 @@ flowchart TB
 
 在单进程模式中，上图的管理角色和频道角色位于同一 JVM，进程间调用自动替换为 EventBus、内存索引和方法调用；拆分部署后，同一接口改由 Netty 长连接、网络 RPC 和跨进程状态迁移实现。
 
-服务端按职责拆分为 15 个 Maven 模块，依赖保持单向无环：
+服务端按职责拆分为 13 个 Maven 子模块，依赖保持单向无环：
 
 | 分层 | 模块 | 职责 |
 | --- | --- | --- |
-| 公共底座 | `core`、`net-packet`、`net-netty`、`data`、`db-dialect`、`plugin-api` | DI、事件、协议、网络、持久化、迁移与插件 SPI |
+| 公共底座 | `core`、`net-packet`、`net-netty`、`persistence`、`plugin-api` | DI、事件、协议、网络、持久化、迁移与插件 SPI |
 | 游戏域 | `domain-game`、`domain-script`、`wz-provider`、`channel` | 游戏状态、逻辑、脚本、WZ 数据与频道运行时 |
-| 管理侧 | `coordinator`、`login`、`admin`、`http-api` | 大区协调、登录、运维控制台与版本化 API |
+| 管理侧 | `coordinator`、`login`、`http-api` | 大区协调、登录、运维控制台与版本化 API |
 | 启动入口 | `bootstrap` | 读取 profile，并将所需角色装配进当前 JVM |
 
 > 完整的设计决策、状态与逻辑边界、进程拓扑、热更新机制及性能红线，见 [ARCHITECTURE.md](ARCHITECTURE.md)。该文档是项目架构的权威说明。
@@ -148,7 +148,9 @@ npm run build
 | `TWINKLE_SCRIPT_PATH` | 服务端脚本目录 | 启动前应显式配置 |
 | `TWINKLE_SERVICE_LANGUAGE` | 服务端语言 | `zh-CN` |
 | `TWINKLE_LOGIN_PORT` | v83 登录端口 | `8484` |
+| `TWINKLE_WORLD_ID` | 当前集群的大区稳定 ID（`0..254`，允许稀疏） | `0` |
 | `TWINKLE_CHANNEL_PORT` | v83 频道端口 | `8584` |
+| `TWINKLE_WORKERS` | split 模式显式 worker/频道/端口拓扑，如 `worker-a=1:8584,8:9000;worker-b=21:10000` | `worker-1=1:8584` |
 | `TWINKLE_HTTP_PORT` | HTTP API 端口 | `8686` |
 
 生产环境还必须配置稳定的服务端身份、Cursor 签名密钥、API 引导密钥，并在应用前配置 TLS、反向代理和防火墙。API 的版本与兼容规则见 [API 版本管理](docs/API-VERSIONING.md)，部署与回滚流程见 [上线切换文档](docs/archived/ops/switch-to-production.md)。

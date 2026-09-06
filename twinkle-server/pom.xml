@@ -17,8 +17,7 @@
         <module>core</module>
         <module>net-packet</module>
         <module>net-netty</module>
-        <module>db-dialect</module>
-        <module>data</module>
+        <module>persistence</module>
         <module>plugin-api</module>
         <module>bootstrap</module>
 
@@ -31,7 +30,6 @@
         <!-- 管理侧（管理进程） -->
         <module>coordinator</module>
         <module>login</module>
-        <module>admin</module>
         <module>http-api</module>
     </modules>
 
@@ -147,12 +145,7 @@
             </dependency>
             <dependency>
                 <groupId>org.gms</groupId>
-                <artifactId>twinkle-db-dialect</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.gms</groupId>
-                <artifactId>twinkle-data</artifactId>
+                <artifactId>twinkle-persistence</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -197,11 +190,6 @@
             </dependency>
             <dependency>
                 <groupId>org.gms</groupId>
-                <artifactId>twinkle-admin</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.gms</groupId>
                 <artifactId>twinkle-http-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -216,20 +204,6 @@
             <artifactId>lombok</artifactId>
             <version>${lombok.version}</version>
             <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j2-impl</artifactId>
-            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

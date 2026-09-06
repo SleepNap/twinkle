@@ -9,6 +9,7 @@ import org.gms.event.OutboxRepository;
 import org.gms.event.ReliableEventBus;
 import org.gms.event.ReliableReceiver;
 import org.gms.net.netty.internal.JsonPayloadCodec;
+import org.gms.net.netty.internal.RemoteEventBus;
 import org.gms.role.ChannelProcessCondition;
 
 /**
@@ -29,7 +30,11 @@ public class ReliableBusConfig {
     @Bean
     @Singleton
     public ReliableEventBus reliableEventBus(EventBus eventBus, OutboxRepository outboxRepository) {
-        return new ReliableEventBus(eventBus, outboxRepository, new JsonPayloadCodec());
+        ReliableEventBus reliable = new ReliableEventBus(eventBus, outboxRepository, new JsonPayloadCodec());
+        if (eventBus instanceof RemoteEventBus remote) {
+            remote.addReconnectListener(reliable::retryPending);
+        }
+        return reliable;
     }
 
     @Bean

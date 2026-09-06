@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
@@ -50,7 +50,7 @@ class GeneralChatHandlerTest {
 
     private static FakeSession sessionWithCharacter(long sessionId, long characterId, String name) {
         FakeSession session = new FakeSession(sessionId);
-        Character character = new Character(1L);
+        PlayerCharacter character = new PlayerCharacter(1L);
         character.setId(characterId);
         character.setName(name);
         session.setAttr("character", character);

@@ -1,4 +1,5 @@
 package org.gms.coordinator;
+import org.gms.service.intercoord.SharedStateService;
 
 import java.util.Map;
 import java.util.Optional;
@@ -6,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.gms.i18n.I18n;
+import org.gms.service.intercoord.SharedStateService.StoreValue;
 
 /**
  * 单一属主存储（架构 4.4 三机制之一"状态单一属主"：共享状态真值只在 coordinator 一处持有）。
@@ -28,7 +30,7 @@ public final class SingleOwnerStore {
     private final ConcurrentMap<String, Entry> store = new ConcurrentHashMap<>();
 
     /** 单条存储项：值 + 版本号（写者带期望版本实现乐观并发）。 */
-    public record Entry(Object value, long version) {
+    public record Entry(StoreValue value, long version) {
     }
 
     /** 读取真值。 */
@@ -43,7 +45,7 @@ public final class SingleOwnerStore {
      * @return 新版本号
      * @throws IllegalStateException 版本冲突（被并发写者覆盖）
      */
-    public long put(String key, Object value, long expectedVersion) {
+    public long put(String key, StoreValue value, long expectedVersion) {
         AtomicLong applied = new AtomicLong(-1);
         store.compute(key, (k, existing) -> {
             long current = existing == null ? 0 : existing.version();
@@ -64,10 +66,10 @@ public final class SingleOwnerStore {
     public long increment(String key, long delta) {
         AtomicLong result = new AtomicLong();
         store.compute(key, (k, existing) -> {
-            long current = existing == null ? 0 : ((Number) existing.value()).longValue();
+            long current = existing == null ? 0 : existing.value().asLong();
             long next = current + delta;
             result.set(next);
-            return new Entry(next, (existing == null ? 0 : existing.version()) + 1);
+            return new Entry(StoreValue.number(next), (existing == null ? 0 : existing.version()) + 1);
         });
         return result.get();
     }

@@ -1,6 +1,6 @@
 package org.gms.replaceable;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.wz.GameDataProvider;
@@ -33,7 +33,7 @@ class ItemSystemTest {
     @Test
     @DisplayName("给物品：堆叠 + 分配空槽")
     void giveItemAddsAndStacks() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
 
         assertThat(system.giveItem(chr, 2_000_000, 150)).isTrue();
         assertThat(system.countItem(chr, 2_000_000)).isEqualTo(150);
@@ -44,7 +44,7 @@ class ItemSystemTest {
     @Test
     @DisplayName("给物品：尊重 slotMax 低堆叠")
     void giveItemRespectsSlotMax() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
 
         assertThat(system.giveItem(chr, 2_000_001, 12)).isTrue();
         // 5 + 5 + 2 → 三个槽
@@ -55,7 +55,7 @@ class ItemSystemTest {
     @Test
     @DisplayName("给物品：空间不足返回 false 且不动")
     void giveItemRejectsWhenNoSpace() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         chr.getInventory(InventoryType.USE);          // 触发 USE 背包（槽位上限 24）
         // 塞满 24 槽（每槽 100）
         assertThat(system.giveItem(chr, 2_000_000, 24 * 100)).isTrue();
@@ -68,7 +68,7 @@ class ItemSystemTest {
     @Test
     @DisplayName("扣物品：部分扣/全扣/不足拒绝")
     void takeItemDeducts() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         system.giveItem(chr, 2_000_000, 100);
 
         assertThat(system.takeItem(chr, 2_000_000, 30)).isTrue();
@@ -84,7 +84,7 @@ class ItemSystemTest {
     @Test
     @DisplayName("版本门拒绝换代后的迟到写")
     void versionGateBlocksStaleWrite() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         versionGate.onReload();                       // 逻辑换代
 
         assertThat(system.giveItem(chr, 2_000_000, 5)).isFalse();

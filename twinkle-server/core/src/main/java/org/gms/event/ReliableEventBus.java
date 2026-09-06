@@ -51,6 +51,9 @@ public final class ReliableEventBus {
     /** 发送侧：已处理消息 id（本进程 outbox 重投去重）。 */
     private final ConcurrentMap<String, Boolean> processedMessageIds = new ConcurrentHashMap<>();
 
+    /** 正在投递的消息；失败后移除，允许重连/定时重试。 */
+    private final ConcurrentMap<String, Boolean> inFlightMessageIds = new ConcurrentHashMap<>();
+
     public ReliableEventBus(EventBus delegate, OutboxRepository outbox) {
         this(delegate, outbox, PayloadCodec.MARKER);
     }
@@ -61,10 +64,7 @@ public final class ReliableEventBus {
         this.codec = codec;
         // 启动重投：取出未 ACKED 的 in-flight 消息（进程崩了重发，架构 4.5）。
         // 注意：ACKED = 接收方已确认应用，重投只重投未确认的。
-        for (OutboxRepository.OutboxRow row : outbox.findPending()) {
-            log.info(I18n.message("log.bus.start_redeliver"), row.messageId(), row.streamId(), row.seq());
-            deliver(row);
-        }
+        retryPending();
     }
 
     /**
@@ -77,7 +77,8 @@ public final class ReliableEventBus {
      */
     public <T> CompletableFuture<Void> send(String streamId, String target, T message) {
         String stream = streamId == null ? "default" : streamId;
-        long seq = streamSeq.computeIfAbsent(stream, k -> new AtomicLong()).incrementAndGet();
+        long seq = streamSeq.computeIfAbsent(stream,
+                k -> new AtomicLong(outbox.lastIssuedSeq(k))).incrementAndGet();
         String messageId = stream + ":" + seq;
         String payload = codec.encode(message);
 
@@ -86,44 +87,52 @@ public final class ReliableEventBus {
                 message.getClass().getName(), payload, OutboxRepository.OutboxRow.PENDING));
 
         // 2) 投递 + 标记 DELIVERED（接收方 ack 才 ACKED）
-        deliver(new OutboxRepository.OutboxRow(id, stream, seq, messageId, target,
+        return deliver(new OutboxRepository.OutboxRow(id, stream, seq, messageId, target,
                 message.getClass().getName(), payload, OutboxRepository.OutboxRow.PENDING));
-        return CompletableFuture.completedFuture(null);
     }
 
     /** 投递一条 outbox 消息到 delegate（发送侧重投去重；package-private 供测试直接驱动重投）。 */
-    public void deliver(OutboxRepository.OutboxRow row) {
+    public CompletableFuture<Void> deliver(OutboxRepository.OutboxRow row) {
         String stream = row.streamId();
         // 幂等去重：同 messageId 已投递过则不重复投（发送侧重投保护；接收侧另有 ReliableReceiver 去重）
-        if (processedMessageIds.putIfAbsent(row.messageId(), Boolean.TRUE) != null) {
+        if (processedMessageIds.containsKey(row.messageId())
+                || inFlightMessageIds.putIfAbsent(row.messageId(), Boolean.TRUE) != null) {
             log.info(I18n.message("log.bus.send_dedup"), row.messageId());
-            return;
+            return CompletableFuture.completedFuture(null);
         }
-        long last = deliveredSeq.getOrDefault(stream, 0L);
-        if (row.seq() <= last) {
-            log.info(I18n.message("log.bus.dup_seq_drop"), row.messageId(), row.seq(), last);
-            return;
-        }
-        deliveredSeq.put(stream, row.seq());
         // 反序列化 + 投递（发送侧真实投递；接收侧按 bus_stream 判序去重）
         Object payload = codec.decode(row.payload(), row.payloadType());
         if (payload == null) {
+            inFlightMessageIds.remove(row.messageId());
             log.error(I18n.message("log.bus.decode_failed"), row.messageId(), row.payloadType());
-            return;
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("Cannot decode reliable message " + row.messageId()));
         }
-        try {
-            // 跨进程投递：delegate 支持 ReliableDelivery 时携带序号（接收侧 ReliableReceiver 恰好一次）；
-            // 否则普通 send（进程内，接收侧即本地）。
-            if (delegate instanceof ReliableDelivery reliable) {
-                reliable.sendReliable(stream, row.seq(), row.messageId(), row.target(), payload);
-            } else {
-                delegate.send(row.target(), payload).join();
+        // 跨进程投递：delegate 支持 ReliableDelivery 时携带序号（接收侧 ReliableReceiver 恰好一次）；
+        // 否则普通 send（进程内，接收侧即本地）。只有底层确认写出后才推进发送侧状态。
+        CompletableFuture<Void> delivery = delegate instanceof ReliableDelivery reliable
+                ? reliable.sendReliable(stream, row.seq(), row.messageId(), row.target(), payload)
+                : delegate.send(row.target(), payload);
+        return delivery.whenComplete((ignored, error) -> {
+            inFlightMessageIds.remove(row.messageId());
+            if (error != null) {
+                log.error(I18n.message("log.bus.deliver_failed"), row.messageId(), error);
+                return;
             }
-            // 投递成功 → DELIVERED（等接收方 ack 落定 ACKED）
             outbox.markDelivered(row.id());
-        } catch (RuntimeException e) {
-            log.error(I18n.message("log.bus.deliver_failed"), row.messageId(), e);
+            processedMessageIds.put(row.messageId(), Boolean.TRUE);
+            deliveredSeq.merge(stream, row.seq(), Math::max);
+        });
+    }
+
+    /** 重投所有尚未 ACKED 的消息。失败行保留原状态，下一次重连继续尝试。 */
+    public CompletableFuture<Void> retryPending() {
+        CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
+        for (OutboxRepository.OutboxRow row : outbox.findPending()) {
+            log.info(I18n.message("log.bus.start_redeliver"), row.messageId(), row.streamId(), row.seq());
+            result = result.thenCompose(ignored -> deliver(row).exceptionally(error -> null));
         }
+        return result;
     }
 
     /**

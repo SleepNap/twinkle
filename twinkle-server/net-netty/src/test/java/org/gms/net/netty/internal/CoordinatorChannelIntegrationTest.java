@@ -8,6 +8,8 @@ import org.gms.event.InProcessEventBus;
 import org.gms.message.MessageTargets;
 import org.gms.message.WhisperRequest;
 import org.gms.service.intercoord.IntercoordService;
+import org.gms.service.intercoord.PlayerPresenceService;
+import org.gms.service.intercoord.SharedStateService;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
@@ -35,12 +37,12 @@ class CoordinatorChannelIntegrationTest {
         InternalServer server = new InternalServer(router.connectionHandler());
         server.start(0);
 
-        // ---- 频道端（channel=5） ----
+        // ---- 频道端（同一 worker 托管稀疏 channel=5、21） ----
         AtomicReference<InternalConnection> connRef = new AtomicReference<>();
         AtomicReference<WhisperRequest> delivered = new AtomicReference<>();
         InProcessEventBus channelBus = new InProcessEventBus();
         // 模拟频道进程订阅本频道 target（ChannelMessageSubscriber 行为）
-        channelBus.subscribe(MessageTargets.channel(5), WhisperRequest.class, delivered::set);
+        channelBus.subscribe(MessageTargets.channel(21), WhisperRequest.class, delivered::set);
 
         CoordinatorLink link = new CoordinatorLink(new InetSocketAddress("127.0.0.1", server.boundPort()), 50);
         link.addConnectListener(conn -> {
@@ -48,28 +50,38 @@ class CoordinatorChannelIntegrationTest {
             // 频道进程启动上报身份（ChannelRegistryRegistrar 行为）
             conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
                     conn.nextMessageId(), JsonCodec.encode(
-                    new InternalProtocol.RegisterPayload(5, "127.0.0.1", 8584, false, 0))));
+                    new InternalProtocol.RegisterPayload(5, "127.0.0.1", 8584, false, 0,
+                            "worker-sparse"))));
+            conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
+                    conn.nextMessageId(), JsonCodec.encode(
+                    new InternalProtocol.RegisterPayload(21, "127.0.0.1", 10000, false, 0,
+                            "worker-sparse"))));
         });
         link.start();
 
         try {
             // 等待注册完成
-            await(() -> truth.channel(5).isPresent());
+            await(() -> truth.channel(5).isPresent() && truth.channel(21).isPresent());
 
             // ---- RPC 定位 ----
             RemoteIntercoordService remote = new RemoteIntercoordService(link);
-            remote.registerPlayer(1001, 2, 5);
-            assertThat(remote.locate(1001)).contains(5);
-            remote.updatePlayerActivity(1001, IntercoordService.PlayerActivity.MTS);
+            remote.registerPlayer(1001, 2, 21);
+            assertThat(remote.locate(1001)).contains(21);
+            remote.updatePlayerActivity(1001, PlayerPresenceService.PlayerActivity.MTS);
             assertThat(remote.presence(1001).orElseThrow().activity())
-                    .isEqualTo(IntercoordService.PlayerActivity.MTS);
+                    .isEqualTo(PlayerPresenceService.PlayerActivity.MTS);
             assertThat(remote.onlineInWorld(2)).isEqualTo(1);
-            assertThat(remote.sessionsOnChannel(5)).isEqualTo(1);
-            assertThat(remote.onlineOnChannel(5)).isZero();
+            assertThat(remote.sessionsOnChannel(21)).isEqualTo(1);
+            assertThat(remote.onlineOnChannel(21)).isZero();
+
+            long version = remote.write("test:topology",
+                    new SharedStateService.StoreValue("json", 2, "{\"ok\":true}"), -1);
+            assertThat(version).isEqualTo(1);
+            assertThat(remote.read("test:topology").orElseThrow().value().schemaVersion()).isEqualTo(2);
 
             // ---- EVENT 路由：频道 A 发悄悄话 → coordinator 路由回本频道 ----
             RemoteEventBus remoteBus = new RemoteEventBus(channelBus, link);
-            remoteBus.send(MessageTargets.channel(5), new WhisperRequest(1001, "Alice", 1002, "Bob", "你好"));
+            remoteBus.send(MessageTargets.channel(21), new WhisperRequest(1001, "Alice", 1002, "Bob", "你好"));
 
             await(() -> delivered.get() != null);
             assertThat(delivered.get().fromId()).isEqualTo(1001);
@@ -79,6 +91,11 @@ class CoordinatorChannelIntegrationTest {
             assertThat(remote.channels().get(5).channelId()).isEqualTo(5);
             assertThat(remote.channels().get(5).host()).isEqualTo("127.0.0.1");
             assertThat(remote.channels().get(5).port()).isEqualTo(8584);
+            assertThat(remote.channels().get(21).port()).isEqualTo(10000);
+
+            // worker 断链时两个稀疏频道必须一起从可用目录移除，列表不会保留幽灵端点。
+            link.close();
+            await(() -> truth.channel(5).isEmpty() && truth.channel(21).isEmpty());
         } finally {
             link.close();
             server.close();

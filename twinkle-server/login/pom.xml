@@ -15,13 +15,14 @@
     <description>账号校验、选角。管理侧</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <dependency>
             <groupId>org.gms</groupId>
             <artifactId>twinkle-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.gms</groupId>
-            <artifactId>twinkle-data</artifactId>
+            <artifactId>twinkle-persistence</artifactId>
         </dependency>
         <!-- v83 登录协议：handler / opcode / 包构造（login 是客户端协议处理器，ArchUnit 规则 4 已豁免） -->
         <dependency>

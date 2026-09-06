@@ -21,8 +21,8 @@ public final class AdminRpcDispatcherTest {
                 "inventorySnapshot", new String[]{JsonCodec.encode(42L)});
 
         assertThat(response.ok()).isTrue();
-        AdminService.PlayerInventory decoded = JsonCodec.decode(
-                response.value(), AdminService.PlayerInventory.class.getName());
+        AdminService.CharacterInventory decoded = JsonCodec.decode(
+                response.value(), AdminService.CharacterInventory.class.getName());
         assertThat(decoded.characterId()).isEqualTo(42L);
         assertThat(decoded.items()).singleElement().satisfies(item -> {
             assertThat(item.itemType()).isEqualTo("pet");
@@ -60,12 +60,12 @@ public final class AdminRpcDispatcherTest {
     private static AdminService admin() {
         return new AdminService() {
             @Override
-            public PlayerInventory inventorySnapshot(long characterId) {
+            public CharacterInventory inventorySnapshot(long characterId) {
                 PetView pet = new PetView("小黑", 12, 3456, 87, 3, 4, 17_500, 5);
                 InventoryItemView item = new InventoryItemView(
                         5, 2, "pet", 5_000_000, 1, 0, 9001, "", 0, 0,
                         null, pet);
-                return new PlayerInventory(characterId, "Hero", 7L, List.of(item));
+                return new CharacterInventory(characterId, "Hero", 7L, List.of(item));
             }
 
             @Override

@@ -5,7 +5,6 @@ import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
-import org.gms.channel.ChannelServer;
 import org.gms.i18n.I18n;
 import org.gms.net.netty.LoginServer;
 
@@ -20,19 +19,19 @@ public final class StartupReporter implements ApplicationEventListener<ServerSta
     private final String profile;
     private final String role;
     private final Optional<LoginServer> loginServer;
-    private final Optional<ChannelServer> channelServer;
+    private final Optional<ChannelWorker> channelWorker;
 
     public StartupReporter(
             @Property(name = "twinkle.server.name", defaultValue = "twinkle") String serverName,
             @Property(name = "twinkle.profile", defaultValue = "single") String profile,
             @Property(name = "twinkle.role", defaultValue = "") String role,
             Optional<LoginServer> loginServer,
-            Optional<ChannelServer> channelServer) {
+            Optional<ChannelWorker> channelWorker) {
         this.serverName = serverName;
         this.profile = profile;
         this.role = role;
         this.loginServer = loginServer;
-        this.channelServer = channelServer;
+        this.channelWorker = channelWorker;
     }
 
     @Override
@@ -50,7 +49,7 @@ public final class StartupReporter implements ApplicationEventListener<ServerSta
         if (managementExpected && loginServer.filter(LoginServer::isRunning).isEmpty()) {
             throw new IllegalStateException(I18n.message("error.bootstrap.component_not_ready", "login Netty"));
         }
-        if (channelExpected && channelServer.filter(ChannelServer::isRunning).isEmpty()) {
+        if (channelExpected && channelWorker.filter(ChannelWorker::anyRunning).isEmpty()) {
             throw new IllegalStateException(I18n.message("error.bootstrap.component_not_ready", "channel Netty"));
         }
     }

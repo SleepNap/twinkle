@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.wz.WzResourceRegistry;
@@ -19,6 +19,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChannelMapManagerReloadTest {
 
     @Test
+    public void channelsDoNotShareMapRuntimeContainers(@TempDir Path root) throws Exception {
+        Path file = Files.createDirectories(root.resolve("Map.wz/Map/Map1")).resolve("100000000.img.xml");
+        Files.writeString(file, mapXml(false, 100000001, 100100));
+        WzResourceRegistry resources = new WzResourceRegistry(root, List.of(new MapResourceLoader()), Runnable::run);
+        MapleMap first = new ChannelMapManager(resources).getMap(100000000);
+        MapleMap second = new ChannelMapManager(resources).getMap(100000000);
+        first.addCharacter(new PlayerCharacter(1));
+        assertThat(first).isNotSameAs(second);
+        assertThat(second.characters()).isEmpty();
+        assertThat(first.nextObjectId()).isEqualTo(second.nextObjectId());
+    }
+
+    @Test
     void reloadReplacesStaticWzDataButKeepsRuntimeMapIdentityAndCharacters(@TempDir Path root) throws Exception {
         Path file = Files.createDirectories(root.resolve("Map.wz/Map/Map1"))
                 .resolve("100000000.img.xml");
@@ -30,7 +43,7 @@ class ChannelMapManagerReloadTest {
         ChannelMapManager manager = new ChannelMapManager(resources);
         WzReloadCoordinator coordinator = new WzReloadCoordinator(resources, List.of(manager));
         MapleMap liveMap = manager.getMap(100000000);
-        Character character = new Character(resources.version());
+        PlayerCharacter character = new PlayerCharacter(resources.version());
         liveMap.addCharacter(character);
         MapleMonster monster = new MapleMonster(resources.mob(100100));
         monster.takeDamage(25);

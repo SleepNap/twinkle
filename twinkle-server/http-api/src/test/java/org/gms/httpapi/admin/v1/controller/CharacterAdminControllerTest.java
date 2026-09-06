@@ -1,20 +1,20 @@
 package org.gms.httpapi.admin.v1.controller;
 
 import io.micronaut.http.HttpResponse;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.BuddyListEntity;
-import org.gms.data.entity.Character;
-import org.gms.data.entity.InventoryItemEntity;
-import org.gms.data.entity.QuestProgressEntity;
-import org.gms.data.entity.QuestStatusEntity;
-import org.gms.data.entity.SkillEntity;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.BuddyListRepository;
-import org.gms.data.repo.CharacterRepository;
-import org.gms.data.repo.InventoryItemRepository;
-import org.gms.data.repo.QuestProgressSnapshot;
-import org.gms.data.repo.QuestRepository;
-import org.gms.data.repo.SkillRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.BuddyListEntity;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.entity.InventoryItemEntity;
+import org.gms.persistence.entity.QuestProgressEntity;
+import org.gms.persistence.entity.QuestStatusEntity;
+import org.gms.persistence.entity.SkillEntity;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.BuddyListRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
+import org.gms.persistence.repo.InventoryItemRepository;
+import org.gms.persistence.repo.QuestProgressSnapshot;
+import org.gms.persistence.repo.QuestRepository;
+import org.gms.persistence.repo.SkillRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -28,9 +28,9 @@ class CharacterAdminControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void aggregatesPersistedCharacterDetails() {
-        Account account = account(7L);
-        Character hero = character(71L, 7L, "hero");
-        Character buddyCharacter = character(72L, 8L, "friend");
+        GameAccountRecord account = account(7L);
+        PlayerCharacterRecord hero = character(71L, 7L, "hero");
+        PlayerCharacterRecord buddyCharacter = character(72L, 8L, "friend");
 
         InventoryItemEntity inventory = new InventoryItemEntity();
         inventory.setInventoryItemId(101L);
@@ -93,8 +93,8 @@ class CharacterAdminControllerTest {
     }
 
     private static CharacterAdminController controller(
-            Account account,
-            List<Character> characters,
+            GameAccountRecord account,
+            List<PlayerCharacterRecord> characters,
             List<InventoryItemEntity> inventory,
             List<QuestStatusEntity> quests,
             List<QuestProgressEntity> progress,
@@ -109,8 +109,8 @@ class CharacterAdminControllerTest {
                 new MemoryBuddyRepository(buddies));
     }
 
-    private static Account account(long id) {
-        Account account = new Account();
+    private static GameAccountRecord account(long id) {
+        GameAccountRecord account = new GameAccountRecord();
         account.setId(id);
         account.setName("alice");
         account.setNxCredit(500);
@@ -119,8 +119,8 @@ class CharacterAdminControllerTest {
         return account;
     }
 
-    private static Character character(long id, long accountId, String name) {
-        Character character = new Character();
+    private static PlayerCharacterRecord character(long id, long accountId, String name) {
+        PlayerCharacterRecord character = new PlayerCharacterRecord();
         character.setId(id);
         character.setAccountId(accountId);
         character.setName(name);
@@ -129,24 +129,24 @@ class CharacterAdminControllerTest {
         return character;
     }
 
-    private record MemoryAccountRepository(Account account) implements AccountRepository {
-        @Override public Optional<Account> findByName(String name) { return Optional.empty(); }
-        @Override public Optional<Account> findById(Long id) {
+    private record MemoryAccountRepository(GameAccountRecord account) implements GameAccountRepository {
+        @Override public Optional<GameAccountRecord> findByName(String name) { return Optional.empty(); }
+        @Override public Optional<GameAccountRecord> findById(Long id) {
             return account.getId().equals(id) ? Optional.of(account) : Optional.empty();
         }
-        @Override public void insert(Account value) { }
-        @Override public void update(Account value) { }
-        @Override public List<Account> findByNameLike(String query, int limit) { return List.of(); }
+        @Override public void insert(GameAccountRecord value) { }
+        @Override public void update(GameAccountRecord value) { }
+        @Override public List<GameAccountRecord> findByNameLike(String query, int limit) { return List.of(); }
     }
 
-    private record MemoryCharacterRepository(List<Character> characters) implements CharacterRepository {
-        @Override public List<Character> findByAccount(int accountId, int world) { return List.of(); }
-        @Override public Optional<Character> findById(long id) {
+    private record MemoryCharacterRepository(List<PlayerCharacterRecord> characters) implements PlayerCharacterRepository {
+        @Override public List<PlayerCharacterRecord> findByAccount(int accountId, int world) { return List.of(); }
+        @Override public Optional<PlayerCharacterRecord> findById(long id) {
             return characters.stream().filter(character -> character.getId() == id).findFirst();
         }
         @Override public boolean existsByName(String name) { return false; }
-        @Override public void insert(Character character) { }
-        @Override public void save(Character character) { }
+        @Override public void insert(PlayerCharacterRecord character) { }
+        @Override public void save(PlayerCharacterRecord character) { }
     }
 
     private record MemoryInventoryRepository(List<InventoryItemEntity> items)

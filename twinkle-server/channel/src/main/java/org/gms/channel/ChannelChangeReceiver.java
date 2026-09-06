@@ -21,16 +21,18 @@ import org.gms.message.MessageTargets;
  * 携带序号，ReliableReceiver 判序）。
  */
 @Log4j2
-public final class ChannelChangeReceiver {
+public final class ChannelChangeReceiver implements AutoCloseable {
 
     private final int channelId;
     private final ReliableReceiver reliableReceiver;
+    private final AutoCloseable subscription;
 
     public ChannelChangeReceiver(int channelId, ReliableReceiver reliableReceiver, EventBus eventBus) {
         this.channelId = channelId;
         this.reliableReceiver = reliableReceiver;
         // 订阅本频道 CC 请求流（可靠投递经 ReliableDelivery 携带序号）
-        eventBus.subscribe(MessageTargets.channel(channelId), ChangeChannelRequest.class, this::onChangeChannel);
+        subscription = eventBus.subscribe(MessageTargets.channel(channelId), ChangeChannelRequest.class,
+                this::onChangeChannel);
     }
 
     private void onChangeChannel(ChangeChannelRequest req) {
@@ -59,5 +61,14 @@ public final class ChannelChangeReceiver {
     private static String reliableMessageId(ChangeChannelRequest req, String stream) {
         // 确定性消息 id：玩家 + 目标频道 + 来源频道（同一迁移幂等；不同迁移序号不同）
         return stream + ":to" + req.toChannel() + ":from" + req.fromChannel();
+    }
+
+    @Override
+    public void close() {
+        try {
+            subscription.close();
+        } catch (Exception e) {
+            log.warn("Failed to cancel channel-change subscription", e);
+        }
     }
 }

@@ -1,6 +1,6 @@
 package org.gms.domain.game.map;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,16 +13,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MapleMapTest {
 
-    private Character newChar() {
-        return new Character(new DefaultVersionGate().currentVersion());
+    private PlayerCharacter newChar() {
+        return new PlayerCharacter(new DefaultVersionGate().currentVersion());
     }
 
     @Test
     @DisplayName("玩家进出与人数")
     void characterEnterLeave() {
         MapleMap map = new MapleMap();
-        Character a = newChar();
-        Character b = newChar();
+        PlayerCharacter a = newChar();
+        PlayerCharacter b = newChar();
 
         map.addCharacter(a);
         map.addCharacter(b);

@@ -5,12 +5,12 @@ import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.gms.channel.CharacterLoader;
-import org.gms.channel.PlayerStorage;
+import org.gms.channel.PlayerCharacterAssembler;
+import org.gms.channel.ChannelPlayerDirectory;
 import org.gms.channel.persist.CharacterFlushTickHandler;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.channel.persist.RestartService;
-import org.gms.data.repo.CharacterSnapshotRepository;
+import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.observability.Metrics;
@@ -32,10 +32,10 @@ public class PersistConfig {
 
     @Bean
     @Singleton
-    public CharacterSaveQueue characterSaveQueue(CharacterSnapshotRepository snapshotRepository,
-                                                 CharacterLoader loader,
-                                                 PlayerStorage playerStorage) {
-        return new CharacterSaveQueue(snapshotRepository, loader, playerStorage);
+    public CharacterSaveQueue characterSaveQueue(PlayerCharacterSnapshotRepository snapshotRepository,
+                                                 PlayerCharacterAssembler loader,
+                                                 ChannelPlayerDirectory playerDirectory) {
+        return new CharacterSaveQueue(snapshotRepository, loader, playerDirectory);
     }
 
     @Bean

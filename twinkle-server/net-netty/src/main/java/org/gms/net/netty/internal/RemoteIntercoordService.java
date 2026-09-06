@@ -110,6 +110,11 @@ public final class RemoteIntercoordService implements IntercoordService {
     }
 
     @Override
+    public void registerChannel(int channelId, String host, int port, int onlineCount, String workerId) {
+        rpcVoid("registerChannel", channelId, host, port, onlineCount, workerId);
+    }
+
+    @Override
     public void heartbeatChannel(int channelId, int onlineCount) {
         rpcVoid("heartbeatChannel", channelId, onlineCount);
     }
@@ -147,9 +152,8 @@ public final class RemoteIntercoordService implements IntercoordService {
     }
 
     @Override
-    public long write(String key, Object value, long expectedVersion) {
-        // 值跨进程保持 JSON 字符串（coordinator 端 StoreEntry.value 为 String，读端按需解析）
-        InternalProtocol.RpcResponse resp = rpc("write", key, value == null ? null : JsonCodec.encode(value), expectedVersion);
+    public long write(String key, StoreValue value, long expectedVersion) {
+        InternalProtocol.RpcResponse resp = rpc("write", key, value, expectedVersion);
         if (resp == null || !resp.ok()) {
             return -1;
         }

@@ -1,11 +1,11 @@
 package org.gms.httpapi.admin.v1.controller;
 
 import io.micronaut.http.HttpRequest;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.AccountDeletionRepository;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.AccountDeletionRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.service.admin.AdminService;
 import org.junit.jupiter.api.Test;
@@ -148,7 +148,7 @@ class AccountAdminControllerTest {
 
     @Test
     void unbanAndMuteUpdatesRestrictionState() {
-        Account account = account(7L, "alice");
+        GameAccountRecord account = account(7L, "alice");
         account.setBanned(1);
         account.setBanReason("old");
         MemoryAccounts accounts = new MemoryAccounts(account);
@@ -165,7 +165,7 @@ class AccountAdminControllerTest {
 
     @Test
     void forceOfflineRepairsStaleLoginState() {
-        Account account = account(7L, "alice");
+        GameAccountRecord account = account(7L, "alice");
         MemoryAccounts accounts = new MemoryAccounts(account);
         AccountAdminController controller = controller(
                 accounts, new MemoryCharacters(character(71L, 7L)), new FakeAdmin());
@@ -176,7 +176,7 @@ class AccountAdminControllerTest {
 
     @Test
     void updateAccountChangesEditableProfileAndHonorsPasswordBoundary() {
-        Account account = account(7L, "alice");
+        GameAccountRecord account = account(7L, "alice");
         account.setPassword(BCrypt.hashpw("oldpass", BCrypt.gensalt()));
         MemoryAccounts accounts = new MemoryAccounts(account);
         AccountAdminController controller = controller(accounts, new MemoryCharacters(), new FakeAdmin());
@@ -216,7 +216,7 @@ class AccountAdminControllerTest {
 
     @Test
     public void generateTemporaryPasswordStoresOnlyHashAndKeepsPlayerPassword() {
-        Account account = account(7L, "alice");
+        GameAccountRecord account = account(7L, "alice");
         account.setPassword(BCrypt.hashpw("player-secret", BCrypt.gensalt()));
         String playerPasswordHash = account.getPassword();
         MemoryAccounts accounts = new MemoryAccounts(account);
@@ -252,8 +252,8 @@ class AccountAdminControllerTest {
                 .isEqualTo(400);
     }
 
-    private static Account account(long id, String name) {
-        Account account = new Account();
+    private static GameAccountRecord account(long id, String name) {
+        GameAccountRecord account = new GameAccountRecord();
         account.setId(id);
         account.setName(name);
         account.setLoggedIn(1);
@@ -261,42 +261,42 @@ class AccountAdminControllerTest {
         return account;
     }
 
-    private static AccountAdminController controller(AccountRepository accounts,
-                                                     CharacterRepository characters,
+    private static AccountAdminController controller(GameAccountRepository accounts,
+                                                     PlayerCharacterRepository characters,
                                                      AdminService admin) {
         return new AccountAdminController(accounts, new MemoryDeletion(), characters, admin);
     }
 
-    private static Character character(long id, long accountId) {
-        Character character = new Character();
+    private static PlayerCharacterRecord character(long id, long accountId) {
+        PlayerCharacterRecord character = new PlayerCharacterRecord();
         character.setId(id);
         character.setAccountId(accountId);
         character.setName("hero");
         return character;
     }
 
-    private static final class MemoryAccounts implements AccountRepository {
-        private Account account;
+    private static final class MemoryAccounts implements GameAccountRepository {
+        private GameAccountRecord account;
 
         private MemoryAccounts() {
         }
 
-        private MemoryAccounts(Account account) {
+        private MemoryAccounts(GameAccountRecord account) {
             this.account = account;
         }
 
         @Override
-        public Optional<Account> findByName(String name) {
+        public Optional<GameAccountRecord> findByName(String name) {
             return account != null && account.getName().equals(name) ? Optional.of(account) : Optional.empty();
         }
 
         @Override
-        public Optional<Account> findById(Long id) {
+        public Optional<GameAccountRecord> findById(Long id) {
             return account != null && account.getId().equals(id) ? Optional.of(account) : Optional.empty();
         }
 
         @Override
-        public void insert(Account account) {
+        public void insert(GameAccountRecord account) {
             if (account.getId() == null) {
                 account.setId(99L);
             }
@@ -304,29 +304,29 @@ class AccountAdminControllerTest {
         }
 
         @Override
-        public void update(Account account) {
+        public void update(GameAccountRecord account) {
         }
 
         @Override
-        public List<Account> findByNameLike(String query, int limit) {
+        public List<GameAccountRecord> findByNameLike(String query, int limit) {
             return account == null ? List.of() : List.of(account);
         }
     }
 
-    private static final class MemoryCharacters implements CharacterRepository {
-        private final List<Character> characters;
+    private static final class MemoryCharacters implements PlayerCharacterRepository {
+        private final List<PlayerCharacterRecord> characters;
 
-        private MemoryCharacters(Character... characters) {
+        private MemoryCharacters(PlayerCharacterRecord... characters) {
             this.characters = List.of(characters);
         }
 
         @Override
-        public List<Character> findByAccount(int accountId, int world) {
+        public List<PlayerCharacterRecord> findByAccount(int accountId, int world) {
             return characters;
         }
 
         @Override
-        public Optional<Character> findById(long id) {
+        public Optional<PlayerCharacterRecord> findById(long id) {
             return characters.stream().filter(character -> character.getId() == id).findFirst();
         }
 
@@ -336,11 +336,11 @@ class AccountAdminControllerTest {
         }
 
         @Override
-        public void insert(Character chr) {
+        public void insert(PlayerCharacterRecord chr) {
         }
 
         @Override
-        public void save(Character chr) {
+        public void save(PlayerCharacterRecord chr) {
         }
     }
 

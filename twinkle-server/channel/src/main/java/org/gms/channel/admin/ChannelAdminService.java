@@ -6,7 +6,7 @@ import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.ChannelMapManager;
 import org.gms.channel.persist.RestartService;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
@@ -22,7 +22,7 @@ import org.gms.wz.WzReloadCoordinator;
 /**
  * 频道侧 {@link AdminService} 实现（架构 M3-1 第②路：管理侧经 service 接口访问频道）。
  *
- * <p>只读快照经 DTO 拷贝返回（{@link Character} 是内存态权威对象，绝不出进程/出模块边界，
+ * <p>只读快照经 DTO 拷贝返回（{@link PlayerCharacter} 是内存态权威对象，绝不出进程/出模块边界，
  * 防 http-api 直踩游戏内存）。踢下线走会话注册表关闭连接。
  *
  * <p>M5 运维操作（架构 M5-1）：脚本重载、L4 重启均委托频道侧具体组件执行——管理侧
@@ -70,8 +70,8 @@ public final class ChannelAdminService implements AdminService {
     }
 
     @Override
-    public PlayerInventory inventorySnapshot(long characterId) {
-        Character character = players.getById(characterId);
+    public CharacterInventory inventorySnapshot(long characterId) {
+        PlayerCharacter character = players.getById(characterId);
         if (character == null) {
             return null;
         }
@@ -87,7 +87,7 @@ public final class ChannelAdminService implements AdminService {
             }
             items.sort(java.util.Comparator.comparingInt(InventoryItemView::inventoryType)
                     .thenComparingInt(InventoryItemView::position));
-            return new PlayerInventory(character.getId(),
+            return new CharacterInventory(character.getId(),
                     character.getName() == null ? "" : character.getName(),
                     character.dirtyVersion(), java.util.List.copyOf(items));
         }
@@ -159,7 +159,7 @@ public final class ChannelAdminService implements AdminService {
         return restartCoordinator.phase();
     }
 
-    private OnlinePlayer toDto(Character chr) {
+    private OnlinePlayer toDto(PlayerCharacter chr) {
         return new OnlinePlayer(chr.getId(), chr.getName(), chr.getMap(), chr.getLevel(), chr.getJob());
     }
 

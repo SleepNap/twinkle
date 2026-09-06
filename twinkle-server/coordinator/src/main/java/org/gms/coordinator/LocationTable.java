@@ -1,12 +1,13 @@
 package org.gms.coordinator;
+import org.gms.service.intercoord.PlayerPresenceService;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import org.gms.service.intercoord.IntercoordService.PlayerActivity;
-import org.gms.service.intercoord.IntercoordService.PlayerPresence;
+import org.gms.service.intercoord.PlayerPresenceService.PlayerActivity;
+import org.gms.service.intercoord.PlayerPresenceService.PlayerPresence;
 
 /**
  * 大区玩家 Presence 表（coordinator 维护 player → world + 连接属主频道 + 活动状态）。

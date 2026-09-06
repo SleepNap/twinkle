@@ -1,0 +1,113 @@
+package org.gms.persistence.repo;
+
+import com.mybatisflex.core.query.QueryWrapper;
+import org.gms.persistence.entity.BusOutboxEntity;
+import org.gms.persistence.entity.BusStreamEntity;
+import org.gms.persistence.mapper.BusOutboxMapper;
+import org.gms.persistence.mapper.BusStreamMapper;
+import org.gms.event.OutboxRepository;
+
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * MyBatis-Flex 实现的消息总线 outbox 仓库（M4 可靠投递，架构 4.5）。
+ *
+ * <p>SQL 用两库公共子集（SELECT/UPDATE/ORDER BY，红线 14：方言点进 persistence.dialect，此处无方言裸写）。
+ *
+ * <p>M6 跨进程：接收侧去重状态落 {@code bus_stream} 表（{@code lastDeliveredSeq}），
+ * 重启不丢去重状态——进程崩了重投未 ACKED 时接收侧按持久化序号判断是否重复应用。
+ */
+public class FlexBusOutboxRepository implements OutboxRepository {
+
+    private final BusOutboxMapper mapper;
+    private final BusStreamMapper streamMapper;
+
+    public FlexBusOutboxRepository(BusOutboxMapper mapper, BusStreamMapper streamMapper) {
+        this.mapper = mapper;
+        this.streamMapper = streamMapper;
+    }
+
+    @Override
+    public long insert(OutboxRow row) {
+        BusOutboxEntity e = new BusOutboxEntity();
+        e.setStreamId(row.streamId());
+        e.setSeq(row.seq());
+        e.setMessageId(row.messageId());
+        e.setTarget(row.target());
+        e.setPayloadType(row.payloadType());
+        e.setPayload(row.payload());
+        e.setStatus(OutboxRow.PENDING);
+        e.setCreatedAt(Instant.now().toString());
+        mapper.insert(e);
+        return e.getId();
+    }
+
+    @Override
+    public List<OutboxRow> findPending() {
+        // 未 ACKED 的按 id 序（重投保序，单一属主序号投递）
+        return mapper.selectListByQuery(QueryWrapper.create()
+                        .where(BusOutboxEntity::getStatus).ne(OutboxRow.ACKED)
+                        .orderBy(BusOutboxEntity::getId).asc())
+                .stream()
+                .map(this::toRow)
+                .toList();
+    }
+
+    @Override
+    public long lastIssuedSeq(String streamId) {
+        BusOutboxEntity latest = mapper.selectOneByQuery(QueryWrapper.create()
+                .where(BusOutboxEntity::getStreamId).eq(streamId)
+                .orderBy(BusOutboxEntity::getSeq).desc()
+                .limit(1));
+        return latest == null ? 0L : latest.getSeq();
+    }
+
+    @Override
+    public void markDelivered(long id) {
+        BusOutboxEntity e = new BusOutboxEntity();
+        e.setId(id);
+        e.setStatus(OutboxRow.DELIVERED);
+        e.setDeliveredAt(Instant.now().toString());
+        mapper.update(e);
+    }
+
+    @Override
+    public void markAcked(String messageId) {
+        BusOutboxEntity e = new BusOutboxEntity();
+        e.setStatus(OutboxRow.ACKED);
+        mapper.updateByQuery(e, QueryWrapper.create()
+                .where(BusOutboxEntity::getMessageId).eq(messageId));
+    }
+
+    @Override
+    public long lastDeliveredSeq(String streamId) {
+        BusStreamEntity e = streamMapper.selectOneByQuery(QueryWrapper.create()
+                .where(BusStreamEntity::getStreamId).eq(streamId));
+        return e == null ? 0 : e.getLastDeliveredSeq();
+    }
+
+    @Override
+    public void advanceLastDeliveredSeq(String streamId, long seq) {
+        BusStreamEntity e = streamMapper.selectOneByQuery(QueryWrapper.create()
+                .where(BusStreamEntity::getStreamId).eq(streamId));
+        if (e == null) {
+            // 首条：插入
+            BusStreamEntity fresh = new BusStreamEntity();
+            fresh.setStreamId(streamId);
+            fresh.setLastDeliveredSeq(seq);
+            streamMapper.insert(fresh);
+            return;
+        }
+        // 只进不退（并发安全：单写语义 + 同流单属主）
+        if (seq > e.getLastDeliveredSeq()) {
+            e.setLastDeliveredSeq(seq);
+            streamMapper.update(e);
+        }
+    }
+
+    private OutboxRow toRow(BusOutboxEntity e) {
+        return new OutboxRow(e.getId(), e.getStreamId(), e.getSeq(), e.getMessageId(),
+                e.getTarget(), e.getPayloadType(), e.getPayload(), e.getStatus());
+    }
+}

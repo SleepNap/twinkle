@@ -8,7 +8,7 @@ import java.net.URL;
  * 插件 classloader（架构 7.3 可见性边界：绝不能加载/遮蔽稳定层类，否则 CCE）。
  *
  * <p>策略：<b>宿主包（{@code org.gms.*}）一律父优先</b>——插件 jar 里即使塞了一个
- * {@code org.gms.data.entity.Character}，加载时直接由父（应用 classloader）加载宿主真身，
+ * {@code org.gms.persistence.entity.PlayerCharacterRecord}，加载时直接由父（应用 classloader）加载宿主真身，
  * 结构上不可能遮蔽稳定层类。插件自有代码（{@code com.acme.*} 等非 org.gms 包）本地优先，
  * 换 loader = 新实例，与 L3 模块替换同构（架构 5.1）。
  *

@@ -25,16 +25,19 @@ twinkle:
   # ============== 登录服 Netty（架构 M1：v83 客户端连接） ==============
   # v83 客户端经典登录端口 8484；与 Micronaut HTTP 各自独立 EventLoop（红线 4）
   net:
+    world:
+      # 当前集群的大区稳定 ID；v83 可用范围 0..254，允许非零且不要求从 0 连续排列。
+      id: ${TWINKLE_WORLD_ID:0}
     login:
       port: ${TWINKLE_LOGIN_PORT:8484}
     # 频道服端口（M2 进图：选角后客户端重连；单进程默认与登录服错开）
-    # split 档每频道进程独占一个端口（如 8584 / 8585 / ...），经 TWINKLE_CHANNEL_PORT 指定
+    # split 档优先由 TWINKLE_WORKER_CHANNELS 显式声明 channelId:port；此项兼容单频道 worker。
     channel:
       # 登录服通过 v83 SERVER_IP 回包告诉客户端连接频道时使用的 IPv4；不是监听地址。
       # 登录服和频道服的 Netty 端口均默认监听所有网卡；公网部署时这里填写客户端可达的公网 IPv4。
       host: ${TWINKLE_CHANNEL_HOST:127.0.0.1}
       port: ${TWINKLE_CHANNEL_PORT:8584}
-      # 频道 id（split 档每频道进程 1 / 2 / ...；single 档恒 1）
+      # 频道稳定 ID（v83 范围 1..256，可稀疏；不是列表下标或端口偏移）
       id: ${TWINKLE_CHANNEL_ID:1}
 
   # ============== 内部通信 coordinator（架构 4.6.4 注册中心：channel 上报/心跳/路由） ==============
@@ -66,6 +69,12 @@ twinkle:
     path: ${TWINKLE_WZ_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\wz}
   script:
     path: ${TWINKLE_SCRIPT_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\scripts}
+
+  # ============== 频道 Worker（一个 JVM 可托管多个频道） ==============
+  # channels 格式：channelId:port,channelId:port；留空时兼容上面的单频道 id/port。
+  worker:
+    id: ${TWINKLE_WORKER_ID:}
+    channels: ${TWINKLE_WORKER_CHANNELS:}
 
   # ============== API Key 与限流（/api、/internal 统一认证、Scope 授权和审计） ==============
   http:
@@ -99,6 +108,9 @@ micronaut:
     port: ${TWINKLE_HTTP_PORT:8686}
   router:
     static-resources:
+      web-console:
+        mapping: /**
+        paths: classpath:public
       openapi:
         mapping: /api-docs/**
         paths: classpath:META-INF/swagger

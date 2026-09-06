@@ -1,12 +1,12 @@
 package org.gms.httpapi.billing;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.PointAccount;
-import org.gms.data.entity.PointTransaction;
-import org.gms.data.entity.SubscriptionPlan;
-import org.gms.data.repo.PointAccountRepository;
-import org.gms.data.repo.PointTransactionRepository;
-import org.gms.data.repo.SubscriptionPlanRepository;
+import org.gms.persistence.entity.PointAccount;
+import org.gms.persistence.entity.PointTransaction;
+import org.gms.persistence.entity.SubscriptionPlan;
+import org.gms.persistence.repo.PointAccountRepository;
+import org.gms.persistence.repo.PointTransactionRepository;
+import org.gms.persistence.repo.SubscriptionPlanRepository;
 import org.gms.i18n.I18n;
 
 import java.time.Instant;

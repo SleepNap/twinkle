@@ -22,7 +22,7 @@
             <AppenderRef ref="Console"/>
         </Root>
         <Logger name="org.gms" level="DEBUG"/>
-        <Logger name="org.gms.data.mapper" level="${SQL_LOG_LEVEL}"/>
+        <Logger name="org.gms.persistence.mapper" level="${SQL_LOG_LEVEL}"/>
         <Logger name="io.micronaut" level="INFO"/>
         <!-- 使用项目自己的【启动完成】摘要，避免重复的框架完成日志。 -->
         <Logger name="io.micronaut.runtime.Micronaut" level="WARN"/>

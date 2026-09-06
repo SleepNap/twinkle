@@ -1,6 +1,6 @@
 package org.gms.replaceable;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.hotreload.versioned.VersionGate;
 import org.junit.jupiter.api.DisplayName;
@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 生命恢复系统：状态/逻辑分离 + 版本门落地。
- * 系统只经 CharacterState 接口操作角色（Character 是稳定层具体类，仅在测试装配侧 new）。
+ * 系统只经 CharacterState 接口操作角色（PlayerCharacter 是稳定层具体类，仅在测试装配侧 new）。
  */
 class HealthRecoverySystemTest {
 
@@ -18,7 +18,7 @@ class HealthRecoverySystemTest {
     @DisplayName("恢复 HP 向 maxHp 收敛并封顶")
     void recoversHpTowardMaxHpCapped() {
         VersionGate gate = new DefaultVersionGate();
-        Character c = new Character(gate.currentVersion());
+        PlayerCharacter c = new PlayerCharacter(gate.currentVersion());
         c.setMaxHp(1000);
         c.setHp(100);
         HealthRecoverySystem system = new HealthRecoverySystem(gate);
@@ -36,7 +36,7 @@ class HealthRecoverySystemTest {
     @DisplayName("满血时不改动")
     void atFullHpNoChange() {
         VersionGate gate = new DefaultVersionGate();
-        Character c = new Character(gate.currentVersion());
+        PlayerCharacter c = new PlayerCharacter(gate.currentVersion());
         c.setMaxHp(500);
         c.setHp(500);
         HealthRecoverySystem system = new HealthRecoverySystem(gate);
@@ -49,7 +49,7 @@ class HealthRecoverySystemTest {
     @DisplayName("重载换代后旧逻辑迟到写被版本门拒绝")
     void staleWriteRejectedAfterReload() {
         VersionGate gate = new DefaultVersionGate();
-        Character c = new Character(gate.currentVersion()); // 逻辑版本 1
+        PlayerCharacter c = new PlayerCharacter(gate.currentVersion()); // 逻辑版本 1
         c.setMaxHp(1000);
         c.setHp(100);
         HealthRecoverySystem system = new HealthRecoverySystem(gate);

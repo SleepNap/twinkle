@@ -1,46 +1,25 @@
 package org.gms.bootstrap;
 
 import io.micronaut.context.annotation.Bean;
-import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.gms.channel.admin.ChannelAdminService;
-import org.gms.channel.admin.ChannelEventPublisher;
-import org.gms.channel.AttackHandler;
-import org.gms.channel.BuddyHandler;
-import org.gms.channel.ChangeChannelHandler;
-import org.gms.channel.ChannelChangeReceiver;
-import org.gms.channel.ChannelActivityService;
-import org.gms.channel.ChannelHandlerRegistrar;
-import org.gms.channel.ChannelMapManager;
-import org.gms.channel.ChannelMessageSubscriber;
-import org.gms.channel.ChannelLocationBinder;
-import org.gms.channel.ChannelServer;
-import org.gms.channel.CharacterLoader;
-import org.gms.channel.MonsterSpawnService;
-import org.gms.channel.GeneralChatHandler;
-import org.gms.channel.MoveLifeHandler;
-import org.gms.channel.MovePlayerHandler;
-import org.gms.channel.NpcTalkHandler;
-import org.gms.channel.NpcTalkMoreHandler;
-import org.gms.channel.PlayerInteractionHandler;
-import org.gms.channel.PlayerLoggedinHandler;
-import org.gms.channel.PlayerMapTransitionHandler;
-import org.gms.channel.PlayerSessionRegistry;
-import org.gms.channel.PlayerStorage;
-import org.gms.channel.UseItemHandler;
-import org.gms.channel.WhisperHandler;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.channel.ChannelPlayerDirectory;
+import org.gms.channel.PlayerCharacterAssembler;
+import org.gms.channel.persist.CharacterSaveQueue;
+import org.gms.channel.persist.RestartService;
+import org.gms.persistence.repo.BuddyListRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.domain.script.ScriptManager;
 import org.gms.event.EventBus;
+import org.gms.event.ReliableEventBus;
+import org.gms.event.ReliableReceiver;
 import org.gms.hotreload.EntityReloadCoordinator;
-import org.gms.hotreload.EntityReloadService;
+import org.gms.hotreload.RestartCoordinator;
 import org.gms.hotreload.versioned.VersionGate;
-import org.gms.net.netty.LoginServer;
-import org.gms.net.packet.HandlerRegistry;
+import org.gms.net.netty.HeartbeatConfig;
 import org.gms.replaceable.CombatSystem;
 import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.MovementSystem;
@@ -49,239 +28,83 @@ import org.gms.replaceable.TradeSystem;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.service.admin.AdminService;
 import org.gms.service.intercoord.IntercoordService;
-import org.gms.wz.WzResourceRegistry;
+import org.gms.tick.TickScheduler;
 import org.gms.wz.WzReloadCoordinator;
-import org.gms.wz.WzReloadParticipant;
+import org.gms.wz.WzResourceRegistry;
 
-
-/**
- * 频道服装配（架构 M2 进图 + M3-5 游戏内协议 handler）。
- *
- * <p>角色加载（CharacterLoader）、地图缓存（ChannelMapManager，WZ 路径来自
- * {@code twinkle.wz.path}）、在线表（PlayerStorage）、会话注册表（PlayerSessionRegistry）、
- * 刷怪服务（MonsterSpawnService）、全部游戏内 handler + 可替换层 system 在此装配。
- *
- * <p>装配条件（架构 4.1 进程边界是配置）：single 全内嵌 / split 的 channel 角色装配本类；
- * coordinator 角色（管理进程）不装配（游戏世界只在频道进程）。
- */
+/** Channel worker 装配：共享资源只建一次，频道运行态由 {@link ChannelWorker} 按清单创建。 */
 @Factory
 @Requires(condition = ChannelProcessCondition.class)
 public class ChannelConfig {
 
     @Bean
     @Singleton
-    public CharacterLoader characterLoader(VersionGate versionGate,
-                                           org.gms.data.repo.InventoryItemRepository inventoryItemRepository,
-                                           org.gms.data.repo.QuestRepository questRepository,
-                                           org.gms.data.repo.SkillRepository skillRepository) {
-        return new CharacterLoader(versionGate, inventoryItemRepository, questRepository, skillRepository);
+    public PlayerCharacterAssembler characterLoader(VersionGate versionGate,
+                                           org.gms.persistence.repo.InventoryItemRepository inventoryItemRepository,
+                                           org.gms.persistence.repo.QuestRepository questRepository,
+                                           org.gms.persistence.repo.SkillRepository skillRepository) {
+        return new PlayerCharacterAssembler(versionGate, inventoryItemRepository, questRepository, skillRepository);
     }
 
     @Bean
     @Singleton
-    public ChannelMapManager channelMapManager(WzResourceRegistry resources) {
-        return new ChannelMapManager(resources);
+    public ChannelPlayerDirectory channelPlayerDirectory() {
+        return new ChannelPlayerDirectory();
     }
 
-    @Bean
-    @Singleton
-    public WzReloadCoordinator wzReloadCoordinator(WzResourceRegistry resources,
-                                                   java.util.List<WzReloadParticipant> participants) {
-        return new WzReloadCoordinator(resources, participants);
-    }
-
-    @Bean
-    @Singleton
-    public PlayerStorage playerStorage() {
-        return new PlayerStorage();
-    }
-
-    @Bean
-    @Singleton
-    public PlayerSessionRegistry playerSessionRegistry() {
-        return new PlayerSessionRegistry();
-    }
-
-    @Bean
-    @Singleton
-    public MonsterSpawnService monsterSpawnService(GameDataProvider gameData, PlayerSessionRegistry sessions,
-                                                   org.gms.domain.game.lease.ControllerLeaseService leaseService) {
-        return new MonsterSpawnService(gameData, sessions, leaseService);
-    }
-
-    /** @Bean(preDestroy="close")：频道 Netty 服 context close 时优雅关闭释放端口（多测试/多次启动不残留）。 */
     @Bean(preDestroy = "close")
     @Singleton
-    public ChannelServer channelServer(HandlerRegistry registry, PlayerSessionRegistry playerSessionRegistry,
-                                       ChannelEventPublisher eventPublisher, PlayerStorage playerStorage,
-                                       org.gms.channel.persist.CharacterSaveQueue saveQueue,
-                                       org.gms.domain.game.lease.ControllerLeaseService leaseService,
-                                       org.gms.net.netty.HeartbeatConfig heartbeatConfig) {
-        return new ChannelServer(registry, session -> {
-            // 断链注销（事故报告阶段 B：compare-and-remove，迟到旧连接不能误删新会话）。
-            // IO 线程快速返回，重活入队。
-            org.gms.domain.game.Character chr = session.getAttr("character");
-            if (chr == null) {
-                org.gms.channel.NpcTalkHandler.closeConversation(session);
-                return;
-            }
-            if (!playerSessionRegistry.unregister(chr.getId(), session)) {
-                // 本会话已被新代际替代（旧连接迟到关闭）：只计数不清理、不存档——
-                // 防旧态覆盖新会话 DB（事故报告 §5.4）。
-                return;
-            }
-            eventPublisher.playerOffline(chr.getId());
-            playerStorage.remove(chr);
-            if (chr.getMapObject() != null) {
-                chr.getMapObject().removeCharacter(chr);
-            }
-            Long gen = session.getAttr("sessionGeneration");
-            if (gen != null) {
-                leaseService.onDisconnect(chr.getId(), session.sessionId(), gen);
-            }
-            saveQueue.save(chr); // 下线存档（L4 增量 FLUSH 队列，单写执行器）
-            org.gms.channel.NpcTalkHandler.closeConversation(session);
-        }, heartbeatConfig);
-    }
-
-    @Bean
-    @Singleton
-    public ChannelEventPublisher channelEventPublisher(EventBus eventBus) {
-        return new ChannelEventPublisher(eventBus);
-    }
-
-    /** 商城/MTS 采用北斗模式：保留频道 TCP Session，只退出地图和频道游戏玩家表。 */
-    @Bean
-    @Singleton
-    public ChannelActivityService channelActivityService(
+    public ChannelWorker channelWorker(
+            ChannelWorkerSpec spec,
+            PlayerCharacterRepository characterRepository,
+            PlayerCharacterAssembler characterLoader,
+            WzResourceRegistry wzResources,
+            GameDataProvider gameData,
+            ScriptManager scriptManager,
+            MovementSystem movementSystem,
+            CombatSystem combatSystem,
+            TradeSystem tradeSystem,
+            ItemSystem itemSystem,
+            QuestSystem questSystem,
+            EntityReloadCoordinator entityReloadCoordinator,
+            EventBus eventBus,
+            ReliableEventBus reliableEventBus,
+            ReliableReceiver reliableReceiver,
+            IntercoordService intercoord,
+            BuddyListRepository buddyListRepository,
+            CharacterSaveQueue saveQueue,
+            RestartService restartService,
+            RestartCoordinator restartCoordinator,
+            ChannelPlayerDirectory playerDirectory,
+            TickScheduler tickScheduler,
+            HeartbeatConfig heartbeatConfig,
+            org.gms.channel.NpcShopCatalog shopCatalog,
+            org.gms.replaceable.ProgressionSystem progressionSystem,
             @Property(name = "twinkle.net.world.id", defaultValue = "0") int worldId,
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            PlayerStorage playerStorage,
-            PlayerSessionRegistry playerSessionRegistry,
-            org.gms.channel.persist.CharacterSaveQueue characterSaveQueue,
-            ChannelEventPublisher eventPublisher) {
-        return new ChannelActivityService(worldId, channelId, playerStorage, playerSessionRegistry,
-                characterSaveQueue, eventPublisher);
+            @Property(name = "twinkle.lease.ttlSeconds", defaultValue = "50") long leaseTtlSeconds,
+            @Property(name = "twinkle.lease.cooldownSeconds", defaultValue = "15") long leaseCooldownSeconds,
+            @Property(name = "twinkle.lease.sweepIntervalMs", defaultValue = "10000") long leaseSweepIntervalMillis,
+            @Property(name = "twinkle.admin.restart.exit", defaultValue = "true") boolean exitOnRestart) {
+        ChannelRuntimeFactory runtimeFactory = new ChannelRuntimeFactory(characterRepository,
+                characterLoader, wzResources, gameData, scriptManager, movementSystem, combatSystem,
+                tradeSystem, itemSystem, questSystem, entityReloadCoordinator, eventBus,
+                reliableEventBus, reliableReceiver, intercoord, buddyListRepository, saveQueue,
+                playerDirectory, tickScheduler, heartbeatConfig,
+                org.gms.net.packet.v83.V83WorldId.validate(worldId), leaseTtlSeconds,
+                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, progressionSystem);
+        return new ChannelWorker(spec, runtimeFactory, wzResources, scriptManager, restartService,
+                restartCoordinator, intercoord, playerDirectory, tickScheduler, exitOnRestart);
     }
 
     @Bean
     @Singleton
-    public AdminService adminService(PlayerStorage playerStorage, PlayerSessionRegistry playerSessionRegistry,
-                                     ScriptManager scriptManager,
-                                     WzReloadCoordinator wzReloadCoordinator,
-                                     org.gms.channel.persist.RestartService restartService,
-                                     org.gms.hotreload.RestartCoordinator restartCoordinator,
-                                     @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-                                     @Property(name = "twinkle.admin.restart.exit", defaultValue = "true") boolean exitOnRestart) {
-        // 重启编排完成后是否真正退出进程（L4 兜底）。生产默认 true（编排完 System.exit，由外部启动脚本拉起）；
-        // 测试/开发置 false（只编排不退出，防杀测试 JVM）——进程边界是配置（铁律 1）。
-        Runnable restartProcess = exitOnRestart ? () -> System.exit(0) : () -> { };
-        return new ChannelAdminService(playerStorage, playerSessionRegistry, channelId,
-                scriptManager, wzReloadCoordinator, restartService, restartCoordinator, restartProcess);
-    }
-    @Bean
-    @Singleton
-    public ChannelHandlerRegistrar channelHandlerRegistrar(CharacterRepository characterRepository,
-                                                           CharacterLoader characterLoader,
-                                                           ChannelMapManager channelMapManager,
-                                                           PlayerStorage playerStorage,
-                                                           PlayerSessionRegistry playerSessionRegistry,
-                                                           MonsterSpawnService monsterSpawnService,
-                                                           MovementSystem movementSystem,
-                                                           CombatSystem combatSystem,
-                                                           TradeSystem tradeSystem,
-                                                           ItemSystem itemSystem,
-                                                           QuestSystem questSystem,
-                                                           ScriptManager scriptManager,
-                                                           ChannelEventPublisher eventPublisher,
-                                                           EntityReloadCoordinator entityReloadCoordinator,
-                                                           GameDataProvider gameData,
-                                                           EventBus eventBus,
-                                                           org.gms.event.ReliableEventBus reliableEventBus,
-                                                           IntercoordService intercoordService,
-                                                           org.gms.data.repo.BuddyListRepository buddyListRepository,
-                                                           org.gms.domain.game.lease.ControllerLeaseService leaseService,
-                                                           org.gms.channel.persist.CharacterSaveQueue characterSaveQueue,
-                                                           @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
-        return new ChannelHandlerRegistrar(
-                new PlayerLoggedinHandler(characterRepository, characterLoader, channelMapManager, playerStorage, playerSessionRegistry, monsterSpawnService, channelId, eventPublisher, leaseService),
-                new PlayerMapTransitionHandler(),
-                new MovePlayerHandler(movementSystem, playerSessionRegistry),
-                new AttackHandler(combatSystem, playerSessionRegistry, leaseService, false, false),
-                new AttackHandler(combatSystem, playerSessionRegistry, leaseService, true, false),
-                new AttackHandler(combatSystem, playerSessionRegistry, leaseService, false, true),
-                new PlayerInteractionHandler(tradeSystem, playerSessionRegistry, entityReloadCoordinator),
-                new NpcTalkHandler(scriptManager, itemSystem, questSystem),
-                new NpcTalkMoreHandler(),
-                new UseItemHandler(itemSystem, gameData),
-                new WhisperHandler(channelId, intercoordService, eventBus, playerSessionRegistry),
-                new ChangeChannelHandler(channelId, intercoordService, reliableEventBus, playerSessionRegistry,
-                        playerStorage, characterSaveQueue),
-                new BuddyHandler(channelId, intercoordService, eventBus, playerSessionRegistry, buddyListRepository),
-                new MoveLifeHandler(leaseService, playerSessionRegistry),
-                new GeneralChatHandler(playerSessionRegistry));
+    public WzReloadCoordinator wzReloadCoordinator(ChannelWorker worker) {
+        return worker.wzReloadCoordinator();
     }
 
-    /** 频道消息订阅（跨频道悄悄话/公告投递，架构 4.4 消息总线）。 */
     @Bean
     @Singleton
-    public ChannelMessageSubscriber channelMessageSubscriber(
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            IntercoordService intercoordService,
-            PlayerSessionRegistry playerSessionRegistry,
-            EventBus eventBus) {
-        return new ChannelMessageSubscriber(channelId, intercoordService, playerSessionRegistry, eventBus);
-    }
-
-    /** 换频道接收端（架构 4.7：目标频道消费 CC 请求，恰好一次 + 定位确认）。
-     *  @Context 强制装配：构造期即订阅（懒 @Singleton 无人引用不实例化，CC 请求收不到）。 */
-    @Bean
-    @Context
-    @Singleton
-    public ChannelChangeReceiver channelChangeReceiver(
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            org.gms.event.ReliableReceiver reliableReceiver,
-            EventBus eventBus) {
-        return new ChannelChangeReceiver(channelId, reliableReceiver, eventBus);
-    }
-
-    /** 玩家定位绑定（进图/下线经事件更新定位表，架构 4.4）。 */
-    @Bean
-    @Context
-    @Singleton
-    public ChannelLocationBinder channelLocationBinder(
-            @Property(name = "twinkle.net.world.id", defaultValue = "0") int worldId,
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            IntercoordService intercoordService,
-            EventBus eventBus) {
-        return new ChannelLocationBinder(worldId, channelId, intercoordService, eventBus);
-    }
-
-    /**
-     * 频道启动注册钩子（架构 4.6.4 注册中心：channel 启动向 coordinator 上报）。
-     *
-     * <p>关键：{@code ChannelRegistry.heartbeat} 用 computeIfPresent，频道必须先 register 才能
-     * 心跳续期；此前生产代码无人调 registerChannel，注册表恒空，管理控制台"频道状态"列表拿不到
-     * 任何频道。此 @Context 装配在构造期上报本频道（host 是登录服下发给客户端连接频道的
-     * IPv4，读取 twinkle.net.channel.host；端口读取 twinkle.net.channel.port），此后
-     * ChannelLocationBinder 心跳即实时续期。
-     */
-    @Bean
-    @Context
-    @Singleton
-    public ChannelRegistryRegistrar channelRegistryRegistrar(
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String advertisedHost,
-            @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort,
-            IntercoordService intercoordService) {
-        return new ChannelRegistryRegistrar(channelId, advertisedHost, channelPort, intercoordService);
-    }
-
-    /** 频道启动注册（@Context 强制装配：构造期上报 → 心跳可续期）。 */
-    @Singleton
-    public static final class ChannelRegistryRegistrar {
-        public ChannelRegistryRegistrar(int channelId, String host, int port, IntercoordService intercoordService) {
-            intercoordService.registerChannel(channelId, host, port, 0);
-        }
+    public AdminService adminService(ChannelWorker worker) {
+        return new WorkerAdminService(worker);
     }
 }

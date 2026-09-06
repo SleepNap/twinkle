@@ -21,7 +21,7 @@
         </dependency>
         <dependency>
             <groupId>org.gms</groupId>
-            <artifactId>twinkle-data</artifactId>
+            <artifactId>twinkle-persistence</artifactId>
         </dependency>
         <!-- 管理侧禁止依赖 domain-game（红线：编译期杜绝 HTTP 直踩游戏内存） -->
     </dependencies>

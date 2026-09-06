@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.inventory.Inventory;
@@ -25,8 +25,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChannelPacketFactoryLayoutTest {
 
     @Test
+    void changeChannelUsesResolvedEndpointWithoutPortArithmetic() {
+        ByteArrayInPacket packet = new ByteArrayInPacket(ChannelPacketFactory.changeChannel(
+                new byte[]{10, 20, 30, 40}, 19001).getBytes());
+
+        assertThat(packet.readUnsignedShort()).isEqualTo(
+                org.gms.net.opcodes.SendOpcode.CHANGE_CHANNEL.getValue());
+        assertThat(packet.readByte()).isEqualTo((byte) 1);
+        assertThat(packet.readBytes(4)).containsExactly(10, 20, 30, 40);
+        assertThat(packet.readUnsignedShort()).isEqualTo(19001);
+        assertThat(packet.available()).isZero();
+    }
+
+    @Test
     void charInfo_addCharacterInfo_matchesReferenceLayout() throws Exception {
-        Character chr = new Character(1);
+        PlayerCharacter chr = new PlayerCharacter(1);
         chr.setId(1L);
         chr.setName("Hero");
         chr.setGender(0);

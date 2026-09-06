@@ -25,6 +25,9 @@ public interface OutboxRepository {
     /** 取出全部未 ACKED 的待投递/投递中消息（启动重投 + 定时重试用，按 id 序）。 */
     List<OutboxRow> findPending();
 
+    /** 某逻辑流已签发的最大序号；发送进程重启后从这里继续，绝不复用 messageId。 */
+    long lastIssuedSeq(String streamId);
+
     /** 标记投递完成（DELIVERED，等接收方 ack）。 */
     void markDelivered(long id);
 

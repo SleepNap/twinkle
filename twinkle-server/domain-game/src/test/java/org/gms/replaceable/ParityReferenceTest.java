@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>对照真值来自参考项目公开公式（思路参考，非逐字复制）：
  * <ul>
- *   <li>伤害：{@code ceil((weaponMult×主属性+副属性)/100 × wAtk)}（Character.calculateMaxBaseDamage）</li>
+ *   <li>伤害：{@code ceil((weaponMult×主属性+副属性)/100 × wAtk)}（PlayerCharacter.calculateMaxBaseDamage）</li>
  *   <li>落点：整数线性插值（Foothold.calculateFooting）</li>
  * </ul>
  *

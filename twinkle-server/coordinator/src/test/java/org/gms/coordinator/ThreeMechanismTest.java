@@ -1,4 +1,6 @@
 package org.gms.coordinator;
+import org.gms.service.intercoord.SharedStateService;
+import org.gms.service.intercoord.PlayerPresenceService;
 
 import org.gms.i18n.I18n;
 import org.gms.i18n.ResourceBundleI18nService;
@@ -42,12 +44,12 @@ class ThreeMechanismTest {
     void worldPresenceKeepsChannelConnectionWhilePlayerIsInCashShop() {
         svc.registerPlayer(1001, 3, 7);
 
-        svc.updatePlayerActivity(1001, IntercoordService.PlayerActivity.CASH_SHOP);
+        svc.updatePlayerActivity(1001, PlayerPresenceService.PlayerActivity.CASH_SHOP);
 
         assertThat(svc.presence(1001)).hasValueSatisfying(presence -> {
             assertThat(presence.worldId()).isEqualTo(3);
             assertThat(presence.ownerChannelId()).isEqualTo(7);
-            assertThat(presence.activity()).isEqualTo(IntercoordService.PlayerActivity.CASH_SHOP);
+            assertThat(presence.activity()).isEqualTo(PlayerPresenceService.PlayerActivity.CASH_SHOP);
         });
         assertThat(svc.locate(1001)).contains(7);
         assertThat(svc.onlineInWorld(3)).isEqualTo(1);
@@ -69,7 +71,7 @@ class ThreeMechanismTest {
         svc.registerPlayer(1001, 3, 9);
         assertThat(svc.locate(1001)).contains(9);
         assertThat(svc.presence(1001).orElseThrow().activity())
-                .isEqualTo(IntercoordService.PlayerActivity.IN_CHANNEL);
+                .isEqualTo(PlayerPresenceService.PlayerActivity.IN_CHANNEL);
     }
 
     // ---- 频道注册 ----
@@ -84,16 +86,33 @@ class ThreeMechanismTest {
         assertThat(svc.channel(1).get().onlineCount()).isEqualTo(7);
     }
 
+    @Test
+    void sparseChannelIdsRemainStableAndDuplicateOwnerIsRejected() {
+        svc.registerChannel(1, "127.0.0.1", 8584, 0, "worker-a");
+        svc.registerChannel(8, "127.0.0.1", 9000, 0, "worker-a");
+        svc.registerChannel(21, "127.0.0.1", 10000, 0, "worker-b");
+
+        assertThat(svc.channels().keySet()).containsExactlyInAnyOrder(1, 8, 21);
+        assertThatThrownBy(() -> svc.registerChannel(8, "127.0.0.1", 9999, 0, "worker-b"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already owned");
+
+        svc.unregisterChannel(8);
+        assertThat(svc.channel(8)).isEmpty();
+        assertThat(svc.channels().keySet()).containsExactlyInAnyOrder(1, 21);
+    }
+
     // ---- 单一属主存储 ----
 
     @Test
     void singleOwnerWriteReadWithVersion() {
-        long v1 = svc.write("notice", "欢迎", -1);
+        long v1 = svc.write("notice", SharedStateService.StoreValue.text("欢迎"), -1);
         assertThat(v1).isEqualTo(1);
-        assertThat(svc.read("notice").get().value()).isEqualTo("欢迎");
+        assertThat(svc.read("notice").get().value().payload()).isEqualTo("欢迎");
+        assertThat(svc.read("notice").get().value().schemaVersion()).isEqualTo(1);
 
         // 版本冲突拒绝（防覆盖：另一写者改了，本写者用旧版本）
-        assertThatThrownBy(() -> svc.write("notice", "覆盖", 0))
+        assertThatThrownBy(() -> svc.write("notice", SharedStateService.StoreValue.text("覆盖"), 0))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("版本冲突");
     }

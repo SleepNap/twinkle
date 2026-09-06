@@ -1,6 +1,6 @@
 package org.gms.replaceable;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
@@ -36,17 +36,17 @@ class TradeSystemTest {
         return d;
     }
 
-    private Character player(int meso) {
-        Character c = new Character(versionGate.currentVersion());
+    private PlayerCharacter player(int meso) {
+        PlayerCharacter c = new PlayerCharacter(versionGate.currentVersion());
         c.setMeso(meso);
         return c;
     }
 
-    private void give(Character c, int id, int qty) {
+    private void give(PlayerCharacter c, int id, int qty) {
         assertThat(itemSystem.giveItem(c, id, qty)).isTrue();
     }
 
-    private boolean offer(Trade trade, Character trader, int itemId, int quantity, int targetSlot) {
+    private boolean offer(Trade trade, PlayerCharacter trader, int itemId, int quantity, int targetSlot) {
         InventoryType type = ItemConstants.getInventoryType(itemId);
         Item source = trader.getInventory(type).items().stream()
                 .filter(item -> item.getId() == itemId && item.getQuantity() >= quantity)
@@ -59,8 +59,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("双方锁定后结算：物品双向转移")
     void completeTransfersItemsBothWays() {
-        Character a = player(0);
-        Character b = player(0);
+        PlayerCharacter a = player(0);
+        PlayerCharacter b = player(0);
         give(a, 2_000_000, 50);
         give(b, 2_000_000, 20);
 
@@ -80,8 +80,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("meso 双向转移")
     void mesoTransferred() {
-        Character a = player(1000);
-        Character b = player(500);
+        PlayerCharacter a = player(1000);
+        PlayerCharacter b = player(500);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
         assertThat(tradeSystem.offerMeso(trade, a, 300)).isTrue();
@@ -96,8 +96,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("两个网络会话并发确认时只结算一次")
     void concurrentConfirmSettlesExactlyOnce() {
-        Character a = player(5000);
-        Character b = player(5000);
+        PlayerCharacter a = player(5000);
+        PlayerCharacter b = player(5000);
         give(a, 2_000_000, 10);
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
         assertThat(offer(trade, a, 2_000_000, 4, 0)).isTrue();
@@ -121,8 +121,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("接收方剩余槽位不足时整笔拒绝且不扣除任何物品")
     void insufficientCombinedCapacityDoesNotPartiallySettle() {
-        Character a = player(0);
-        Character b = player(0);
+        PlayerCharacter a = player(0);
+        PlayerCharacter b = player(0);
         give(a, 2_000_000, 5);
         give(a, 2_000_001, 5);
         for (int index = 0; index < 23; index++) {
@@ -146,8 +146,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("装备交易保留唯一 ID、所有者、期限及全部强化属性")
     void equipTransferPreservesExactInstance() {
-        Character a = player(0);
-        Character b = player(0);
+        PlayerCharacter a = player(0);
+        PlayerCharacter b = player(0);
         Equip source = new Equip(1_302_000);
         source.setCashId(7788);
         source.setOwner("Alice");
@@ -191,8 +191,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("出价后原槽物品属性变化时整笔拒绝且不误扣同 ID 物品")
     void changedOfferedInstanceRejectsSettlement() {
-        Character a = player(0);
-        Character b = player(0);
+        PlayerCharacter a = player(0);
+        PlayerCharacter b = player(0);
         Item offered = new Item(2_000_000);
         offered.setQuantity((short) 5);
         offered.setOwner("before");
@@ -214,8 +214,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("双方背包已满时可利用各自移出的槽位互换物品")
     void outgoingItemsFreeSlotsForIncomingExchange() {
-        Character a = player(0);
-        Character b = player(0);
+        PlayerCharacter a = player(0);
+        PlayerCharacter b = player(0);
         for (int index = 0; index < 24; index++) {
             give(a, 2_010_000 + index, 1);
             give(b, 2_020_000 + index, 1);
@@ -243,8 +243,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("锁定后金币减少时结算失败且双方余额不变")
     void staleMesoOfferDoesNotPartiallySettle() {
-        Character a = player(1000);
-        Character b = player(500);
+        PlayerCharacter a = player(1000);
+        PlayerCharacter b = player(500);
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
         assertThat(tradeSystem.offerMeso(trade, a, 800)).isTrue();
         assertThat(tradeSystem.lock(trade, a)).isTrue();
@@ -260,7 +260,7 @@ class TradeSystemTest {
     @Test
     @DisplayName("锁定后拒绝继续出价")
     void offerRejectedAfterLock() {
-        Character a = player(0);
+        PlayerCharacter a = player(0);
         give(a, 2_000_000, 10);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
@@ -272,7 +272,7 @@ class TradeSystemTest {
     @Test
     @DisplayName("一方未锁定则不能结算")
     void completeRejectedUntilBothLock() {
-        Character a = player(0);
+        PlayerCharacter a = player(0);
         give(a, 2_000_000, 10);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
@@ -285,7 +285,7 @@ class TradeSystemTest {
     @Test
     @DisplayName("出价超持有量拒绝")
     void offerExceedingHeldRejected() {
-        Character a = player(0);
+        PlayerCharacter a = player(0);
         give(a, 2_000_000, 5);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
@@ -295,7 +295,7 @@ class TradeSystemTest {
     @Test
     @DisplayName("版本门拒绝换代后的迟到出价")
     void versionGateBlocksStaleOffer() {
-        Character a = new Character(versionGate.currentVersion());
+        PlayerCharacter a = new PlayerCharacter(versionGate.currentVersion());
         give(a, 2_000_000, 10);
 
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(player(0)));
@@ -308,8 +308,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("中断 ACTIVE 交易：出价清空、meso 归零、状态 CANCELLED、背包不动")
     void interrupt_activeTrade_clearsOffersAndCancels() {
-        Character a = player(1000);
-        Character b = player(1000);
+        PlayerCharacter a = player(1000);
+        PlayerCharacter b = player(1000);
         give(a, 2_000_000, 10);
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
         offer(trade, a, 2_000_000, 5, 0);
@@ -331,8 +331,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("中断已结束的交易返回 false（幂等）")
     void interrupt_doneTrade_returnsFalse() {
-        Character a = player(1000);
-        Character b = player(1000);
+        PlayerCharacter a = player(1000);
+        PlayerCharacter b = player(1000);
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
         tradeSystem.lock(trade, a);
         tradeSystem.lock(trade, b);
@@ -346,8 +346,8 @@ class TradeSystemTest {
     @Test
     @DisplayName("中断后可重新发起新交易（安全点清空）")
     void interrupt_clearsStateForNewTrade() {
-        Character a = player(1000);
-        Character b = player(1000);
+        PlayerCharacter a = player(1000);
+        PlayerCharacter b = player(1000);
         Trade trade = tradeSystem.create(new TradeSide(a), new TradeSide(b));
         tradeSystem.offerMeso(trade, a, 500);
         assertThat(tradeSystem.interrupt(trade)).isTrue();

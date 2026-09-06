@@ -21,6 +21,7 @@ public class Portal {
     /** 目标传送点名（换图类传送点用）。 */
     private String targetPortalName;
     private boolean script;
+    private String scriptName;
 
     public Portal(int id, String name, PortalType type, int x, int y) {
         this.id = id;

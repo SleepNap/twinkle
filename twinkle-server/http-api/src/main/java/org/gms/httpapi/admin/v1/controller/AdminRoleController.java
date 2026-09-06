@@ -12,12 +12,12 @@ import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.Put;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.AccountAdminRole;
-import org.gms.data.entity.AdminRole;
-import org.gms.data.repo.AccountAdminRoleRepository;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.AdminRoleRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.AccountAdminRole;
+import org.gms.persistence.entity.AdminRole;
+import org.gms.persistence.repo.AccountAdminRoleRepository;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.AdminRoleRepository;
 import org.gms.httpapi.admin.AdminPermission;
 
 import java.util.ArrayList;
@@ -36,11 +36,11 @@ public final class AdminRoleController {
 
     private final AdminRoleRepository roleRepository;
     private final AccountAdminRoleRepository accountRoleRepository;
-    private final AccountRepository accountRepository;
+    private final GameAccountRepository accountRepository;
 
     public AdminRoleController(AdminRoleRepository roleRepository,
                                AccountAdminRoleRepository accountRoleRepository,
-                               AccountRepository accountRepository) {
+                               GameAccountRepository accountRepository) {
         this.roleRepository = roleRepository;
         this.accountRoleRepository = accountRoleRepository;
         this.accountRepository = accountRepository;

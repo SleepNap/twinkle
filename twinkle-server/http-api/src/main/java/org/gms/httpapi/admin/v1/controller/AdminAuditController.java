@@ -7,8 +7,8 @@ import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.QueryValue;
-import org.gms.data.repo.ApiRequestAuditRepository;
-import org.gms.data.repo.ToolExecutionAuditRepository;
+import org.gms.persistence.repo.ApiRequestAuditRepository;
+import org.gms.persistence.repo.ToolExecutionAuditRepository;
 
 import java.util.Map;
 

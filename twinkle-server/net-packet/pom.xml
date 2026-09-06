@@ -15,6 +15,7 @@
     <description>v83 opcode、HandlerRegistry、PacketCodec（不依赖业务）</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- i18n 静态门面 org.gms.i18n.I18n（静态工具/HandlerRegistry 的日志与异常文案统一经此解析，见 docs/archived/i18n.md） -->
         <dependency>
             <groupId>org.gms</groupId>

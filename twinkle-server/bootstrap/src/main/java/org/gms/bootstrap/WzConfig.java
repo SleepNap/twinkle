@@ -14,6 +14,7 @@ import org.gms.replaceable.HealthRecoverySystem;
 import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.MovementSystem;
 import org.gms.replaceable.QuestSystem;
+import org.gms.replaceable.ProgressionSystem;
 import org.gms.replaceable.TradeSystem;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.wz.WzResourceLoader;
@@ -75,6 +76,12 @@ public class WzConfig {
     @Singleton
     public QuestSystem questSystem(VersionGate versionGate) {
         return new QuestSystem(versionGate);
+    }
+
+    @Bean
+    @Singleton
+    public ProgressionSystem progressionSystem(VersionGate versionGate) {
+        return new ProgressionSystem(versionGate);
     }
 
     @Bean

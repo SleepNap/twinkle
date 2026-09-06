@@ -39,7 +39,7 @@ public final class TwinklePluginHost implements PluginHost {
 
 
 
-    private final HandlerRegistry packetRegistry;
+    private final List<HandlerRegistry> packetRegistries;
     private final LogicSystemRegistry logicSystemRegistry;
     private final TickScheduler tickScheduler;
     private final EventBus eventBus;
@@ -52,7 +52,17 @@ public final class TwinklePluginHost implements PluginHost {
                              EventBus eventBus,
                              VersionGate versionGate,
                              EntityReloadCoordinator entityReloadCoordinator) {
-        this.packetRegistry = packetRegistry;
+        this(List.of(packetRegistry), logicSystemRegistry, tickScheduler, eventBus, versionGate,
+                entityReloadCoordinator);
+    }
+
+    public TwinklePluginHost(List<HandlerRegistry> packetRegistries,
+                             LogicSystemRegistry logicSystemRegistry,
+                             TickScheduler tickScheduler,
+                             EventBus eventBus,
+                             VersionGate versionGate,
+                             EntityReloadCoordinator entityReloadCoordinator) {
+        this.packetRegistries = List.copyOf(packetRegistries);
         this.logicSystemRegistry = logicSystemRegistry;
         this.tickScheduler = tickScheduler;
         this.eventBus = eventBus;
@@ -71,12 +81,21 @@ public final class TwinklePluginHost implements PluginHost {
                 PacketHandler handler = instantiate(c.className(), PacketHandler.class, loader, descriptor.id());
                 RecvOpcode opcode = RecvOpcode.valueOf(c.opcode());
                 int version = maxVersion(c.version());
-                if (packetRegistry.find(opcode.getValue()).isPresent()) {
-                    packetRegistry.replace(opcode, handler, version);
-                } else {
-                    packetRegistry.register(opcode, handler, version);
+                List<HandlerRegistry> registered = new ArrayList<>();
+                try {
+                    for (HandlerRegistry packetRegistry : packetRegistries) {
+                        if (packetRegistry.find(opcode.getValue()).isPresent()) {
+                            packetRegistry.replace(opcode, handler, version);
+                        } else {
+                            packetRegistry.register(opcode, handler, version);
+                        }
+                        registered.add(packetRegistry);
+                    }
+                } catch (RuntimeException e) {
+                    registered.forEach(registry -> registry.unregister(opcode));
+                    throw e;
                 }
-                handles.add(() -> packetRegistry.unregister(opcode));
+                handles.add(() -> packetRegistries.forEach(registry -> registry.unregister(opcode)));
                 log.info(I18n.message("log.plugin.contribution_packet"), descriptor.id(), opcode, version);
             } catch (RuntimeException e) {
                 log.error(I18n.message("log.plugin.packet_register_failed"), descriptor.id(), c.opcode(), e);

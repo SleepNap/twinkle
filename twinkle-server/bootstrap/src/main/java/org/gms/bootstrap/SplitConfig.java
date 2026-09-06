@@ -13,6 +13,7 @@ import org.gms.event.EventBus;
 import org.gms.event.InProcessEventBus;
 import org.gms.net.netty.internal.AdminRpcDispatcher;
 import org.gms.net.netty.internal.ChannelLifecycleRpcDispatcher;
+import org.gms.net.netty.internal.ClusterRemoteAdminService;
 import org.gms.net.netty.internal.ChannelConnectionRegistry;
 import org.gms.net.netty.internal.CoordinatorFrameRouter;
 import org.gms.net.netty.internal.CoordinatorLink;
@@ -83,8 +84,9 @@ public class SplitConfig {
     @Requires(condition = SplitCoordinatorCondition.class)
     @Primary
     public AdminService adminService(CoordinatorLink coordinatorLink,
+                                     IntercoordService intercoordService,
                                      @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId) {
-        return new RemoteAdminService(coordinatorLink, channelId);
+        return new ClusterRemoteAdminService(coordinatorLink, intercoordService, channelId);
     }
 
     /** 管理进程频道生命周期网络桩（按频道 ID 路由，不固定到默认频道）。 */
@@ -134,16 +136,18 @@ public class SplitConfig {
     public CoordinatorLink channelCoordinatorLink(
             @Property(name = "twinkle.coordinator.host", defaultValue = "127.0.0.1") String host,
             @Property(name = "twinkle.coordinator.port", defaultValue = "8510") int port,
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String advertisedHost,
-            @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
+            ChannelWorkerSpec workerSpec) {
         CoordinatorLink link = new CoordinatorLink(new InetSocketAddress(host, port), 1000);
         // 连接建立（含重连）→ 上报频道身份（注册中心，架构 4.6.4）
         link.addConnectListener(conn -> {
-            conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
-                    conn.nextMessageId(), JsonCodec.encode(
-                    new InternalProtocol.RegisterPayload(channelId, advertisedHost, channelPort, false, 0))));
-            log.info(I18n.message("log.bootstrap.channel_reported"), channelId, advertisedHost, channelPort);
+            for (ChannelWorkerSpec.Endpoint endpoint : workerSpec.endpoints()) {
+                conn.send(new DefaultInternalFrame(InternalFrame.MessageType.REGISTER,
+                        conn.nextMessageId(), JsonCodec.encode(new InternalProtocol.RegisterPayload(
+                        endpoint.channelId(), endpoint.host(), endpoint.port(), false, 0,
+                        workerSpec.workerId()))));
+                log.info(I18n.message("log.bootstrap.channel_reported"),
+                        endpoint.channelId(), endpoint.host(), endpoint.port());
+            }
         });
         link.start();
         return link;
@@ -174,8 +178,9 @@ public class SplitConfig {
     @Requires(condition = SplitChannelCondition.class)
     public ChannelAdminRpcBinder channelAdminRpcBinder(CoordinatorLink channelCoordinatorLink,
                                                        AdminService adminService,
+                                                       ChannelWorker worker,
                                                        ChannelLifecycleService channelLifecycleService) {
-        return new ChannelAdminRpcBinder(channelCoordinatorLink, adminService, channelLifecycleService);
+        return new ChannelAdminRpcBinder(channelCoordinatorLink, adminService, worker, channelLifecycleService);
     }
 
     // ==================== 启动装配 ====================
@@ -183,16 +188,20 @@ public class SplitConfig {
     /** 频道进程挂接 AdminService RPC 分发（管理进程运维操作落到频道真值）。 */
     @Singleton
     public static final class ChannelAdminRpcBinder {
-        public ChannelAdminRpcBinder(CoordinatorLink link, AdminService adminService,
+        public ChannelAdminRpcBinder(CoordinatorLink link, AdminService adminService, ChannelWorker worker,
                                      ChannelLifecycleService channelLifecycleService) {
-            AdminRpcDispatcher adminDispatcher = new AdminRpcDispatcher(adminService);
             ChannelLifecycleRpcDispatcher lifecycleDispatcher =
                     new ChannelLifecycleRpcDispatcher(channelLifecycleService);
             link.addConnectListener(conn -> conn.onRpcRequest(env -> {
                 String method = env.request().method();
+                int channelId = env.request().targetChannelId() == null
+                        ? -1 : env.request().targetChannelId();
+                AdminService targetAdmin = channelId > 0 && worker.runtime(channelId) != null
+                        ? worker.runtime(channelId).admin() : adminService;
                 InternalProtocol.RpcResponse response = lifecycleDispatcher.supports(method)
-                        ? lifecycleDispatcher.dispatch(method, env.request().args())
-                        : adminDispatcher.dispatch(method, env.request().args());
+                        ? lifecycleDispatcher.dispatch(method, env.request().args(),
+                                channelId > 0 ? channelId : null)
+                        : new AdminRpcDispatcher(targetAdmin).dispatch(method, env.request().args());
                 conn.replyRpc(env.messageId(), response);
             }));
         }

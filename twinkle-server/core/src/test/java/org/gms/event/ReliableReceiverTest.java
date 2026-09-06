@@ -41,6 +41,11 @@ class ReliableReceiverTest {
         }
 
         @Override
+        public long lastIssuedSeq(String streamId) {
+            return 0;
+        }
+
+        @Override
         public void markDelivered(long id) {
         }
 

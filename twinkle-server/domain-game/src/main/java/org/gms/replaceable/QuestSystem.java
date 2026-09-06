@@ -1,6 +1,8 @@
 package org.gms.replaceable;
 
 import org.gms.domain.game.quest.QuestStatus;
+import org.gms.domain.game.quest.QuestChange;
+import org.gms.domain.game.spi.ProgressionState;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.hotreload.versioned.VersionDecision;
 import org.gms.hotreload.versioned.VersionGate;
@@ -17,6 +19,12 @@ public final class QuestSystem {
 
     public QuestSystem(VersionGate versionGate) {
         this.versionGate = versionGate;
+    }
+
+    public boolean apply(ProgressionState state, QuestChange change) {
+        synchronized (state) {
+            return versionGate.decide(state) == VersionDecision.ALLOW && state.applyQuestChange(change);
+        }
     }
 
     /** 开始任务（已完成不能重开）。 */

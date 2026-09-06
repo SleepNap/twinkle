@@ -13,7 +13,7 @@ import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.QueryValue;
-import org.gms.data.config.DbConfigFacade;
+import org.gms.persistence.config.DbConfigFacade;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.httpapi.application.admin.AdminApiService;

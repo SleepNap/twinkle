@@ -1,6 +1,6 @@
 package org.gms.replaceable;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.hotreload.versioned.VersionGate;
 import org.junit.jupiter.api.DisplayName;
@@ -19,7 +19,7 @@ class QuestSystemTest {
     @Test
     @DisplayName("开始→记进度→完成 完整流程")
     void questLifecycle() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
 
         assertThat(quests.startQuest(chr, 1000)).isTrue();
         assertThat(quests.isStarted(chr, 1000)).isTrue();
@@ -35,7 +35,7 @@ class QuestSystemTest {
     @Test
     @DisplayName("已完成的任务不能重开")
     void completedCannotRestart() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         quests.startQuest(chr, 1000);
         quests.completeQuest(chr, 1000);
 
@@ -45,7 +45,7 @@ class QuestSystemTest {
     @Test
     @DisplayName("未开始的任务不能写进度/完成")
     void progressAndCompleteRejectedBeforeStart() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
 
         assertThat(quests.setProgress(chr, 1000, 1, 5)).isFalse();
         assertThat(quests.completeQuest(chr, 1000)).isFalse();
@@ -54,7 +54,7 @@ class QuestSystemTest {
     @Test
     @DisplayName("版本门拒绝换代后的迟到任务操作")
     void versionGateBlocksStaleOps() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
 
         versionGate.onReload();
         assertThat(quests.startQuest(chr, 1000)).isFalse();

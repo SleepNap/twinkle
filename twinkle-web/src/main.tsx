@@ -1,7 +1,7 @@
 import { StrictMode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createRoot } from "react-dom/client"
-import { BrowserRouter } from "react-router-dom"
+import { HashRouter } from "react-router-dom"
 import { ThemeProvider } from "next-themes"
 
 import App from "./App"
@@ -27,10 +27,10 @@ createRoot(document.getElementById("root")!).render(
         <AdminAuthProvider>
           <CredentialProvider>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-              <BrowserRouter>
+              <HashRouter>
                 <App />
                 <Toaster richColors position="top-right" />
-              </BrowserRouter>
+              </HashRouter>
             </ThemeProvider>
           </CredentialProvider>
         </AdminAuthProvider>

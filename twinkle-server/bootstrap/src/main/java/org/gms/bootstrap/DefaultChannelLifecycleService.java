@@ -11,201 +11,213 @@ import org.gms.i18n.I18n;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.service.channel.ChannelLifecycleService;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
-/** 本地频道监听生命周期；single 由 HTTP 直接调用，split-channel 由 coordinator RPC 调用。 */
+/** Worker 本地频道监听生命周期；每个频道独立启停，最后一个 terminate 才退出 Worker JVM。 */
 @Singleton
 @Requires(condition = ChannelProcessCondition.class)
 public final class DefaultChannelLifecycleService implements ChannelLifecycleService {
 
-    private final ChannelServer channelServer;
-    private final PlayerStorage playerStorage;
+    private static final class Local {
+        final int channelId;
+        final String host;
+        final int port;
+        final ChannelServer server;
+        final PlayerStorage players;
+        final AtomicReference<State> state;
+        volatile String lastError;
+
+        Local(int channelId, String host, int port, ChannelServer server, PlayerStorage players) {
+            this.channelId = channelId;
+            this.host = host;
+            this.port = port;
+            this.server = server;
+            this.players = players;
+            this.state = new AtomicReference<>(server.isRunning() ? State.RUNNING : State.STOPPED);
+        }
+    }
+
+    private final Map<Integer, Local> channels;
     private final RestartService restartService;
-    private final int channelId;
-    private final String host;
-    private final int port;
+    private final ChannelWorker worker;
     private final Topology topology;
     private final Runnable exitProcess;
-    private final AtomicReference<State> state;
-    private volatile String lastError;
+    private final Set<Integer> terminateRequested = ConcurrentHashMap.newKeySet();
 
     @Inject
     public DefaultChannelLifecycleService(
-            ChannelServer channelServer,
-            PlayerStorage playerStorage,
+            ChannelWorker worker,
             RestartService restartService,
-            @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-            @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1") String host,
-            @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int port,
             @Property(name = "twinkle.role", defaultValue = "") String role,
             @Property(name = "twinkle.admin.shutdown.exit", defaultValue = "true") boolean exitOnShutdown) {
-        this(channelServer, playerStorage, restartService, channelId, host, port, role,
-                exitOnShutdown ? () -> System.exit(0) : () -> { });
+        Map<Integer, Local> locals = new LinkedHashMap<>();
+        worker.runtimes().forEach(runtime -> locals.put(runtime.channelId(), new Local(
+                runtime.channelId(), runtime.host(), runtime.port(), runtime.server(), runtime.players())));
+        this.channels = Map.copyOf(locals);
+        this.restartService = restartService;
+        this.worker = worker;
+        this.topology = role.isBlank() ? Topology.EMBEDDED : Topology.DISTRIBUTED;
+        this.exitProcess = exitOnShutdown ? () -> System.exit(0) : () -> { };
     }
 
-    DefaultChannelLifecycleService(
-            ChannelServer channelServer,
-            PlayerStorage playerStorage,
-            RestartService restartService,
-            int channelId,
-            String host,
-            int port,
-            String role,
-            Runnable exitProcess) {
-        this.channelServer = channelServer;
-        this.playerStorage = playerStorage;
+    /** 单频道兼容构造，保留既有生命周期单元测试。 */
+    DefaultChannelLifecycleService(ChannelServer channelServer, PlayerStorage playerStorage,
+                                   RestartService restartService, int channelId, String host, int port,
+                                   String role, Runnable exitProcess) {
+        this.channels = Map.of(channelId, new Local(channelId, host, port, channelServer, playerStorage));
         this.restartService = restartService;
-        this.channelId = channelId;
-        this.host = host;
-        this.port = port;
+        this.worker = null;
         this.topology = role.isBlank() ? Topology.EMBEDDED : Topology.DISTRIBUTED;
         this.exitProcess = exitProcess;
-        this.state = new AtomicReference<>(channelServer.isRunning() ? State.RUNNING : State.STOPPED);
     }
 
     @Override
     public List<Status> statuses() {
-        return List.of(status());
+        return channels.values().stream().map(this::status).toList();
     }
 
     @Override
-    public CommandResult requestStart(int requestedChannelId) {
-        if (requestedChannelId != channelId) {
-            return new CommandResult(false, unavailable(requestedChannelId));
-        }
-        State current = state.get();
-        if (channelServer.isRunning()) {
-            state.set(State.RUNNING);
-            return new CommandResult(false, status());
+    public CommandResult requestStart(int channelId) {
+        Local local = channels.get(channelId);
+        if (local == null) return unknown(channelId);
+        State current = local.state.get();
+        if (local.server.isRunning()) {
+            local.state.set(State.RUNNING);
+            return new CommandResult(false, status(local));
         }
         if ((current != State.STOPPED && current != State.FAILED)
-                || !state.compareAndSet(current, State.STARTING)) {
-            return new CommandResult(false, status());
+                || !local.state.compareAndSet(current, State.STARTING)) {
+            return new CommandResult(false, status(local));
         }
-        lastError = null;
-        Thread.ofVirtual().name("channel-" + channelId + "-start").start(this::start);
-        return new CommandResult(true, status());
+        local.lastError = null;
+        terminateRequested.remove(channelId);
+        Thread.ofVirtual().name("channel-" + channelId + "-start").start(() -> start(local));
+        return new CommandResult(true, status(local));
     }
 
-    @Override
-    public CommandResult requestStop(int requestedChannelId) {
-        return requestStop(requestedChannelId, false);
-    }
+    @Override public CommandResult requestStop(int channelId) { return requestStop(channelId, false); }
 
     @Override
-    public CommandResult requestStop(int requestedChannelId, boolean force) {
-        if (requestedChannelId != channelId) {
-            return new CommandResult(false, unavailable(requestedChannelId));
-        }
-        State current = state.get();
-        if (!channelServer.isRunning() && current != State.FAILED) {
-            state.set(State.STOPPED);
-            return new CommandResult(false, status());
+    public CommandResult requestStop(int channelId, boolean force) {
+        Local local = channels.get(channelId);
+        if (local == null) return unknown(channelId);
+        State current = local.state.get();
+        if (!local.server.isRunning() && current != State.FAILED) {
+            local.state.set(State.STOPPED);
+            return new CommandResult(false, status(local));
         }
         if ((current != State.RUNNING && current != State.FAILED)
-                || !state.compareAndSet(current, State.STOPPING)) {
-            return new CommandResult(false, status());
+                || !local.state.compareAndSet(current, State.STOPPING)) {
+            return new CommandResult(false, status(local));
         }
-        lastError = null;
-        Thread.ofVirtual().name("channel-" + channelId + "-stop").start(() -> stop(force));
-        return new CommandResult(true, status());
+        local.lastError = null;
+        Thread.ofVirtual().name("channel-" + channelId + "-stop").start(() -> stop(local, force));
+        return new CommandResult(true, status(local));
     }
 
-    @Override
-    public CommandResult requestTerminate(int requestedChannelId) {
-        return requestTerminate(requestedChannelId, false);
-    }
+    @Override public CommandResult requestTerminate(int channelId) { return requestTerminate(channelId, false); }
 
     @Override
-    public CommandResult requestTerminate(int requestedChannelId, boolean force) {
-        if (requestedChannelId != channelId) {
-            return new CommandResult(false, unavailable(requestedChannelId));
-        }
-        State current = state.get();
+    public CommandResult requestTerminate(int channelId, boolean force) {
+        Local local = channels.get(channelId);
+        if (local == null) return unknown(channelId);
+        State current = local.state.get();
         if (current == State.STARTING || current == State.STOPPING || current == State.TERMINATING
-                || !state.compareAndSet(current, State.TERMINATING)) {
-            return new CommandResult(false, status());
+                || !local.state.compareAndSet(current, State.TERMINATING)) {
+            return new CommandResult(false, status(local));
         }
-        lastError = null;
-        Thread.ofVirtual().name("channel-" + channelId + "-terminate").start(() -> terminate(force));
-        return new CommandResult(true, status());
+        terminateRequested.add(channelId);
+        local.lastError = null;
+        Thread.ofVirtual().name("channel-" + channelId + "-terminate").start(() -> terminate(local, force));
+        return new CommandResult(true, status(local));
     }
 
-    private void start() {
+    private void start(Local local) {
         try {
             restartService.ensureSavesPersisted();
-            channelServer.start(port);
-            state.set(State.RUNNING);
+            startNetwork(local);
+            local.state.set(State.RUNNING);
         } catch (RuntimeException e) {
-            fail(e);
+            fail(local, e);
         }
     }
 
-    private void stop(boolean force) {
+    private void stop(Local local, boolean force) {
         try {
-            try {
-                restartService.stopNetwork(channelServer::stop, force);
-            } catch (RuntimeException e) {
-                if (!force) {
-                    throw e;
-                }
-                lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            }
-            state.set(State.STOPPED);
+            restartService.stopNetwork(() -> stopNetwork(local), force);
+            local.state.set(State.STOPPED);
         } catch (RuntimeException e) {
-            fail(e);
+            fail(local, e);
         }
     }
 
-    private void terminate(boolean force) {
+    private void terminate(Local local, boolean force) {
         try {
-            // 让 HTTP/RPC 的 accepted 响应先写回；频道已进入 TERMINATING，不再接受其它生命周期操作。
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(250));
-            // 即便监听已因上一次失败关闭，也必须重新验证并重试存档后才能退出。
-            try {
-                restartService.stopNetwork(channelServer::stop, force);
-            } catch (RuntimeException e) {
-                if (!force) {
-                    throw e;
-                }
-                lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            if (force) {
+                // force 是显式的最终兜底：立即摘除路由并关闭监听，不再被已知失败的存档闸门卡死。
+                stopNetwork(local);
+                local.state.set(State.STOPPED);
+                exitIfAllTerminated();
+                return;
             }
-            exitProcess.run();
-            state.compareAndSet(State.TERMINATING, State.STOPPED);
+            if (local.server.isRunning()) {
+                restartService.stopNetwork(() -> stopNetwork(local), false);
+            } else {
+                restartService.ensureSavesPersisted();
+            }
+            local.state.set(State.STOPPED);
+            exitIfAllTerminated();
         } catch (RuntimeException e) {
-            fail(e);
+            fail(local, e);
         }
     }
 
-    private void fail(RuntimeException error) {
-        lastError = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
-        state.set(State.FAILED);
+    private void startNetwork(Local local) {
+        if (worker == null) local.server.start(local.port);
+        else worker.start(local.channelId);
     }
 
-    private Status status() {
-        State current = state.get();
-        boolean running = channelServer.isRunning();
+    private void stopNetwork(Local local) {
+        if (worker == null) local.server.stop();
+        else worker.stop(local.channelId);
+    }
+
+    private void exitIfAllTerminated() {
+        if (terminateRequested.containsAll(channels.keySet())) exitProcess.run();
+    }
+
+    private void fail(Local local, RuntimeException error) {
+        local.lastError = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        local.state.set(State.FAILED);
+    }
+
+    private Status status(Local local) {
+        State current = local.state.get();
+        boolean running = local.server.isRunning();
         if (current != State.STARTING && current != State.STOPPING && current != State.TERMINATING) {
             if (running && current != State.RUNNING) {
-                state.compareAndSet(current, State.RUNNING);
-                current = state.get();
-                if (current == State.RUNNING) {
-                    lastError = null;
-                }
+                local.state.compareAndSet(current, State.RUNNING);
+                current = local.state.get();
+                if (current == State.RUNNING) local.lastError = null;
             } else if (!running && current == State.RUNNING) {
-                state.compareAndSet(State.RUNNING, State.STOPPED);
-                current = state.get();
+                local.state.compareAndSet(State.RUNNING, State.STOPPED);
+                current = local.state.get();
             }
         }
-        return new Status(channelId, host, port, playerStorage.all().size(),
-                current, topology, true, lastError);
+        return new Status(local.channelId, local.host, local.port, local.players.count(), current,
+                topology, true, local.lastError);
     }
 
-    private Status unavailable(int requestedChannelId) {
-        return new Status(requestedChannelId, "", 0, 0, State.UNAVAILABLE, topology, false,
-                I18n.message("error.channel.lifecycle.unknown", requestedChannelId));
+    private CommandResult unknown(int channelId) {
+        return new CommandResult(false, new Status(channelId, "", 0, 0, State.UNAVAILABLE,
+                topology, false, I18n.message("error.channel.lifecycle.unknown", channelId)));
     }
 }

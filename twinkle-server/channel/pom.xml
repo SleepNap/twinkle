@@ -15,6 +15,7 @@
     <description>频道、玩家在线表、CC 迁移。游戏域（频道进程）</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- 游戏对象模型 -->
         <dependency>
             <groupId>org.gms</groupId>
@@ -23,7 +24,7 @@
         <!-- 数据层（存档读写） -->
         <dependency>
             <groupId>org.gms</groupId>
-            <artifactId>twinkle-data</artifactId>
+            <artifactId>twinkle-persistence</artifactId>
         </dependency>
         <!-- WZ 数据源（进图加载地图） -->
         <dependency>

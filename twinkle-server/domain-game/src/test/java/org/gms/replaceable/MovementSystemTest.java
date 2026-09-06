@@ -1,6 +1,6 @@
 package org.gms.replaceable;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.map.MapleFoothold;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.hotreload.versioned.DefaultVersionGate;
@@ -39,7 +39,7 @@ class MovementSystemTest {
     @Test
     @DisplayName("水平移动更新 x，落地到脚下地面")
     void moveUpdatesPositionAndLands() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         MapleMap map = map();
 
         assertThat(movement.move(chr, map, 50, 0)).isTrue();
@@ -54,7 +54,7 @@ class MovementSystemTest {
     @Test
     @DisplayName("悬空（无覆盖地面）保持 newY")
     void hoverWithoutGroundKeepsNewY() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         MapleMap map = map();
 
         assertThat(movement.move(chr, map, 250, 30)).isTrue();
@@ -65,7 +65,7 @@ class MovementSystemTest {
     @Test
     @DisplayName("版本门拒绝换代后的迟到移动")
     void versionGateBlocksStaleMove() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         MapleMap map = map();
 
         versionGate.onReload();

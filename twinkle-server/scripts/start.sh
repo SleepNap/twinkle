@@ -18,4 +18,4 @@ export TWINKLE_WZ_PATH="${TWINKLE_WZ_PATH:-./wz}"
 export TWINKLE_SCRIPT_PATH="${TWINKLE_SCRIPT_PATH:-./scripts}"
 
 echo "==> 启动 twinkle（profile=single，HTTP 监听所有网卡，DB=$TWINKLE_DB_URL）"
-exec java -jar "$JAR" --profile=single
+exec java -jar "$JAR" --twinkle.profile=single

@@ -1,12 +1,12 @@
 package org.gms.bootstrap;
 
 import org.gms.channel.ChannelServer;
-import org.gms.channel.CharacterLoader;
+import org.gms.channel.PlayerCharacterAssembler;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.channel.persist.RestartService;
-import org.gms.data.repo.CharacterRepository;
-import org.gms.data.entity.Character;
+import org.gms.persistence.repo.PlayerCharacterRepository;
+import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
@@ -29,7 +29,7 @@ class DefaultChannelLifecycleServiceTest {
     void stopsAndStartsEmbeddedChannelWithoutStoppingControlProcess() {
         PlayerStorage players = new PlayerStorage();
         CharacterSaveQueue saveQueue = new CharacterSaveQueue(repository(),
-                new CharacterLoader(new DefaultVersionGate()), players);
+                new PlayerCharacterAssembler(new DefaultVersionGate()), players);
         ChannelServer server = new ChannelServer(new HandlerRegistry());
         server.start(0);
         int port = server.boundPort();
@@ -76,7 +76,7 @@ class DefaultChannelLifecycleServiceTest {
     void gracefulStopWaitsForInFlightTasksWhileForcedStopInterruptsThem() throws Exception {
         PlayerStorage players = new PlayerStorage();
         CharacterSaveQueue saveQueue = new CharacterSaveQueue(repository(),
-                new CharacterLoader(new DefaultVersionGate()), players);
+                new PlayerCharacterAssembler(new DefaultVersionGate()), players);
         ChannelServer server = new ChannelServer(new HandlerRegistry());
         server.start(0);
         int port = server.boundPort();
@@ -119,14 +119,14 @@ class DefaultChannelLifecycleServiceTest {
     @Test
     void persistenceFailureBlocksNormalExitButForcedExitContinues() {
         AtomicBoolean databaseAvailable = new AtomicBoolean(false);
-        CharacterRepository repository = new CharacterRepository() {
+        PlayerCharacterRepository repository = new PlayerCharacterRepository() {
             @Override
-            public List<Character> findByAccount(int accountId, int world) {
+            public List<PlayerCharacterRecord> findByAccount(int accountId, int world) {
                 return List.of();
             }
 
             @Override
-            public Optional<Character> findById(long id) {
+            public Optional<PlayerCharacterRecord> findById(long id) {
                 return Optional.empty();
             }
 
@@ -136,18 +136,18 @@ class DefaultChannelLifecycleServiceTest {
             }
 
             @Override
-            public void insert(Character character) {
+            public void insert(PlayerCharacterRecord character) {
             }
 
             @Override
-            public void save(Character character) {
+            public void save(PlayerCharacterRecord character) {
                 if (!databaseAvailable.get()) {
                     throw new IllegalStateException("database unavailable");
                 }
             }
         };
         PlayerStorage players = new PlayerStorage();
-        org.gms.domain.game.Character player = new org.gms.domain.game.Character(
+        org.gms.domain.game.PlayerCharacter player = new org.gms.domain.game.PlayerCharacter(
                 new DefaultVersionGate().currentVersion());
         player.setId(29L);
         player.setName("SafeShutdown");
@@ -156,7 +156,7 @@ class DefaultChannelLifecycleServiceTest {
         players.add(player);
 
         CharacterSaveQueue saveQueue = new CharacterSaveQueue(repository,
-                new CharacterLoader(new DefaultVersionGate()), players);
+                new PlayerCharacterAssembler(new DefaultVersionGate()), players);
         ChannelServer server = new ChannelServer(new HandlerRegistry());
         server.start(0);
         RestartService restartService = new RestartService(new RestartCoordinator(), new GameTickLoop(5),
@@ -186,15 +186,15 @@ class DefaultChannelLifecycleServiceTest {
         }
     }
 
-    private static CharacterRepository repository() {
-        return new CharacterRepository() {
+    private static PlayerCharacterRepository repository() {
+        return new PlayerCharacterRepository() {
             @Override
-            public List<Character> findByAccount(int accountId, int world) {
+            public List<PlayerCharacterRecord> findByAccount(int accountId, int world) {
                 return List.of();
             }
 
             @Override
-            public Optional<Character> findById(long id) {
+            public Optional<PlayerCharacterRecord> findById(long id) {
                 return Optional.empty();
             }
 
@@ -204,11 +204,11 @@ class DefaultChannelLifecycleServiceTest {
             }
 
             @Override
-            public void insert(Character character) {
+            public void insert(PlayerCharacterRecord character) {
             }
 
             @Override
-            public void save(Character character) {
+            public void save(PlayerCharacterRecord character) {
             }
         };
     }

@@ -4,7 +4,7 @@ package org.gms.replaceable;
  * 伤害计算（可替换层，纯函数、无状态）。
  *
  * <p>v83 物理基础伤害公式，思路参考自 BeiDou-Server 的
- * {@code Character.calculateMaxBaseDamage}（非逐字复制，参数化自研）：
+ * {@code PlayerCharacter.calculateMaxBaseDamage}（非逐字复制，参数化自研）：
  * {@code maxBase = ceil((weaponMult × 主属性 + 副属性) / 100 × wAtk)}。
  *
  * <p>武器类型系数（weaponMult）由武器类型决定（如单手剑约 1.2），M2 装备系统

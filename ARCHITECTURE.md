@@ -71,12 +71,11 @@ twinkle/
 │   ├── core/          # DI、EventBus、配置门面、调度、插件框架、热更新、RestartCoordinator
 │   ├── net-netty/     # Netty IO（客户端 v83 协议 + 内部通信复用，不依赖业务）
 │   ├── net-packet/    # v83 opcode、HandlerRegistry、PacketCodec
-│   ├── data/          # MyBatis-Flex 映射 + Repository + 自研迁移器（M0 决策）
-│   ├── db-dialect/    # 方言差异点封装（upsert/自增/布尔/时间函数等）
+│   ├── persistence/   # MyBatis-Flex、Repository、迁移器与数据库方言适配
 │   └── plugin-api/    # 插件 SPI（贡献点、SDK 版本化）
 │
 ├── 游戏域（频道进程）
-│   ├── domain-game/   # 游戏对象模型（Character/MapleMap/...，纯数据 + 索引/服务）
+│   ├── domain-game/   # 游戏对象模型（PlayerCharacter/MapleMap/...，纯数据 + 子聚合）
 │   ├── domain-script/ # GraalVM 脚本引擎
 │   ├── wz-provider/   # WZ 解析
 │   └── channel/       # 频道、玩家在线表、CC 迁移
@@ -84,8 +83,7 @@ twinkle/
 ├── 管理侧（管理进程）
 │   ├── coordinator/   # 共享状态代理、定位表、消息路由（内建注册中心/配置中心）
 │   ├── login/         # 账号校验、选角
-│   ├── admin/         # Web 控制台、运维 API
-│   ├── http-api/      # Micronaut Controller（/internal + /api）
+│   ├── http-api/      # Web 控制台、Micronaut Controller（/admin + /internal + /api）
 │
 └── plugins/           # 内置插件（按部署作用域分发进对应进程）
 ```
@@ -94,7 +92,7 @@ twinkle/
 
 | 进程 | 装配模块 |
 |---|---|
-| **管理进程**（1 个） | 公共底座 + coordinator + login + admin + http-api + 平台插件 |
+| **管理进程**（1 个） | 公共底座 + coordinator + login + http-api + 平台插件 |
 | **频道进程**（每分片 1 个） | 公共底座 + domain-game + domain-script + wz-provider + channel + 频道插件 |
 
 依赖单向无环，且管理侧**不得依赖 domain-game**——分进程时两者不在同一 JVM（物理隔离），single 档同进程也禁止跨依赖，从编译期杜绝 HTTP 直踩游戏内存。
@@ -121,7 +119,7 @@ twinkle/
 ```
 twinkle.jar --profile=single           # 全内嵌：1 个 JVM 跑全部（默认，性能最优档）
 twinkle.jar --profile=standalone       # 最低配：单 JVM，SQLite，2C2G/1C1G
-twinkle.jar --profile=split-channel    # 频道拆出：coordinator 1 进程 + 每频道 1 进程
+twinkle.jar --profile=split-channel    # 频道拆出：coordinator 1 进程 + 若干 channel worker
 twinkle.jar --profile=split-realm      # 按大区拆：coordinator + 每大区 1 进程
 ```
 
@@ -179,7 +177,8 @@ twinkle.jar --profile=split-realm      # 按大区拆：coordinator + 每大区 
                      └── 消息总线（频道间）──┘
 ```
 
-- **频道 = 进程单元 = 世界分片**：一个频道进程拥有它那张图的一切（地图/怪物/掉落）以及连接到它的 TCP 会话。玩家进入商城/MTS 后退出地图和频道游戏玩家表，但连接仍归原频道。
+- **频道 = 运行态隔离单元，worker = 进程隔离单元**：每个频道拥有独立地图/怪物/掉落、玩家表、会话表和 TCP 端口；一个 worker 可托管 1..N 个频道，并共享只读 WZ、ScriptManager、主 Tick 与存档单写队列。玩家进入商城/MTS 后退出地图和频道游戏玩家表，但连接仍归原频道。
+- **大区/频道 ID 不透明且可稀疏**：大区合法范围为 `0..254`（`255` 保留为列表结束标记），频道内部合法范围为 `1..256`（v83 wire ID 为 `channelId - 1`），均不要求连续。数量、列表顺序、端口和 worker 都不得推导身份；登录与换频道只按真实 ID 和 coordinator 中的 ID→端点映射路由。
 - **一个进程可托管 N 个频道**（配置驱动）。代码不因"一进程一频道"还是"一进程多频道"而分叉——分发 = 配置 + 注册表。
 
 #### 4.3.1 大区在线、连接属主与频道游戏成员必须分离
@@ -279,9 +278,9 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
      └───────────┘            └───────────┘
 ```
 
-**进程总数 = `1 + 分片数`**（管理进程 1 个 + 每频道/每大区 1 个）。20 频道 → 21 个进程。login / admin / http 全部并入管理进程——低频、无状态、只经 service 接口，为隔离它们单独付 JVM 常驻内存不值。
+**进程总数 = `1 + ceil(频道数 / 每 worker 频道数)`**。20 频道、每 worker 5 个频道 → 5 个进程（管理进程 1 + worker 4）；完全隔离配置每 worker 1 个频道时仍为 21 个进程。login / admin / http 全部并入管理进程。
 
-**"何时才值得分"判据**：单机多进程的价值是**故障隔离，不是性能**（4.5 已述）。20 频道在单机 16C32G 上若用 split 档 = 20 份 JVM 常驻开销；没有"一个频道崩了不能连累全服"的诉求，就 `--profile=single` 单进程抗满（现状即如此且没问题）。分进程留给**多机 / 多区**或**明确隔离诉求**时才划算。
+**"何时才值得分"判据**：单机多进程的价值是**故障隔离，不是性能**。通过 worker 密度调节隔离成本：高密度 worker 节省 WZ/脚本/JVM 内存，低密度 worker 缩小故障影响面；每 worker 1 频道是最强隔离的特例。
 
 #### 4.6.3 逐组件归属表
 
@@ -401,7 +400,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 | 关系库 | **按需三档**：SQLite（低配 standalone 默认）/ PostgreSQL（大服/分布式）/ MySQL 8+、MariaDB（兼容切换） |
 | ORM | **MyBatis-Flex**（一份代码跑三库，常规 CRUD 全覆盖） |
 | 复杂原生 SQL | 用"两库公共子集"语法写（SELECT/JOIN/CTE/窗口等本就通用） |
-| 方言差异点 | 自增 / upsert / 布尔 / 时间函数 / 字符串函数 → 集中进 **`db-dialect`** 模块，按配置选实现 |
+| 方言差异点 | 自增 / upsert / 布尔 / 时间函数 / 字符串函数 → 集中进 **`persistence.dialect`** 包，按配置选实现 |
 | 迁移 | **自研迁移器**（M0 决策），每库独立版本表，启动时跑 |
 | seed | 基础数据随版本发布，与逻辑同版本（migration 管结构、seed 管内容） |
 
@@ -424,9 +423,9 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 
 ### 6.3 方言策略
 
-> 业务代码不允许出现**裸的方言差异**——出现就进 `db-dialect`。
+> 业务代码不允许出现**裸的方言差异**——出现就进 `persistence.dialect`。
 
-绝大多数 SQL（SELECT/JOIN/GROUP BY/ORDER BY/LIMIT/子查询/CTE/窗口函数）两库通用，直接写；少数方言点（upsert/自增/布尔/时间/字符串函数）封装进 `db-dialect`，方法级（`nextId()` / `upsert()` / `toTime()`…），PG / MySQL / **SQLite** 各一个实现，运行时按配置选。MariaDB 归 MySQL 系，随 ORM 覆盖。
+绝大多数 SQL（SELECT/JOIN/GROUP BY/ORDER BY/LIMIT/子查询/CTE/窗口函数）两库通用，直接写；少数方言点（upsert/自增/布尔/时间/字符串函数）封装进 `persistence` 模块的 `dialect` 包，方法级（`nextId()` / `upsert()` / `toTime()`…），PG / MySQL / **SQLite** 各一个实现，运行时按配置选。MariaDB 归 MySQL 系，随 ORM 覆盖。
 
 **SQL 能力矩阵**（M0 定义、M2 复杂 SQL 准入清单，违反即红线）：
 
@@ -434,7 +433,7 @@ M0-M2 单进程阶段三机制全部进程内实现，但接口从第一天按"�
 |---|---|
 | 参数化查询 | **强制**：全库经 MyBatis-Flex `#{}`；禁止 `${}` 与字符串拼接 SQL（安全红线 18，CI 扫描拦截，见 `SqlInjectionScanTest`） |
 | 通用 SQL（SELECT/JOIN/GROUP BY/ORDER BY/LIMIT/子查询/CTE/窗口函数） | **允许**：两库公共子集直接写 |
-| 方言点（upsert/自增/布尔/时间/字符串函数） | **禁止裸写**：进 `db-dialect` 方法级封装（红线 14） |
+| 方言点（upsert/自增/布尔/时间/字符串函数） | **禁止裸写**：进 `persistence.dialect` 方法级封装（红线 14） |
 | 存储过程 / 触发器 | **禁止**：SQLite 不支持，非公共子集 |
 | 复杂原生 SQL 兜底（红线 7：Character 存档 60 列联写） | **允许**：必须参数化，禁止拼接 |
 
@@ -524,7 +523,7 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 2. **MySQL `newmaple` 库兼容**：表结构不改，扩展走 migration `ADD COLUMN`（禁止单条 ALTER 串接多列）。
 3. **存档格式兼容**：`characters` ~60 列 + keymap/skills/queststatus/inventory 结构不变。
 4. **游戏对象不进容器**：Character/MapleMap/Item 手动 new，容器只管基础设施 + Service。
-5. **数据库按需三档**：低配 standalone 用 SQLite；大服/分布式用 PG；MySQL/MariaDB 兼容切换。方言差异点进 `db-dialect`。
+5. **数据库按需三档**：低配 standalone 用 SQLite；大服/分布式用 PG；MySQL/MariaDB 兼容切换。方言差异点进 `persistence.dialect`。
 6. **HTTP 与游戏 Netty 隔离 EventLoop**：第三方 API 流量不挤占游戏 tick 线程。
 7. **Character 存档复杂联写保留原生 SQL 兜底**（60 列联写不强求 ORM 级联）。
 8. `accounts.banned` 只有值 `1` 明确表示已封禁，查询未封禁必须用 `banned <> 1`（兼容 NULL 语义）。
@@ -533,7 +532,7 @@ VSCode 模型的本质不是"能加载 jar"，而是**平台只暴露贡献点�
 11. **可替换层不得引用稳定层具体类**（接口或数据投影，防 CCE）。
 12. **可替换层不得持有跨操作状态**（逻辑无状态化 = 热重载安全前提）。
 13. **贡献点从第一天版本化**（可装卸即兼容面）。
-14. **业务代码不允许出现裸的方言差异**（出现即进 `db-dialect`）。
+14. **业务代码不允许出现裸的方言差异**（出现即进 `persistence.dialect`）。
 15. **2C2G = 强制单进程，禁止多 JVM**："大区/频道独立进程"仅限大内存机器 / 多机。多 JVM 常驻开销每多开一个整体翻倍。
 16. **JDK 锁定 GraalVM CE for JDK 21**：原生内置 JVMCI + GraalVM JS，GraalJS 全速无需额外开关；不回退 stock Temurin。
 17. **主动重开 ≠ 全量落盘**：只 FLUSH 脏数据（增量），不做全量 flush；"等几分钟停服"是旧架构全量落盘的产物，本架构不继承。

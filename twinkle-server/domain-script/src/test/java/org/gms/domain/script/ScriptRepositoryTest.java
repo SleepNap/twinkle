@@ -56,15 +56,12 @@ class ScriptRepositoryTest {
         ScriptRepository repo = new ScriptRepository(root);
         assertThat(repo.loadAll()).hasSize(2);
 
-        // 修改 a（修改需要等 mtime 变化）
+        // 修改 a（即使文件系统 mtime 粒度较粗，也必须通过内容变化识别）
         Files.writeString(a, "var a = 99;");
         // 新增 c
         Files.writeString(root.resolve("c.js"), "var c = 3;");
         // 删除 b
         Files.delete(b);
-        // 等 mtime 跨越至少 1ms（Files.getLastModifiedTime 在某些 FS 精度有限）
-        Thread.sleep(50);
-
         int changed = repo.reload();
         assertThat(changed).isEqualTo(3);                  // 修改 + 新增 + 删除
         assertThat(repo.loadAll()).hasSize(2);

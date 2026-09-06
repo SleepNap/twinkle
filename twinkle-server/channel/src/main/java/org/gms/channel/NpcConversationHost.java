@@ -1,16 +1,19 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
+import org.gms.domain.game.inventory.ItemConstants;
+import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.script.host.Cm;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.QuestSystem;
+import java.util.Map;
 
 /**
  * NPC 对话宿主（channel 实现 {@link Cm} 契约，M3-5）。
  *
- * <p>持有：发包出口 {@link PacketSession} + 角色（经 {@link Character} 具体类——host
+ * <p>持有：发包出口 {@link PacketSession} + 角色（经 {@link PlayerCharacter} 具体类——host
  * 是稳定层内部适配，可替换层逻辑系统仍经 spi 接口，红线 11 针对"可替换层不得引用
  * 具体类"，host 在 channel 属装配层）、能力经 {@link ItemSystem}/{@link QuestSystem}
  * （版本门）。
@@ -21,11 +24,12 @@ import org.gms.replaceable.QuestSystem;
 public final class NpcConversationHost implements Cm {
 
     private final PacketSession session;
-    private final Character chr;
+    private final PlayerCharacter chr;
     private final int npcId;
     private final ItemSystem itemSystem;
     private final QuestSystem questSystem;
     private final Runnable onDispose;
+    private final MapTransitionService transitions;
 
     /** nextlevel 路由上下文（经典 status 脚本为 null）。 */
     private NextLevelContext context;
@@ -34,14 +38,21 @@ public final class NpcConversationHost implements Cm {
     /** 是否已请求关闭对话（dispose 调用标记；实际关闭由 handler 在 invoke 返回后执行）。 */
     private volatile boolean disposed;
 
-    public NpcConversationHost(PacketSession session, Character chr, int npcId,
+    public NpcConversationHost(PacketSession session, PlayerCharacter chr, int npcId,
                                ItemSystem itemSystem, QuestSystem questSystem, Runnable onDispose) {
+        this(session, chr, npcId, itemSystem, questSystem, onDispose, null);
+    }
+
+    public NpcConversationHost(PacketSession session, PlayerCharacter chr, int npcId,
+                               ItemSystem itemSystem, QuestSystem questSystem, Runnable onDispose,
+                               MapTransitionService transitions) {
         this.session = session;
         this.chr = chr;
         this.npcId = npcId;
         this.itemSystem = itemSystem;
         this.questSystem = questSystem;
         this.onDispose = onDispose;
+        this.transitions = transitions;
     }
 
     /** 当前 npc 模板 id。 */
@@ -228,12 +239,24 @@ public final class NpcConversationHost implements Cm {
 
     @Override
     public void giveItem(int itemId, int quantity) {
-        itemSystem.giveItem(chr, itemId, quantity);
+        updateItem(itemId, quantity, true);
     }
 
     @Override
     public void takeItem(int itemId, int quantity) {
-        itemSystem.takeItem(chr, itemId, quantity);
+        updateItem(itemId, quantity, false);
+    }
+
+    private void updateItem(int itemId, int quantity, boolean add) {
+        var type = ItemConstants.getInventoryType(itemId);
+        if (type == InventoryType.UNDEFINED) return;
+        synchronized (chr) {
+            var before = GameplayPackets.inventory(chr, type);
+            boolean changed = add ? itemSystem.giveItem(chr, itemId, quantity) : itemSystem.takeItem(chr, itemId, quantity);
+            if (changed) GameplayPackets.inventoryChanges(type, before, GameplayPackets.inventory(chr, type))
+                    .forEach(session::send);
+        }
+        session.send(GameplayPackets.enableActions());
     }
 
     @Override
@@ -248,22 +271,34 @@ public final class NpcConversationHost implements Cm {
 
     @Override
     public void gainExp(int amount) {
-        chr.setExp(chr.getExp() + amount);
+        synchronized (chr) {
+            long total = chr.getExp() + amount;
+            if (total < 0 || total > Integer.MAX_VALUE) return;
+            chr.setExp(total);
+            chr.markDirty();
+            session.send(GameplayPackets.stats(Map.of(GameplayPackets.EXP, (int) total)));
+        }
     }
 
     @Override
     public void gainMeso(int amount) {
-        chr.setMeso(chr.getMeso() + amount);
+        synchronized (chr) {
+            long total = (long) chr.getMeso() + amount;
+            if (total < 0 || total > Integer.MAX_VALUE) return;
+            chr.setMeso((int) total);
+            chr.markDirty();
+            session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, chr.getMeso())));
+        }
     }
 
     @Override
     public void startQuest(int questId) {
-        questSystem.startQuest(chr, questId);
+        if (questSystem.startQuest(chr, questId)) QuestActionHandler.sendStatus(session, chr.getQuestStatus(questId));
     }
 
     @Override
     public void completeQuest(int questId) {
-        questSystem.completeQuest(chr, questId);
+        if (questSystem.completeQuest(chr, questId)) QuestActionHandler.sendStatus(session, chr.getQuestStatus(questId));
     }
 
     @Override
@@ -281,7 +316,9 @@ public final class NpcConversationHost implements Cm {
 
     @Override
     public void warp(int mapId) {
-        chr.setMap(mapId);
+        if (transitions == null || !transitions.warp(session, mapId)) {
+            session.send(GameplayPackets.enableActions());
+        } else disposed = true;
     }
 
     /** 统计选项数（msgType 4 用，脚本 {@code #L..#l} 标记）。 */

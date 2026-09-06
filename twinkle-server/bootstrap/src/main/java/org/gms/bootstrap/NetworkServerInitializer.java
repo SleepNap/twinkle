@@ -11,9 +11,6 @@ import org.gms.net.netty.LoginServer;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.role.ManagementProcessCondition;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 
 /**
  * 启动期网络装配（架构 bootstrap：Netty 登录服 + 登录 handler 注册，M1 链路）。
@@ -39,25 +36,10 @@ public final class NetworkServerInitializer {
                                     LoginHandlerRegistrar loginHandlers,
                                     LoginServer loginServer,
                                     @Property(name = "twinkle.net.login.port", defaultValue = "8484") int port,
-                                    @Property(name = "twinkle.server.name", defaultValue = "twinkle") String serverName,
-                                    @Property(name = "twinkle.net.channel.host", defaultValue = "127.0.0.1")
-                                    String channelHost,
-                                    @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
-        // channel.host 是 v83 SERVER_IP 回包下发给客户端的频道地址，不是 Netty 监听地址。
-        loginHandlers.register(registry, serverName, resolveChannelIpv4(channelHost), channelPort);
+                                    @Property(name = "twinkle.server.name", defaultValue = "twinkle") String serverName) {
+        loginHandlers.register(registry, serverName);
         loginServer.start(port);
         log.info(I18n.message("log.bootstrap.login_started"), loginServer.boundPort());
     }
 
-    private static byte[] resolveChannelIpv4(String host) {
-        try {
-            InetAddress address = InetAddress.getByName(host);
-            if (address instanceof Inet4Address) {
-                return address.getAddress();
-            }
-        } catch (UnknownHostException e) {
-            throw new IllegalStateException(I18n.message("error.bootstrap.channel_host_invalid", host), e);
-        }
-        throw new IllegalStateException(I18n.message("error.bootstrap.channel_host_invalid", host));
-    }
 }

@@ -4,10 +4,12 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
@@ -33,7 +35,7 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
 
 
     private final Channel channel;
-    private final Runnable closeHandler;
+    private final CopyOnWriteArrayList<Runnable> closeHandlers = new CopyOnWriteArrayList<>();
     private final AtomicLong messageIdSeq = new AtomicLong();
     private final ConcurrentMap<Long, CompletableFuture<InternalFrame>> pending = new ConcurrentHashMap<>();
 
@@ -42,7 +44,7 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
 
     private InternalConnection(Channel channel, Runnable closeHandler) {
         this.channel = channel;
-        this.closeHandler = closeHandler;
+        if (closeHandler != null) closeHandlers.add(closeHandler);
     }
 
     /**
@@ -65,6 +67,11 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
         this.rpcRequestHandler = handler;
     }
 
+    /** 追加断链监听；coordinator 用它同步移除该 worker 的全部频道端点。 */
+    public void addCloseListener(Runnable listener) {
+        if (listener != null) closeHandlers.add(listener);
+    }
+
     /** RPC 请求 + 帧 messageId（响应关联用）。 */
     public record RpcRequestEnvelope(InternalProtocol.RpcRequest request, long messageId) {
     }
@@ -83,6 +90,19 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
     /** 单向发送一帧（投递/心跳/注册）。 */
     public void send(InternalFrame frame) {
         channel.writeAndFlush(frame);
+    }
+
+    /** 单向发送并在 Netty 真正写出（或失败）时完成，用于可靠消息的投递确认。 */
+    public CompletableFuture<Void> sendAsync(InternalFrame frame) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        channel.writeAndFlush(frame).addListener(future -> {
+            if (future.isSuccess()) {
+                result.complete(null);
+            } else {
+                result.completeExceptionally(future.cause());
+            }
+        });
+        return result;
     }
 
     /** 请求-响应：发送帧，同 messageId 的 RPC_RESPONSE 到来时完成 future（超时由调用方控制）。 */
@@ -165,10 +185,26 @@ public final class InternalConnection extends ChannelInboundHandlerAdapter imple
         RuntimeException closed = new IllegalStateException(I18n.message("error.internal.connection_closed"));
         pending.forEach((id, fut) -> fut.completeExceptionally(closed));
         pending.clear();
-        if (closeHandler != null) {
-            closeHandler.run();
+        for (Runnable closeHandler : closeHandlers) {
+            try {
+                closeHandler.run();
+            } catch (RuntimeException e) {
+                log.warn("Internal connection close listener failed", e);
+            }
         }
         ctx.fireChannelInactive();
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        // Worker 进程崩溃或被终止时，connection reset 是正常的断链表现；关闭 channel 后
+        // channelInactive 会统一完成 pending RPC，并触发 coordinator 摘除该连接的全部频道。
+        if (cause instanceof IOException) {
+            log.debug("Internal connection closed by peer: {}", cause.getMessage());
+        } else {
+            log.warn("Internal connection failed", cause);
+        }
+        ctx.close();
     }
 
     @Override

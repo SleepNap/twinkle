@@ -1,6 +1,6 @@
 package org.gms.login;
 
-import org.gms.data.entity.Character;
+import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.InPacket;
@@ -11,6 +11,7 @@ import java.nio.charset.Charset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 登录响应包字节布局测试（红线 1：v83 包字节级兼容）。
@@ -84,8 +85,53 @@ class LoginPacketFactoryTest {
     }
 
     @Test
+    void serverList_preservesSparseChannelIdsInsteadOfListIndexes() {
+        OutPacket packet = LoginPacketFactory.serverList(42, "twinkle", List.of(
+                new LoginPacketFactory.ServerChannel(1, 11),
+                new LoginPacketFactory.ServerChannel(8, 22),
+                new LoginPacketFactory.ServerChannel(21, 33)));
+        ByteArrayInPacket in = new ByteArrayInPacket(packet.getBytes());
+
+        in.readUnsignedShort();
+        in.readByte();
+        in.readString();
+        in.readByte();
+        in.readString();
+        in.readByte(); in.readByte(); in.readByte(); in.readByte(); in.readByte();
+        assertThat(in.readByte()).isEqualTo((byte) 3);
+        int[] expectedIds = {1, 8, 21};
+        int[] expectedLoads = {11, 22, 33};
+        for (int i = 0; i < expectedIds.length; i++) {
+            assertThat(in.readString()).isEqualTo("twinkle-" + expectedIds[i]);
+            assertThat(in.readInt()).isEqualTo(expectedLoads[i]);
+            assertThat(in.readByte() & 0xFF).isEqualTo(42);
+            assertThat(in.readByte() & 0xFF).isEqualTo(expectedIds[i] - 1);
+            assertThat(in.readByte()).isZero();
+        }
+        assertThat(in.readUnsignedShort()).isZero();
+        assertThat(in.available()).isZero();
+    }
+
+    @Test
+    void serverList_preservesSparseWorldIdAndReservesEndMarker() {
+        ByteArrayInPacket in = new ByteArrayInPacket(
+                LoginPacketFactory.serverList(42, "twinkle", List.of()).getBytes());
+        in.readUnsignedShort();
+        assertThat(in.readByte() & 0xFF).isEqualTo(42);
+        assertThatThrownBy(() -> LoginPacketFactory.serverList(255, "invalid", List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void wireChannelConversionSupportsSparseAndMaximumIds() {
+        assertThat(ChannelSelectionService.fromWireId(0)).isEqualTo(1);
+        assertThat(ChannelSelectionService.fromWireId(7)).isEqualTo(8);
+        assertThat(ChannelSelectionService.fromWireId(255)).isEqualTo(256);
+    }
+
+    @Test
     void charList_layoutWithSingleCharacter() {
-        Character c = new Character();
+        PlayerCharacterRecord c = new PlayerCharacterRecord();
         c.setId(100L);
         c.setName("Hero");
         c.setGender(0);
@@ -187,7 +233,7 @@ class LoginPacketFactoryTest {
     @Test
     void fixedStringPadding_isNullPaddedTo13Bytes() {
         // 中文名 GBK 多字节也应右补 \0 到 13 字节
-        Character c = new Character();
+        PlayerCharacterRecord c = new PlayerCharacterRecord();
         c.setId(1L);
         c.setName("冒险家");
         OutPacket p = LoginPacketFactory.charList(List.of(c), 0, 0, null);

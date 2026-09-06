@@ -27,7 +27,12 @@ public final class ChannelConnectionRegistry {
 
     /** 频道连接注册（REGISTER 帧：channelId>0）。 */
     public void registerChannel(int channelId, String host, int port, InternalConnection conn) {
-        channels.put(channelId, conn);
+        channels.compute(channelId, (id, existing) -> {
+            if (existing != null && existing != conn && existing.isActive()) {
+                throw new IllegalStateException("Channel id is already connected: " + channelId);
+            }
+            return conn;
+        });
         channelHosts.put(channelId, host + ":" + port);
         log.info(I18n.message("log.registry.channel_registered"), channelId, host + ":" + port);
     }
@@ -39,12 +44,19 @@ public final class ChannelConnectionRegistry {
     }
 
     /** 断链移除（幂等，防旧连接迟到断链误删新连接）。 */
-    public void unregister(InternalConnection conn) {
+    public java.util.Set<Integer> unregister(InternalConnection conn) {
         if (admin == conn) {
             admin = null;
-            return;
+            return java.util.Set.of();
         }
-        channels.entrySet().removeIf(e -> e.getValue() == conn);
+        java.util.Set<Integer> removed = new java.util.HashSet<>();
+        channels.entrySet().removeIf(e -> {
+            if (e.getValue() != conn) return false;
+            removed.add(e.getKey());
+            channelHosts.remove(e.getKey());
+            return true;
+        });
+        return java.util.Set.copyOf(removed);
     }
 
     /** 按频道取连接。 */
@@ -60,5 +72,10 @@ public final class ChannelConnectionRegistry {
     /** 全部频道连接快照。 */
     public Map<Integer, InternalConnection> channelsSnapshot() {
         return Map.copyOf(channels);
+    }
+
+    /** 同一连接可能托管多个频道；广播时按 worker 连接去重。 */
+    public java.util.Set<InternalConnection> workerConnectionsSnapshot() {
+        return java.util.Set.copyOf(channels.values());
     }
 }

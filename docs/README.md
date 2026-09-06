@@ -17,8 +17,8 @@
 
 ## 当前分布
 
-- `planned/` — 待实施的设计（当前为空）。
-- `in-progress/` — 正在推进的路线图（Web 控制台路线图）。
+- `planned/` — 尚未开工的设计。
+- `in-progress/` — 正在推进的路线图与收尾工作（Web 控制台、后端结构收敛与模型重构）。
 - `archived/` — 已完成的历史文档，按主题分子目录：
   - `archived/ops/` — 运维操作手册
   - `archived/security/` — 安全加固
@@ -29,3 +29,9 @@
 > 当前任务只以 `planned/`、`in-progress/` 和根目录现行架构文档为准。
 
 跨版本 API 的选择性分叉、历史兼容、退役和自动 OpenAPI 文档规则见 [`API-VERSIONING.md`](API-VERSIONING.md)。
+
+后端 Maven 模块收敛、强类型契约、`PlayerCharacter`/`GameAccountRecord` 命名与聚合拆分方案见
+[`in-progress/backend-structure-refactor.md`](in-progress/backend-structure-refactor.md)。
+
+游戏内功能的已实现范围、客户端待验收项与下一步路线见
+[`in-progress/gameplay-roadmap.md`](in-progress/gameplay-roadmap.md)。

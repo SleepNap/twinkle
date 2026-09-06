@@ -1,8 +1,9 @@
 package org.gms.channel;
+import org.gms.service.intercoord.ChannelDirectoryService;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.channel.persist.CharacterSaveQueue;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.ReliableEventBus;
 import org.gms.i18n.I18n;
 import org.gms.message.ChangeChannelRequest;
@@ -12,6 +13,10 @@ import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.service.intercoord.IntercoordService;
+import org.gms.net.packet.v83.V83ChannelId;
+
+import java.net.Inet4Address;
+import java.net.InetAddress;
 
 /**
  * 换频道处理（RecvOpcode.CHANGE_CHANNEL 0x27，架构 4.7：一机制两用）。
@@ -63,7 +68,7 @@ public final class ChangeChannelHandler implements PacketHandler {
             session.close(I18n.message("error.channel.change.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.channel.change.not_in_map"));
             return;
@@ -75,11 +80,17 @@ public final class ChangeChannelHandler implements PacketHandler {
         }
         packet.skip(4);
         int targetChannel = packet.readByte() & 0xFF; // 0-based
-        int targetId = targetChannel + 1;             // 频道 id（1-based）
+        int targetId = V83ChannelId.fromWire(targetChannel);
 
         if (targetId == channelId) {
             return; // 同频道，忽略
         }
+        ChannelDirectoryService.ChannelInfo target = intercoord.channel(targetId).orElse(null);
+        if (target == null) {
+            log.warn("Target channel is unavailable: {}", targetId);
+            return;
+        }
+        byte[] targetIp = resolveIpv4(target.host());
 
         // 发送前同步存档（架构 4.7：老频道 flush 状态 → 目标频道加载）。玩家状态落 DB，
         // 目标频道重连后 PlayerLoggedinHandler 从 DB 加载最新态（跨进程不掉数据）。
@@ -92,7 +103,8 @@ public final class ChangeChannelHandler implements PacketHandler {
         ChangeChannelRequest req = new ChangeChannelRequest(chr.getId(), channelId, targetId,
                 ChangeChannelRequest.Reason.PLAYER_CHANGE);
         log.info(I18n.message("log.channel.change.request"), chr.getName(), channelId, targetId, req.reason());
-        reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req);
+        // 必须等可靠帧真正写出；coordinator 断链时保持玩家在原频道，不能先进入迁移态。
+        reliableBus.send("cc:player:" + chr.getId(), MessageTargets.channel(targetId), req).join();
 
         // 开始迁移：旧频道仍是 TCP 属主；目标频道只有在客户端重连并完成 PlayerLoggedin 后
         // 才能登记为新属主，避免“尚未连接目标频道但定位已过去”的幽灵在线。
@@ -105,7 +117,18 @@ public final class ChangeChannelHandler implements PacketHandler {
         }
         sessions.unregister(chr.getId(), session);
         session.transition(SessionStage.CHANNEL_TRANSITION);
+        session.send(ChannelPacketFactory.changeChannel(targetIp, target.port()));
         // 玩家重连目标频道端口 → PlayerLoggedinHandler 重新进图（v83 loading 界面）
         log.info(I18n.message("log.channel.change.complete"), chr.getName(), targetId, targetId);
+    }
+
+    private static byte[] resolveIpv4(String host) {
+        try {
+            InetAddress address = InetAddress.getByName(host);
+            if (address instanceof Inet4Address) return address.getAddress();
+        } catch (Exception e) {
+            throw new IllegalStateException("Target channel host is not an IPv4 address: " + host, e);
+        }
+        throw new IllegalStateException("Target channel host is not an IPv4 address: " + host);
     }
 }

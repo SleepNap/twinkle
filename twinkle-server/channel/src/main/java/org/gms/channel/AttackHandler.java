@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.i18n.I18n;
@@ -78,7 +78,7 @@ public final class AttackHandler implements PacketHandler {
             session.close(I18n.message("error.attack.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.attack.not_in_map"));
             return;
@@ -142,7 +142,7 @@ public final class AttackHandler implements PacketHandler {
         applyAndBroadcast(chr, map, skill, numAttacked, numDamage, display, direction, stance, speed, targets, ranged, magic);
     }
 
-    private void applyAndBroadcast(Character chr, MapleMap map, int skill, int numAttacked, int numDamage,
+    private void applyAndBroadcast(PlayerCharacter chr, MapleMap map, int skill, int numAttacked, int numDamage,
                                    int display, int direction, int stance, int speed,
                                    List<Target> targets, boolean ranged, boolean magic) {
         int[] targetOids = new int[targets.size()];
@@ -168,6 +168,9 @@ public final class AttackHandler implements PacketHandler {
             if (!monster.isAlive()) {
                 anyDead = true;
                 deadOids.add(monster.getObjectId());
+                var session = sessions.get(chr.getId());
+                QuestActionHandler quests = session == null ? null : session.getAttr("questActions");
+                if (quests != null) quests.killed(session, monster.getData().getMobId());
             }
         }
 
@@ -200,7 +203,7 @@ public final class AttackHandler implements PacketHandler {
     }
 
     /** 技能等级（简化：技能表未落地，非 0 技能暂按 0 级处理，攻击广播不发 skill 段）。 */
-    private int skillLevel(Character chr, int skill) {
+    private int skillLevel(PlayerCharacter chr, int skill) {
         return skill == 0 ? 0 : 0;
     }
 

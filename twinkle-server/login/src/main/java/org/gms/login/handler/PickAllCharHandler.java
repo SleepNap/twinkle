@@ -1,10 +1,11 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.login.ChannelSelectionService;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
@@ -18,7 +19,7 @@ import java.util.List;
  *
  * <p>包结构：{@code int charId + int worldId + string macs + string hostString}。
  * 校验角色属于当前账号（防越权），成功后回 {@code SERVER_IP} 让客户端连频道服
- * （地址经构造注入，同 {@link CharSelectHandler}）。思路参考 BeiDou
+ * （未显式选频道时使用 coordinator 中 ID 最小的可用频道）。思路参考 BeiDou
  * ViewAllCharSelectedHandler，实现自研。
  */
 @Log4j2
@@ -26,13 +27,13 @@ public final class PickAllCharHandler implements PacketHandler {
 
 
     private final LoginService loginService;
-    private final byte[] channelIp;
-    private final int channelPort;
+    private final ChannelSelectionService channels;
+    private final int worldId;
 
-    public PickAllCharHandler(LoginService loginService, byte[] channelIp, int channelPort) {
+    public PickAllCharHandler(LoginService loginService, ChannelSelectionService channels, int worldId) {
         this.loginService = loginService;
-        this.channelIp = channelIp;
-        this.channelPort = channelPort;
+        this.channels = channels;
+        this.worldId = worldId;
     }
 
     @Override
@@ -41,18 +42,22 @@ public final class PickAllCharHandler implements PacketHandler {
             session.close(I18n.message("error.pick_all_char.outside_stage"));
             return;
         }
-        Account account = session.getAttr("account");
+        GameAccountRecord account = session.getAttr("account");
         if (account == null) {
             session.close(I18n.message("error.pick_all_char.not_logged_in"));
             return;
         }
         long charId = packet.readInt();
-        packet.readInt();           // world id（M1 单世界忽略）
+        int requestedWorldId = packet.readInt();
+        if (requestedWorldId != worldId) {
+            session.close("Selected world is unavailable: " + requestedWorldId);
+            return;
+        }
         packet.readString();        // macs
         packet.readString();        // hostString
 
-        List<Character> characters = loginService.charactersFor(account.getId(), 0);
-        Character selected = characters.stream()
+        List<PlayerCharacterRecord> characters = loginService.charactersFor(account.getId(), requestedWorldId);
+        PlayerCharacterRecord selected = characters.stream()
                 .filter(c -> c.getId() != null && c.getId() == charId)
                 .findFirst()
                 .orElse(null);
@@ -62,8 +67,13 @@ public final class PickAllCharHandler implements PacketHandler {
         }
 
         session.setAttr("selectedChar", selected);
+        ChannelSelectionService.Endpoint endpoint = channels.firstAvailable().orElse(null);
+        if (endpoint == null) {
+            session.close("No channel is available");
+            return;
+        }
         session.transition(SessionStage.SELECTED);
         log.info(I18n.message("log.pick_all_char.selected"), selected.getName(), charId);
-        session.send(LoginPacketFactory.serverIp(channelIp, channelPort, (int) charId));
+        session.send(LoginPacketFactory.serverIp(endpoint.ipv4(), endpoint.port(), (int) charId));
     }
 }

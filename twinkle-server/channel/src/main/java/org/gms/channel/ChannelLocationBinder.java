@@ -20,21 +20,27 @@ import org.gms.service.intercoord.IntercoordService;
  * PlayerOnline 覆盖为新属主。
  */
 @Log4j2
-public final class ChannelLocationBinder {
+public final class ChannelLocationBinder implements AutoCloseable {
 
 
 
     private final int channelId;
     private final int worldId;
     private final IntercoordService intercoord;
+    private final AutoCloseable onlineSubscription;
+    private final AutoCloseable offlineSubscription;
+    private final AutoCloseable activitySubscription;
 
     public ChannelLocationBinder(int worldId, int channelId, IntercoordService intercoord, EventBus eventBus) {
         this.worldId = worldId;
         this.channelId = channelId;
         this.intercoord = intercoord;
-        eventBus.subscribe(OnlinePlayerEvents.TARGET, OnlinePlayerEvents.PlayerOnline.class, this::onOnline);
-        eventBus.subscribe(OnlinePlayerEvents.TARGET, OnlinePlayerEvents.PlayerOffline.class, this::onOffline);
-        eventBus.subscribe(OnlinePlayerEvents.TARGET, OnlinePlayerEvents.PlayerActivityChanged.class,
+        onlineSubscription = eventBus.subscribe(OnlinePlayerEvents.TARGET,
+                OnlinePlayerEvents.PlayerOnline.class, this::onOnline);
+        offlineSubscription = eventBus.subscribe(OnlinePlayerEvents.TARGET,
+                OnlinePlayerEvents.PlayerOffline.class, this::onOffline);
+        activitySubscription = eventBus.subscribe(OnlinePlayerEvents.TARGET,
+                OnlinePlayerEvents.PlayerActivityChanged.class,
                 this::onActivityChanged);
     }
 
@@ -44,12 +50,18 @@ public final class ChannelLocationBinder {
     }
 
     private void onOnline(OnlinePlayerEvents.PlayerOnline event) {
+        if (event.ownerChannelId() != 0 && event.ownerChannelId() != channelId) {
+            return;
+        }
         intercoord.registerPlayer(event.characterId(), worldId, channelId);
         intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
         log.debug(I18n.message("log.channel.location.register"), event.characterId(), channelId);
     }
 
     private void onOffline(OnlinePlayerEvents.PlayerOffline event) {
+        if (event.ownerChannelId() != 0 && event.ownerChannelId() != channelId) {
+            return;
+        }
         intercoord.unregisterPlayer(event.characterId());
         intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
         log.debug(I18n.message("log.channel.location.unregister"), event.characterId());
@@ -61,5 +73,20 @@ public final class ChannelLocationBinder {
         }
         intercoord.updatePlayerActivity(event.characterId(), event.activity());
         intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
+    }
+
+    @Override
+    public void close() {
+        closeQuietly(onlineSubscription);
+        closeQuietly(offlineSubscription);
+        closeQuietly(activitySubscription);
+    }
+
+    private static void closeQuietly(AutoCloseable subscription) {
+        try {
+            subscription.close();
+        } catch (Exception e) {
+            log.warn("Failed to cancel channel-location subscription", e);
+        }
     }
 }

@@ -16,11 +16,11 @@ import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.Put;
 import io.micronaut.http.annotation.QueryValue;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.AccountDeletionRepository;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.AccountDeletionRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.httpapi.admin.AdminAuthFilter;
 import org.gms.service.admin.AdminService;
 import org.mindrot.jbcrypt.BCrypt;
@@ -54,14 +54,14 @@ public final class AccountAdminController {
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789".toCharArray();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    private final AccountRepository accountRepository;
+    private final GameAccountRepository accountRepository;
     private final AccountDeletionRepository accountDeletionRepository;
-    private final CharacterRepository characterRepository;
+    private final PlayerCharacterRepository characterRepository;
     private final AdminService adminService;
 
-    public AccountAdminController(AccountRepository accountRepository,
+    public AccountAdminController(GameAccountRepository accountRepository,
                                   AccountDeletionRepository accountDeletionRepository,
-                                  CharacterRepository characterRepository,
+                                  PlayerCharacterRepository characterRepository,
                                   AdminService adminService) {
         this.accountRepository = accountRepository;
         this.accountDeletionRepository = accountDeletionRepository;
@@ -84,7 +84,7 @@ public final class AccountAdminController {
             case "banned" -> true;
             default -> null;
         };
-        AccountRepository.AccountPage page = accountRepository.findPage(query, banned,
+        GameAccountRepository.AccountPage page = accountRepository.findPage(query, banned,
                 Math.max(0, offset), Math.max(1, Math.min(100, limit)));
         return HttpResponse.ok(Map.of(
                 "total", page.total(),
@@ -148,7 +148,7 @@ public final class AccountAdminController {
             return HttpResponse.badRequest(Map.of("error", "invalid_account_profile"));
         }
 
-        Account account = new Account();
+        GameAccountRecord account = new GameAccountRecord();
         account.setName(name);
         account.setPassword(BCrypt.hashpw(password, BCrypt.gensalt()));
         account.setTemporaryPasswordHash("");
@@ -192,7 +192,7 @@ public final class AccountAdminController {
     public HttpResponse<?> update(HttpRequest<?> request,
                                   @PathVariable long accountId,
                                   @Body Map<String, Object> body) {
-        Account account = accountRepository.findById(accountId).orElse(null);
+        GameAccountRecord account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {
             return HttpResponse.notFound(Map.of("error", "account_not_found"));
         }
@@ -264,12 +264,12 @@ public final class AccountAdminController {
     /** 删除账号及其角色、角色存档和账号级关联数据；审计记录按不可抵赖原则保留。 */
     @Delete("/{accountId}")
     public HttpResponse<?> delete(HttpRequest<?> request, @PathVariable long accountId) {
-        Account account = accountRepository.findById(accountId).orElse(null);
+        GameAccountRecord account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {
             return HttpResponse.notFound(Map.of("error", "account_not_found"));
         }
-        List<Character> characters = characterRepository.findByAccount(accountId);
-        Set<Long> characterIds = characters.stream().map(Character::getId).collect(Collectors.toSet());
+        List<PlayerCharacterRecord> characters = characterRepository.findByAccount(accountId);
+        Set<Long> characterIds = characters.stream().map(PlayerCharacterRecord::getId).collect(Collectors.toSet());
         String before = "accountId=" + accountId + ",accountName=" + account.getName()
                 + ",characters=" + characterIds.size();
 
@@ -303,7 +303,7 @@ public final class AccountAdminController {
     /** 账号详情与所有世界的角色快照。 */
     @Get("/{accountId}")
     public HttpResponse<?> detail(@PathVariable long accountId) {
-        Account account = accountRepository.findById(accountId).orElse(null);
+        GameAccountRecord account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {
             return HttpResponse.notFound(Map.of("error", "account_not_found"));
         }
@@ -322,7 +322,7 @@ public final class AccountAdminController {
     public HttpResponse<?> updateRestrictions(HttpRequest<?> request,
                                               @PathVariable long accountId,
                                               @Body Map<String, Object> body) {
-        Account account = accountRepository.findById(accountId).orElse(null);
+        GameAccountRecord account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {
             return HttpResponse.notFound(Map.of("error", "account_not_found"));
         }
@@ -360,7 +360,7 @@ public final class AccountAdminController {
     /** 踢下账号全部在线角色，并修复可能残留的 logged_in 状态。 */
     @Post("/{accountId}/force-offline")
     public HttpResponse<?> forceOffline(HttpRequest<?> request, @PathVariable long accountId) {
-        Account account = accountRepository.findById(accountId).orElse(null);
+        GameAccountRecord account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {
             return HttpResponse.notFound(Map.of("error", "account_not_found"));
         }
@@ -386,7 +386,7 @@ public final class AccountAdminController {
     public HttpResponse<?> generateTemporaryPassword(HttpRequest<?> request,
                                                      @PathVariable long accountId,
                                                      @Body Map<String, Object> body) {
-        Account account = accountRepository.findById(accountId).orElse(null);
+        GameAccountRecord account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {
             return HttpResponse.notFound(Map.of("error", "account_not_found"));
         }
@@ -424,7 +424,7 @@ public final class AccountAdminController {
 
     private int disconnectAccount(long accountId) {
         int disconnected = 0;
-        for (Character character : characterRepository.findByAccount(accountId)) {
+        for (PlayerCharacterRecord character : characterRepository.findByAccount(accountId)) {
             if (adminService.kick(character.getId())) {
                 disconnected++;
             }
@@ -440,7 +440,7 @@ public final class AccountAdminController {
         return summary.players().stream().map(AdminService.OnlinePlayer::characterId).collect(Collectors.toSet());
     }
 
-    private Map<String, Object> accountMap(Account account) {
+    private Map<String, Object> accountMap(GameAccountRecord account) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", account.getId());
         result.put("name", account.getName());
@@ -471,7 +471,7 @@ public final class AccountAdminController {
         return result;
     }
 
-    private static Map<String, Object> characterMap(Character character, boolean online) {
+    private static Map<String, Object> characterMap(PlayerCharacterRecord character, boolean online) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", character.getId());
         result.put("name", character.getName());
@@ -587,7 +587,7 @@ public final class AccountAdminController {
         return false;
     }
 
-    private static boolean temporaryPasswordActive(Account account) {
+    private static boolean temporaryPasswordActive(GameAccountRecord account) {
         String hash = account.getTemporaryPasswordHash();
         String expiresAt = account.getTemporaryPasswordExpiresAt();
         if (hash == null || hash.isBlank() || expiresAt == null || expiresAt.isBlank()) {
@@ -609,13 +609,13 @@ public final class AccountAdminController {
         return result.toString();
     }
 
-    private static String restrictionSummary(Account account) {
+    private static String restrictionSummary(GameAccountRecord account) {
         return "accountId=" + account.getId()
                 + ",banned=" + (account.getBanned() == 1)
                 + ",muted=" + (account.getMute() != null && account.getMute() == 1);
     }
 
-    private static String accountProfileSummary(Account account) {
+    private static String accountProfileSummary(GameAccountRecord account) {
         return "accountId=" + account.getId()
                 + ",nick=" + safeString(account.getNick(), 20)
                 + ",emailConfigured=" + (account.getEmail() != null && !account.getEmail().isBlank())

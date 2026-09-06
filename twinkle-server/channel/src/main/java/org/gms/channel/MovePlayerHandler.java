@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
@@ -44,7 +44,7 @@ public final class MovePlayerHandler implements PacketHandler {
             session.close(I18n.message("error.move.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.move.not_in_map"));
             return;
@@ -67,7 +67,7 @@ public final class MovePlayerHandler implements PacketHandler {
      * readerIndex 当前停在 9 字节头之后（NetworkSession 已消费 opcode 2 字节），
      * 从 raw 的 {@code readerIndex} 起读 numCommands 与片段，透传从 {@code readerIndex} 起。
      */
-    private byte[] parseAndBroadcast(InPacket packet, Character chr, MapleMap map) {
+    private byte[] parseAndBroadcast(InPacket packet, PlayerCharacter chr, MapleMap map) {
         byte[] raw = packet.getBytes();
         int pos = packet.available() > 0 ? raw.length - packet.available() : raw.length;
         // 跳过 9 字节头

@@ -80,6 +80,16 @@ public final class CoordinatorService implements IntercoordService {
     }
 
     @Override
+    public void registerChannel(int channelId, String host, int port, int onlineCount, String workerId) {
+        channelRegistry.register(channelId, host, port, onlineCount, workerId);
+    }
+
+    @Override
+    public void unregisterChannel(int channelId) {
+        channelRegistry.unregister(channelId);
+    }
+
+    @Override
     public void heartbeatChannel(int channelId, int onlineCount) {
         channelRegistry.heartbeat(channelId, onlineCount);
     }
@@ -87,14 +97,15 @@ public final class CoordinatorService implements IntercoordService {
     @Override
     public Optional<ChannelInfo> channel(int channelId) {
         return channelRegistry.get(channelId).map(info ->
-                new ChannelInfo(info.channelId(), info.host(), info.port(), info.onlineCount()));
+                new ChannelInfo(info.channelId(), info.host(), info.port(), info.onlineCount(), info.workerId()));
     }
 
     @Override
     public Map<Integer, ChannelInfo> channels() {
         Map<Integer, ChannelInfo> out = new java.util.HashMap<>();
         channelRegistry.snapshot().forEach((id, info) ->
-                out.put(id, new ChannelInfo(info.channelId(), info.host(), info.port(), info.onlineCount())));
+                out.put(id, new ChannelInfo(info.channelId(), info.host(), info.port(), info.onlineCount(),
+                        info.workerId())));
         return Map.copyOf(out);
     }
 
@@ -104,7 +115,7 @@ public final class CoordinatorService implements IntercoordService {
     }
 
     @Override
-    public long write(String key, Object value, long expectedVersion) {
+    public long write(String key, StoreValue value, long expectedVersion) {
         return singleOwnerStore.put(key, value, expectedVersion);
     }
 

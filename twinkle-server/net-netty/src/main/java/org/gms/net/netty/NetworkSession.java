@@ -19,6 +19,7 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -187,8 +188,15 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        // 日志红线 9：log.error("描述", e)
-        log.error(I18n.message("log.session.connection_error"), ctx.channel().remoteAddress(), cause);
+        // 客户端主动退出、端口存活探测和进程重启都会以 IOException 表现为对端断开，
+        // 这是连接级正常事件，不应污染 ERROR 告警。非 IO 异常才代表协议或 Handler 故障。
+        if (cause instanceof IOException) {
+            log.debug("Client connection closed by peer: remote={}, reason={}",
+                    ctx.channel().remoteAddress(), cause.getMessage());
+        } else {
+            // 日志红线 9：log.error("描述", e)
+            log.error(I18n.message("log.session.connection_error"), ctx.channel().remoteAddress(), cause);
+        }
         ctx.close();
     }
 

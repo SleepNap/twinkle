@@ -78,6 +78,14 @@ public class MapleMap {
     @Getter(AccessLevel.NONE)
     private final AtomicInteger objectIdSeq = new AtomicInteger();
 
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private volatile Map<Integer, MapNpc> npcs = new HashMap<>();
+
+    public void putNpc(MapNpc npc) { npcs.put(npc.objectId(), npc); }
+    public MapNpc getNpc(int objectId) { return npcs.get(objectId); }
+    public List<MapNpc> npcs() { return List.copyOf(npcs.values()); }
+
     // ---------- 传送点 ----------
 
     public void putPortal(Portal portal) {
@@ -133,6 +141,7 @@ public class MapleMap {
         this.portals = new HashMap<>(source.portals);
         this.spawnPoints = new ArrayList<>(source.spawnPoints);
         this.footholds = new ArrayList<>(source.footholds);
+        this.npcs = new HashMap<>(source.npcs);
     }
 
     /**
@@ -166,19 +175,19 @@ public class MapleMap {
 
     // ---------- 玩家进出（数据结构操作，进图逻辑在 channel/system） ----------
 
-    public void addCharacter(CharacterState character) {
-        characters.add(character);
+    public synchronized void addCharacter(CharacterState character) {
+        if (!characters.contains(character)) characters.add(character);
     }
 
-    public void removeCharacter(CharacterState character) {
+    public synchronized void removeCharacter(CharacterState character) {
         characters.remove(character);
     }
 
-    public List<CharacterState> characters() {
+    public synchronized List<CharacterState> characters() {
         return List.copyOf(characters);
     }
 
-    public int characterCount() {
+    public synchronized int characterCount() {
         return characters.size();
     }
 
@@ -186,23 +195,28 @@ public class MapleMap {
 
     /** 分配下一个对象 id（地图内递增，不用则 -1）。 */
     public int nextObjectId() {
-        return objectIdSeq.getAndIncrement();
+        int candidate;
+        do {
+            candidate = objectIdSeq.getAndIncrement();
+            if (candidate < 0) throw new IllegalStateException("Map object identifiers exhausted");
+        } while (npcs.containsKey(candidate));
+        return candidate;
     }
 
-    public void addMonster(MapleMonster monster) {
+    public synchronized void addMonster(MapleMonster monster) {
         monsters.put(monster.getObjectId(), monster);
     }
 
-    public void removeMonster(int objectId) {
+    public synchronized void removeMonster(int objectId) {
         monsters.remove(objectId);
     }
 
-    public MapleMonster getMonster(int objectId) {
+    public synchronized MapleMonster getMonster(int objectId) {
         return monsters.get(objectId);
     }
 
     /** 全部怪物（不可变视图）。 */
-    public List<MapleMonster> monsters() {
+    public synchronized List<MapleMonster> monsters() {
         return List.copyOf(monsters.values());
     }
 }

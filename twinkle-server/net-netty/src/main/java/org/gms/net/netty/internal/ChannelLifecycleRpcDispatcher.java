@@ -25,10 +25,18 @@ public final class ChannelLifecycleRpcDispatcher {
     }
 
     public InternalProtocol.RpcResponse dispatch(String method, String[] args) {
+        return dispatch(method, args, null);
+    }
+
+    /** 多频道 worker 通过路由字段指定状态查询目标；旧调用保留首频道语义。 */
+    public InternalProtocol.RpcResponse dispatch(String method, String[] args, Integer targetChannelId) {
         try {
             return switch (method) {
                 case STATUS_METHOD -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
-                        lifecycleService.statuses().stream().findFirst().orElse(null)));
+                        lifecycleService.statuses().stream()
+                                .filter(status -> targetChannelId == null
+                                        || status.channelId() == targetChannelId)
+                                .findFirst().orElse(null)));
                 case START_METHOD -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
                         lifecycleService.requestStart(intArg(args, 0))));
                 case STOP_METHOD -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(

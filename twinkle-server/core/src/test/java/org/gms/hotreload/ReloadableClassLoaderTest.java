@@ -38,8 +38,8 @@ class ReloadableClassLoaderTest {
      */
     @Test
     void isStableClass_detectsStablePackages() {
-        assertThat(ReloadableClassLoader.isStableClass("org.gms.data.entity.Character")).isTrue();
-        assertThat(ReloadableClassLoader.isStableClass("org.gms.dialect.DbDialect")).isTrue();
+        assertThat(ReloadableClassLoader.isStableClass("org.gms.persistence.entity.PlayerCharacterRecord")).isTrue();
+        assertThat(ReloadableClassLoader.isStableClass("org.gms.persistence.dialect.DbDialect")).isTrue();
         assertThat(ReloadableClassLoader.isStableClass("org.gms.event.EventBus")).isTrue();
         assertThat(ReloadableClassLoader.isStableClass("org.gms.config.ConfigFacade")).isTrue();
         assertThat(ReloadableClassLoader.isStableClass("org.gms.replaceable.SomeSystem")).isFalse();

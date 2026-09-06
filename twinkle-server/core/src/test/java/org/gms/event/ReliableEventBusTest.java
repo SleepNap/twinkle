@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -45,6 +46,12 @@ class ReliableEventBusTest {
             return rows.stream()
                     .filter(r -> !OutboxRow.ACKED.equals(r.status()))
                     .toList();
+        }
+
+        @Override
+        public long lastIssuedSeq(String streamId) {
+            return rows.stream().filter(row -> row.streamId().equals(streamId))
+                    .mapToLong(OutboxRow::seq).max().orElse(0L);
         }
 
         @Override
@@ -192,5 +199,42 @@ class ReliableEventBusTest {
         RecordingBus bus2 = new RecordingBus();
         ReliableEventBus restarted = newBus(outbox, bus2);
         assertThat(bus2.delivered).hasSize(1); // 重投送达
+    }
+
+    @Test
+    void restartContinuesSequenceInsteadOfReusingMessageId() {
+        MemoryOutbox outbox = new MemoryOutbox();
+        newBus(outbox, new RecordingBus()).send("s", "*", "before").join();
+
+        ReliableEventBus restarted = newBus(outbox, new RecordingBus());
+        restarted.send("s", "*", "after").join();
+
+        assertThat(outbox.rows).extracting(OutboxRow::messageId)
+                .containsExactly("s:1", "s:2");
+    }
+
+    @Test
+    void failedDeliveryRemainsPendingAndCanBeRetried() {
+        MemoryOutbox outbox = new MemoryOutbox();
+        EventBus failed = new EventBus() {
+            @Override
+            public <T> CompletableFuture<Void> send(String target, T payload) {
+                return CompletableFuture.failedFuture(new IllegalStateException("disconnected"));
+            }
+
+            @Override
+            public <T> AutoCloseable subscribe(String target, Class<T> type, Consumer<T> handler) {
+                return () -> { };
+            }
+        };
+        ReliableEventBus reliable = new ReliableEventBus(failed, outbox, new PassThroughCodec());
+
+        assertThat(reliable.send("s", "*", "message")).isCompletedExceptionally();
+        assertThat(outbox.rows.getFirst().status()).isEqualTo(OutboxRow.PENDING);
+
+        RecordingBus recovered = new RecordingBus();
+        newBus(outbox, recovered).retryPending().join();
+        assertThat(recovered.delivered).containsExactly("message");
+        assertThat(outbox.rows.getFirst().status()).isEqualTo(OutboxRow.DELIVERED);
     }
 }

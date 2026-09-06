@@ -1,12 +1,13 @@
 package org.gms.channel.persist;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.channel.CharacterLoader;
+import org.gms.channel.PlayerCharacterAssembler;
+import org.gms.channel.ChannelPlayerDirectory;
 import org.gms.channel.PlayerStorage;
-import org.gms.data.repo.CharacterRepository;
-import org.gms.data.repo.CharacterSnapshotRepository;
-import org.gms.data.repo.InventoryItemRepository;
-import org.gms.domain.game.Character;
+import org.gms.persistence.repo.PlayerCharacterRepository;
+import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
+import org.gms.persistence.repo.InventoryItemRepository;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.i18n.I18n;
 
 import java.util.List;
@@ -34,40 +35,47 @@ public final class CharacterSaveQueue implements AutoCloseable {
 
 
 
-    private final CharacterRepository repository;
+    private final PlayerCharacterRepository repository;
     private final InventoryItemRepository inventoryItemRepository;
-    private final CharacterSnapshotRepository snapshotRepository;
-    private final CharacterLoader loader;
-    private final PlayerStorage playerStorage;
+    private final PlayerCharacterSnapshotRepository snapshotRepository;
+    private final PlayerCharacterAssembler loader;
+    private final java.util.function.Supplier<java.util.Collection<PlayerCharacter>> onlinePlayers;
     private final ExecutorService singleWriter;
     private final ConcurrentMap<Long, Boolean> pending = new ConcurrentHashMap<>();
     /** 最近一次落库失败的角色引用；关闭流程会同步重试，成功前禁止退出进程。 */
-    private final ConcurrentMap<Long, Character> failed = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, PlayerCharacter> failed = new ConcurrentHashMap<>();
 
-    public CharacterSaveQueue(CharacterRepository repository, CharacterLoader loader, PlayerStorage playerStorage) {
-        this(repository, null, null, loader, playerStorage);
+    public CharacterSaveQueue(PlayerCharacterRepository repository, PlayerCharacterAssembler loader, PlayerStorage playerStorage) {
+        this(repository, null, null, loader, playerStorage::all);
     }
 
-    public CharacterSaveQueue(CharacterRepository repository, InventoryItemRepository inventoryItemRepository,
-                              CharacterLoader loader, PlayerStorage playerStorage) {
-        this(repository, inventoryItemRepository, null, loader, playerStorage);
+    public CharacterSaveQueue(PlayerCharacterRepository repository, InventoryItemRepository inventoryItemRepository,
+                              PlayerCharacterAssembler loader, PlayerStorage playerStorage) {
+        this(repository, inventoryItemRepository, null, loader, playerStorage::all);
     }
 
     /** 生产装配入口：角色与背包经同一事务原子落盘。 */
-    public CharacterSaveQueue(CharacterSnapshotRepository snapshotRepository,
-                              CharacterLoader loader, PlayerStorage playerStorage) {
-        this(null, null, snapshotRepository, loader, playerStorage);
+    public CharacterSaveQueue(PlayerCharacterSnapshotRepository snapshotRepository,
+                              PlayerCharacterAssembler loader, PlayerStorage playerStorage) {
+        this(null, null, snapshotRepository, loader, playerStorage::all);
     }
 
-    private CharacterSaveQueue(CharacterRepository repository,
+    /** 生产 Worker 装配入口：一个单写执行器聚合该进程托管的全部频道。 */
+    public CharacterSaveQueue(PlayerCharacterSnapshotRepository snapshotRepository,
+                              PlayerCharacterAssembler loader, ChannelPlayerDirectory directory) {
+        this(null, null, snapshotRepository, loader, directory::allPlayers);
+    }
+
+    private CharacterSaveQueue(PlayerCharacterRepository repository,
                                InventoryItemRepository inventoryItemRepository,
-                               CharacterSnapshotRepository snapshotRepository,
-                               CharacterLoader loader, PlayerStorage playerStorage) {
+                               PlayerCharacterSnapshotRepository snapshotRepository,
+                               PlayerCharacterAssembler loader,
+                               java.util.function.Supplier<java.util.Collection<PlayerCharacter>> onlinePlayers) {
         this.repository = repository;
         this.inventoryItemRepository = inventoryItemRepository;
         this.snapshotRepository = snapshotRepository;
         this.loader = loader;
-        this.playerStorage = playerStorage;
+        this.onlinePlayers = onlinePlayers;
         this.singleWriter = Executors.newSingleThreadExecutor(r -> {
             Thread t = Thread.ofPlatform().name("db-writer").daemon(true).unstarted(r);
             return t;
@@ -79,7 +87,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
      *
      * <p>可被任何线程调用（下线/断链/定期 flush）；写动作在单写线程串行执行。
      */
-    public void save(Character chr) {
+    public void save(PlayerCharacter chr) {
         if (chr == null) {
             return;
         }
@@ -109,7 +117,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
      * 返回前保证数据已持久化（架构 4.7：老频道 flush 状态 → 目标频道加载，不掉数据）。
      * 与 {@link #flushAllSync} 同语义，只针对单角色。
      */
-    public void flushCharacterSync(Character chr) {
+    public void flushCharacterSync(PlayerCharacter chr) {
         if (chr == null) {
             return;
         }
@@ -131,7 +139,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
      */
     public int flushAll() {
         int dirtyCount = 0;
-        for (Character chr : playerStorage.all()) {
+        for (PlayerCharacter chr : onlinePlayers.get()) {
             if (chr.isDirty()) {
                 save(chr);
                 dirtyCount++;
@@ -150,7 +158,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
      */
     public int flushAllSync() {
         int flushed = 0;
-        for (Character chr : playerStorage.all()) {
+        for (PlayerCharacter chr : onlinePlayers.get()) {
             if (chr.isDirty()) {
                 long savedVersion = chr.dirtyVersion();
                 try {
@@ -167,7 +175,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
         return flushed;
     }
 
-    private void persist(Character chr) {
+    private void persist(PlayerCharacter chr) {
         if (snapshotRepository != null) {
             synchronized (chr) {
                 snapshotRepository.save(loader.toData(chr), loader.toInventoryData(chr),
@@ -212,7 +220,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
 
     /** 关闭重试入口：断链后角色已离开在线表，必须保留引用直到确认落库。 */
     private void retryFailedSync() {
-        for (Character chr : List.copyOf(failed.values())) {
+        for (PlayerCharacter chr : List.copyOf(failed.values())) {
             long savedVersion = chr.dirtyVersion();
             try {
                 persist(chr);

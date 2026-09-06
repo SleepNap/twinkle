@@ -10,13 +10,18 @@ import java.util.List;
  * 角色状态契约（稳定层 SPI，架构第三节：可替换层经接口访问稳定层）。
  *
  * <p>游戏逻辑系统（org.gms.replaceable..）依赖本接口操作角色状态，**禁止**依赖
- * {@code org.gms.domain.game.Character} 具体类（红线 11 防 CCE / ArchUnit 规则 3 强制）。
+ * {@code org.gms.domain.game.PlayerCharacter} 具体类（红线 11 防 CCE / ArchUnit 规则 3 强制）。
  * 本接口只暴露逻辑系统所需的核心状态子集；其余持久化字段经具体类在稳定层内部访问。
  *
  * <p>继承 {@link Versioned}：写操作携带逻辑版本，热重载换代后迟到写被版本门识别
  * （架构 5.3）。系统写回状态前应先 {@code versionGate.decide(state)}。
  */
 public interface CharacterState extends Versioned {
+
+    /** 原子移动/堆叠背包槽位；未实现的独立状态适配器明确拒绝。 */
+    public default boolean moveInventoryItem(byte type, short source, short target, int quantity, int slotMax) {
+        return false;
+    }
 
     // ---- 身份 / 成长 ----
 
@@ -157,7 +162,7 @@ public interface CharacterState extends Versioned {
 
     /**
      * 标记自上次落盘后已变更（持久化字段 setter / 背包/任务 mutation 内调用）。
-     * 默认空实现避免破坏既有实现；稳定层 Character 覆盖实现。
+     * 默认空实现避免破坏既有实现；稳定层 PlayerCharacter 覆盖实现。
      */
     default void markDirty() {
     }

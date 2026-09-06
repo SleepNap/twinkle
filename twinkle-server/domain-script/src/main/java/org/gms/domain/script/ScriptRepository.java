@@ -153,7 +153,13 @@ public final class ScriptRepository {
         int diff = 0;
         for (var e : fresh.entrySet()) {
             ScriptSource prev = old.get(e.getKey());
-            if (prev == null || prev.lastModified() != e.getValue().lastModified()) {
+            // Some file systems (notably NTFS through Java's temp-directory APIs) can
+            // preserve the same millisecond mtime for two immediate writes. Comparing
+            // the already-loaded content as a fallback keeps reload reliable without
+            // adding another I/O pass or depending on an arbitrary sleep.
+            if (prev == null
+                    || prev.lastModified() != e.getValue().lastModified()
+                    || !prev.content().equals(e.getValue().content())) {
                 diff++;
             }
         }

@@ -37,8 +37,8 @@ public class ReloadableClassLoader extends URLClassLoader {
      * 经接口访问的稳定面，父优先加载，保证插件换 loader 时 SDK 类身份不变。
      */
     public static final Set<String> STABLE_PACKAGES = Set.of(
-            "org.gms.data.",      // 数据模型 + 仓库
-            "org.gms.dialect.",   // 方言（基础设施）
+            "org.gms.persistence.",      // 数据模型 + 仓库
+            "org.gms.persistence.dialect.",   // 方言（基础设施）
             "org.gms.event.",     // 事件总线（基础设施）
             "org.gms.config.",    // 配置门面（基础设施）
             "org.gms.plugin."     // 插件 SDK（可替换层经接口访问的稳定面）

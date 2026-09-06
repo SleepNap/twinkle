@@ -22,6 +22,60 @@ import java.util.Map;
  */
 public final class ItemSystem {
 
+    public enum ShopResult { SUCCESS, INVALID, NO_MONEY, NO_SPACE }
+
+    /** 普通恢复药：复验客户端指定槽位，在同一角色锁内扣物品并恢复生命/魔力。 */
+    public boolean consumeRecovery(CharacterState state, short slot, int itemId, long now) {
+        synchronized (state) {
+            if (versionGate.decide(state) != VersionDecision.ALLOW || state.getHp() <= 0) return false;
+            TradeItemSnapshot item = state.snapshotTradeItem((byte) 2, slot, 1);
+            ItemData data = gameData.item(itemId);
+            if (item == null || item.itemId() != itemId || data == null
+                    || item.expiration() > 0 && item.expiration() <= now) return false;
+            long hp = healing(data, "hp", "hpr", state.getMaxHp());
+            long mp = healing(data, "mp", "mpr", state.getMaxMp());
+            if (hp == 0 && mp == 0 || !state.removeTradeItems(List.of(item))) return false;
+            state.setHp((int) Math.min(state.getMaxHp(), state.getHp() + hp));
+            state.setMp((int) Math.min(state.getMaxMp(), state.getMp() + mp));
+            state.markDirty();
+            return true;
+        }
+    }
+
+    private static long healing(ItemData data, String fixed, String percent, int maximum) {
+        Integer flat = data.getStat(fixed), ratio = data.getStat(percent);
+        return Math.max(0, flat == null ? 0 : flat)
+                + (long) maximum * Math.max(0, ratio == null ? 0 : ratio) / 100;
+    }
+
+    public ShopResult buy(CharacterState state, int itemId, int quantity, int unitPrice) {
+        synchronized (state) {
+            if (versionGate.decide(state) != VersionDecision.ALLOW || quantity <= 0
+                    || quantity > Short.MAX_VALUE || unitPrice <= 0 || gameData.item(itemId) == null)
+                return ShopResult.INVALID;
+            long cost = (long) quantity * unitPrice;
+            if (cost > state.getMeso()) return ShopResult.NO_MONEY;
+            if (!giveItem(state, itemId, quantity)) return ShopResult.NO_SPACE;
+            state.setMeso(state.getMeso() - (int) cost);
+            return ShopResult.SUCCESS;
+        }
+    }
+
+    public ShopResult sell(CharacterState state, byte inventoryType, short slot, int itemId, int quantity) {
+        synchronized (state) {
+            TradeItemSnapshot item = snapshotTradeItem(state, inventoryType, slot, quantity);
+            ItemData data = gameData.item(itemId);
+            if (item == null || item.itemId() != itemId || data == null || data.isTradeBlock()
+                    || data.getPrice() < 0 || item.cashId() != 0 || item.petId() != 0
+                    || item.flag() != 0 || inventoryType == 5) return ShopResult.INVALID;
+            long proceeds = (long) data.getPrice() * quantity;
+            if (proceeds + state.getMeso() > Integer.MAX_VALUE) return ShopResult.INVALID;
+            if (!takeTradeItems(state, List.of(item))) return ShopResult.INVALID;
+            state.setMeso((int) (state.getMeso() + proceeds));
+            return ShopResult.SUCCESS;
+        }
+    }
+
     /** 单槽堆叠默认上限（v83 无 slotMax 数据的物品）。 */
     public static final int DEFAULT_SLOT_MAX = 100;
 
@@ -91,6 +145,18 @@ public final class ItemSystem {
     /** 持有数量（跨背包类型合计）。 */
     public int countItem(CharacterState state, int itemId) {
         return state.getItemCount(itemId);
+    }
+
+    public boolean moveItem(CharacterState state, byte type, short source, short target, int quantity) {
+        if (versionGate.decide(state) != VersionDecision.ALLOW) return false;
+        synchronized (state) {
+            TradeItemSnapshot snapshot = state.snapshotTradeItem(type, source, quantity);
+            if (snapshot == null) return false;
+            ItemData data = gameData.item(snapshot.itemId());
+            if (data == null) return false;
+            int slotMax = snapshot.equip() != null ? 1 : Math.min(Short.MAX_VALUE, data.getSlotMax());
+            return state.moveInventoryItem(type, source, target, quantity, slotMax);
+        }
     }
 
     /** 读取指定背包槽位的精确交易快照。 */

@@ -6,18 +6,18 @@ import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.AccountAdminRoleRepository;
-import org.gms.data.repo.AdminOperationAuditRepository;
-import org.gms.data.repo.AdminRoleRepository;
-import org.gms.data.repo.AdminSessionRepository;
-import org.gms.data.repo.ApiKeyRepository;
-import org.gms.data.repo.PointAccountRepository;
-import org.gms.data.repo.PointTransactionRepository;
-import org.gms.data.repo.SubscriptionPlanRepository;
-import org.gms.data.repo.ApiRequestAuditRepository;
-import org.gms.data.repo.ToolExecutionAuditRepository;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.AccountAdminRoleRepository;
+import org.gms.persistence.repo.AdminOperationAuditRepository;
+import org.gms.persistence.repo.AdminRoleRepository;
+import org.gms.persistence.repo.AdminSessionRepository;
+import org.gms.persistence.repo.ApiKeyRepository;
+import org.gms.persistence.repo.PointAccountRepository;
+import org.gms.persistence.repo.PointTransactionRepository;
+import org.gms.persistence.repo.SubscriptionPlanRepository;
+import org.gms.persistence.repo.ApiRequestAuditRepository;
+import org.gms.persistence.repo.ToolExecutionAuditRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.event.EventBus;
 import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.httpapi.docs.PublicApiContractService;
@@ -35,7 +35,7 @@ import org.gms.httpapi.application.admin.AdminApiService;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.httpapi.capability.ToolCatalogService;
 import org.gms.httpapi.execution.OnlinePlayerPageService;
-import org.gms.httpapi.execution.PlayerInventoryTool;
+import org.gms.httpapi.execution.CharacterInventoryTool;
 import org.gms.httpapi.execution.ServerHealthTool;
 import org.gms.httpapi.execution.ToolExecutionService;
 import org.gms.observability.Metrics;
@@ -82,8 +82,8 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
-    public AdminApiService adminApiService(AccountRepository accountRepository,
-                                           CharacterRepository characterRepository,
+    public AdminApiService adminApiService(GameAccountRepository accountRepository,
+                                           PlayerCharacterRepository characterRepository,
                                            AdminService adminService,
                                            OnlinePlayerMirror mirror) {
         return new AdminApiService(accountRepository, characterRepository, adminService, mirror);
@@ -172,16 +172,16 @@ public class HttpApiConfig {
 
     @Bean
     @Singleton
-    public PlayerInventoryTool playerInventoryTool(AdminService adminService,
+    public CharacterInventoryTool playerInventoryTool(AdminService adminService,
                                                    ServerIdentity serverIdentity) {
-        return new PlayerInventoryTool(adminService, serverIdentity);
+        return new CharacterInventoryTool(adminService, serverIdentity);
     }
 
     @Bean
     @Singleton
     public ToolExecutionService toolExecutionService(
             ToolCatalogService catalogService, ServerHealthTool healthTool,
-            OnlinePlayerPageService onlineTool, PlayerInventoryTool inventoryTool,
+            OnlinePlayerPageService onlineTool, CharacterInventoryTool inventoryTool,
             ToolExecutionAuditRepository auditRepository,
             ApiRateLimiter rateLimiter, Metrics metrics, ServerIdentity serverIdentity) {
         return new ToolExecutionService(catalogService, healthTool, onlineTool, inventoryTool,
@@ -192,7 +192,7 @@ public class HttpApiConfig {
     @Singleton
     @Context
     public AdminSessionService adminSessionService(
-            AccountRepository accountRepository,
+            GameAccountRepository accountRepository,
             AdminRoleRepository adminRoleRepository,
             AccountAdminRoleRepository accountAdminRoleRepository,
             AdminSessionRepository adminSessionRepository,

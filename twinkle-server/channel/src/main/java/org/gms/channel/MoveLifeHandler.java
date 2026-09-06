@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.lease.ControllerLeaseService;
 import org.gms.domain.game.lease.LeaseOwner;
 import org.gms.domain.game.map.MapleMap;
@@ -46,7 +46,7 @@ public final class MoveLifeHandler implements PacketHandler {
             session.close(I18n.message("error.monster.move.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.monster.move.not_in_map"));
             return;

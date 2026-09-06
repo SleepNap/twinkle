@@ -1,4 +1,7 @@
 package org.gms.net.netty.internal;
+import org.gms.service.intercoord.SharedStateService;
+import org.gms.service.intercoord.ChannelDirectoryService;
+import org.gms.service.intercoord.PlayerPresenceService;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
@@ -66,7 +69,7 @@ public final class IntercoordRpcDispatcher {
                 yield "null";
             }
             case "presence" -> {
-                Optional<IntercoordService.PlayerPresence> r = intercoord.presence(longArg(args, 0));
+                Optional<PlayerPresenceService.PlayerPresence> r = intercoord.presence(longArg(args, 0));
                 yield r.map(JsonCodec::encode).orElse("null");
             }
             case "locate" -> {
@@ -78,7 +81,12 @@ public final class IntercoordRpcDispatcher {
             case "onlineInWorld" -> String.valueOf(intercoord.onlineInWorld(intArg(args, 0)));
             // ---- 频道注册 ----
             case "registerChannel" -> {
-                intercoord.registerChannel(intArg(args, 0), strArg(args, 1), intArg(args, 2), intArg(args, 3));
+                if (args != null && args.length > 4) {
+                    intercoord.registerChannel(intArg(args, 0), strArg(args, 1), intArg(args, 2),
+                            intArg(args, 3), strArg(args, 4));
+                } else {
+                    intercoord.registerChannel(intArg(args, 0), strArg(args, 1), intArg(args, 2), intArg(args, 3));
+                }
                 yield "null";
             }
             case "heartbeatChannel" -> {
@@ -86,16 +94,17 @@ public final class IntercoordRpcDispatcher {
                 yield "null";
             }
             case "channel" -> {
-                Optional<IntercoordService.ChannelInfo> r = intercoord.channel(intArg(args, 0));
+                Optional<ChannelDirectoryService.ChannelInfo> r = intercoord.channel(intArg(args, 0));
                 yield r.map(JsonCodec::encode).orElse("null");
             }
             case "channels" -> JsonCodec.encode(intercoord.channels());
             // ---- 单一属主存储 ----
             case "read" -> {
-                Optional<IntercoordService.StoreEntry> r = intercoord.read(strArg(args, 0));
+                Optional<SharedStateService.StoreEntry> r = intercoord.read(strArg(args, 0));
                 yield r.map(JsonCodec::encode).orElse("null");
             }
-            case "write" -> String.valueOf(intercoord.write(strArg(args, 0), objArg(args, 1), longArg(args, 2)));
+            case "write" -> String.valueOf(intercoord.write(strArg(args, 0),
+                    JsonCodec.decode(args[1], SharedStateService.StoreValue.class.getName()), longArg(args, 2)));
             case "increment" -> String.valueOf(intercoord.increment(strArg(args, 0), longArg(args, 1)));
             case "storeSnapshot" -> JsonCodec.encode(intercoord.storeSnapshot());
             default -> throw new IllegalArgumentException(I18n.message("error.rpc.unknown_method", method));
@@ -124,8 +133,8 @@ public final class IntercoordRpcDispatcher {
         return args == null || i >= args.length ? 0L : JsonCodec.decode(args[i], Long.class.getName());
     }
 
-    private static IntercoordService.PlayerActivity playerActivityArg(String[] args, int i) {
-        return JsonCodec.decode(args[i], IntercoordService.PlayerActivity.class.getName());
+    private static PlayerPresenceService.PlayerActivity playerActivityArg(String[] args, int i) {
+        return JsonCodec.decode(args[i], PlayerPresenceService.PlayerActivity.class.getName());
     }
 
     /** 单一属主存储的 value 是任意 Object：保持 JSON 字符串（跨进程不重建原类型，读端按需解析）。 */

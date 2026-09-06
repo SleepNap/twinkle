@@ -1,8 +1,8 @@
 package org.gms.httpapi.auth;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.ApiKeyRecord;
-import org.gms.data.repo.ApiKeyRepository;
+import org.gms.persistence.entity.ApiKeyRecord;
+import org.gms.persistence.repo.ApiKeyRepository;
 import org.gms.httpapi.identity.ServerIdentity;
 import org.gms.i18n.I18n;
 

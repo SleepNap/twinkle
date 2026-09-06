@@ -48,6 +48,8 @@ public final class CoordinatorFrameRouter {
     /** 每连接注册的帧处理入口（InternalServer connectionHandler 调用）。 */
     public Consumer<InternalConnection> connectionHandler() {
         return conn -> {
+            conn.addCloseListener(() -> registry.unregister(conn)
+                    .forEach(intercoord::unregisterChannel));
             conn.onFrame(frame -> handleFrame(conn, frame));
         };
     }
@@ -98,9 +100,10 @@ public final class CoordinatorFrameRouter {
                     sendRpcError(conn, frame.messageId(), I18n.message("error.rpc.target_channel_unconnected", channelId));
                     return;
                 }
-                // 转发（method 去掉前缀，保留原 messageId 供响应关联）；记住来源连接
+                // method 对旧 worker 保持无前缀；目标频道作为显式字段传递给多频道 worker。
                 String innerMethod = req.method().substring(colon + 1);
-                InternalProtocol.RpcRequest inner = new InternalProtocol.RpcRequest(innerMethod, req.args());
+                InternalProtocol.RpcRequest inner = new InternalProtocol.RpcRequest(
+                        innerMethod, req.args(), channelId);
                 rpcOrigins.put(frame.messageId(), conn);
                 target.send(new DefaultInternalFrame(InternalFrame.MessageType.RPC,
                         frame.messageId(), JsonCodec.encode(inner)));
@@ -141,8 +144,14 @@ public final class CoordinatorFrameRouter {
             // 注册表里有频道连接时，把已有频道信息回给管理进程（admin 查询 channels 用）
             log.info(I18n.message("log.coordinator.admin_registered"), registry.channelsSnapshot().size());
         } else {
-            registry.registerChannel(reg.channelId(), reg.host(), reg.port(), conn);
-            intercoord.registerChannel(reg.channelId(), reg.host(), reg.port(), reg.onlineCount());
+            try {
+                registry.registerChannel(reg.channelId(), reg.host(), reg.port(), conn);
+                intercoord.registerChannel(reg.channelId(), reg.host(), reg.port(), reg.onlineCount(), reg.workerId());
+            } catch (RuntimeException conflict) {
+                log.error("Rejected channel registration: channel={} worker={}",
+                        reg.channelId(), reg.workerId(), conflict);
+                conn.close();
+            }
         }
     }
 
@@ -193,8 +202,7 @@ public final class CoordinatorFrameRouter {
         }
         // target = * → 群发所有远端频道（管理进程已本地派发）
         if (MessageTargets.BROADCAST.equals(target)) {
-            Map<Integer, InternalConnection> all = registry.channelsSnapshot();
-            all.values().forEach(conn -> forwardEvent(conn, event));
+            registry.workerConnectionsSnapshot().forEach(conn -> forwardEvent(conn, event));
             return;
         }
         // 其它 target（如 online-player-events）→ 管理进程已本地派发（架构 4.6.2 管理进程=coordinator）。

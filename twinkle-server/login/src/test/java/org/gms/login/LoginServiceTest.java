@@ -1,9 +1,9 @@
 package org.gms.login;
 
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.junit.jupiter.api.Test;
 import org.mindrot.jbcrypt.BCrypt;
 
@@ -21,45 +21,45 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LoginServiceTest {
 
     /** 内存仓库替身（真实实现走 MyBatis-Flex，接口化便于聚焦校验逻辑）。 */
-    private static final class StubAccountRepository implements AccountRepository {
-        final Map<String, Account> byName = new HashMap<>();
+    private static final class StubAccountRepository implements GameAccountRepository {
+        final Map<String, GameAccountRecord> byName = new HashMap<>();
 
         @Override
-        public Optional<Account> findByName(String name) {
+        public Optional<GameAccountRecord> findByName(String name) {
             return Optional.ofNullable(byName.get(name));
         }
 
         @Override
-        public void insert(Account account) {
+        public void insert(GameAccountRecord account) {
             byName.put(account.getName(), account);
         }
 
         @Override
-        public void update(Account account) {
+        public void update(GameAccountRecord account) {
             byName.put(account.getName(), account);
         }
 
         @Override
-        public Optional<Account> findById(Long id) {
+        public Optional<GameAccountRecord> findById(Long id) {
             return byName.values().stream().filter(account -> id.equals(account.getId())).findFirst();
         }
 
         @Override
-        public List<Account> findByNameLike(String query, int limit) {
+        public List<GameAccountRecord> findByNameLike(String query, int limit) {
             return List.of();
         }
     }
 
-    private static final class StubCharacterRepository implements CharacterRepository {
-        final List<Character> characters = new java.util.ArrayList<>();
+    private static final class StubCharacterRepository implements PlayerCharacterRepository {
+        final List<PlayerCharacterRecord> characters = new java.util.ArrayList<>();
 
         @Override
-        public List<Character> findByAccount(int accountId, int world) {
+        public List<PlayerCharacterRecord> findByAccount(int accountId, int world) {
             return characters;
         }
 
         @Override
-        public java.util.Optional<Character> findById(long id) {
+        public java.util.Optional<PlayerCharacterRecord> findById(long id) {
             return characters.stream().filter(c -> c.getId() != null && c.getId() == id).findFirst();
         }
 
@@ -69,18 +69,18 @@ class LoginServiceTest {
         }
 
         @Override
-        public void insert(Character chr) {
+        public void insert(PlayerCharacterRecord chr) {
             characters.add(chr);
         }
 
         @Override
-        public void save(Character chr) {
-            // 测试桩：M5 起 CharacterRepository 新增 save（L4 增量 FLUSH），登录测试不落库
+        public void save(PlayerCharacterRecord chr) {
+            // 测试桩：M5 起 PlayerCharacterRepository 新增 save（L4 增量 FLUSH），登录测试不落库
         }
     }
 
-    private static Account account(String name, String rawPassword, int banned) {
-        Account a = new Account();
+    private static GameAccountRecord account(String name, String rawPassword, int banned) {
+        GameAccountRecord a = new GameAccountRecord();
         a.setId(1L);
         a.setName(name);
         a.setPassword(BCrypt.hashpw(rawPassword, BCrypt.gensalt()));
@@ -113,7 +113,7 @@ class LoginServiceTest {
     @Test
     public void authenticate_validTemporaryPassword_succeedsOnceWithoutChangingPlayerPassword() {
         StubAccountRepository repo = new StubAccountRepository();
-        Account account = account("alice", "secret", 0);
+        GameAccountRecord account = account("alice", "secret", 0);
         account.setTemporaryPasswordHash(BCrypt.hashpw("GM-temp-42", BCrypt.gensalt()));
         account.setTemporaryPasswordExpiresAt(Instant.now().plusSeconds(300).toString());
         repo.byName.put("alice", account);
@@ -129,7 +129,7 @@ class LoginServiceTest {
     @Test
     public void authenticate_expiredTemporaryPassword_returns4() {
         StubAccountRepository repo = new StubAccountRepository();
-        Account account = account("alice", "secret", 0);
+        GameAccountRecord account = account("alice", "secret", 0);
         account.setTemporaryPasswordHash(BCrypt.hashpw("GM-temp-42", BCrypt.gensalt()));
         account.setTemporaryPasswordExpiresAt(Instant.now().minusSeconds(1).toString());
         repo.byName.put("alice", account);
@@ -159,7 +159,7 @@ class LoginServiceTest {
     @Test
     void authenticate_missingStoredHash_returns4() {
         StubAccountRepository repo = new StubAccountRepository();
-        Account a = account("carol", "pw", 0);
+        GameAccountRecord a = account("carol", "pw", 0);
         a.setPassword("");
         repo.byName.put("carol", a);
         LoginService service = new LoginService(repo, new StubCharacterRepository());
@@ -171,7 +171,7 @@ class LoginServiceTest {
     void charactersFor_delegatesToRepository() {
         StubAccountRepository accRepo = new StubAccountRepository();
         StubCharacterRepository charRepo = new StubCharacterRepository();
-        charRepo.characters.add(new Character());
+        charRepo.characters.add(new PlayerCharacterRecord());
         LoginService service = new LoginService(accRepo, charRepo);
 
         assertThat(service.charactersFor(1L, 0)).hasSize(1);

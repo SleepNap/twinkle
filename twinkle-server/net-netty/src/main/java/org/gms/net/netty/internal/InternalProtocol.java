@@ -18,7 +18,11 @@ public final class InternalProtocol {
     }
 
     /** REGISTER 帧负载：身份上报（频道进程 channelId>0；管理进程 admin=true、channelId=0）。 */
-    public record RegisterPayload(int channelId, String host, int port, boolean admin, int onlineCount) {
+    public record RegisterPayload(int channelId, String host, int port, boolean admin, int onlineCount,
+                                  String workerId) {
+        public RegisterPayload(int channelId, String host, int port, boolean admin, int onlineCount) {
+            this(channelId, host, port, admin, onlineCount, "");
+        }
     }
 
     /** HEARTBEAT 帧负载：频道心跳续期。 */
@@ -36,7 +40,10 @@ public final class InternalProtocol {
     }
 
     /** RPC 请求负载：方法名 + 参数数组（每参数已 JSON 序列化为字符串，避免类型信息丢失）。 */
-    public record RpcRequest(String method, String[] args) {
+    public record RpcRequest(String method, String[] args, Integer targetChannelId) {
+        public RpcRequest(String method, String[] args) {
+            this(method, args, null);
+        }
     }
 
     /** RPC 响应负载：ok + 值（JSON 字符串，null = 无值/empty Optional）/错误信息。 */

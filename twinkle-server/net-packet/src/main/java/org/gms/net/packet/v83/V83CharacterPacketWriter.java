@@ -42,7 +42,7 @@ public final class V83CharacterPacketWriter {
         packet.writeShort(stats.mp());
         packet.writeShort(stats.maxMp());
         packet.writeShort(stats.ap());
-        packet.writeShort(firstRemainingSp(stats.sp()));
+        V83SkillPoints.write(packet, stats.job(), stats.sp());
         packet.writeInt((int) stats.exp());
         packet.writeShort(stats.fame());
         packet.writeInt((int) stats.gachaExp());

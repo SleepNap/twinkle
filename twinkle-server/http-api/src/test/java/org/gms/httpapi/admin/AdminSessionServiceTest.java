@@ -1,13 +1,13 @@
 package org.gms.httpapi.admin;
 
-import org.gms.data.entity.Account;
-import org.gms.data.entity.AccountAdminRole;
-import org.gms.data.entity.AdminRole;
-import org.gms.data.entity.AdminSession;
-import org.gms.data.repo.AccountAdminRoleRepository;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.AdminRoleRepository;
-import org.gms.data.repo.AdminSessionRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.AccountAdminRole;
+import org.gms.persistence.entity.AdminRole;
+import org.gms.persistence.entity.AdminSession;
+import org.gms.persistence.repo.AccountAdminRoleRepository;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.AdminRoleRepository;
+import org.gms.persistence.repo.AdminSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.mindrot.jbcrypt.BCrypt;
 
@@ -97,7 +97,7 @@ class AdminSessionServiceTest {
 
         f.service.initializeBuiltInAdmin();
 
-        Account account = f.accounts.findByName("admin").orElseThrow();
+        GameAccountRecord account = f.accounts.findByName("admin").orElseThrow();
         assertThat(BCrypt.checkpw("admin", account.getPassword())).isTrue();
         assertThat(f.accountRoles.findByAccountId(account.getId())).hasSize(1);
         assertThat(f.service.login("admin", "admin", "127.0.0.1")).isPresent();
@@ -112,7 +112,7 @@ class AdminSessionServiceTest {
         f.service.initializeBuiltInAdmin();
         f.service.initializeBuiltInAdmin();
 
-        Account account = f.accounts.findByName("admin").orElseThrow();
+        GameAccountRecord account = f.accounts.findByName("admin").orElseThrow();
         assertThat(BCrypt.checkpw("changed-password", account.getPassword())).isTrue();
         assertThat(f.accountRoles.findByAccountId(account.getId())).hasSize(1);
     }
@@ -126,7 +126,7 @@ class AdminSessionServiceTest {
                 sessions, 86400L, new SecureRandom());
 
         void account(String name, String password) {
-            Account a = new Account();
+            GameAccountRecord a = new GameAccountRecord();
             a.setId((long) accounts.byName.size() + 1);
             a.setName(name);
             a.setPassword(BCrypt.hashpw(password, BCrypt.gensalt()));
@@ -144,7 +144,7 @@ class AdminSessionServiceTest {
         }
 
         void assign(String accountName, Long roleId) {
-            Account a = accounts.byName.get(accountName);
+            GameAccountRecord a = accounts.byName.get(accountName);
             AccountAdminRole relation = new AccountAdminRole();
             relation.setAccountId(a.getId());
             relation.setRoleId(roleId);
@@ -152,21 +152,21 @@ class AdminSessionServiceTest {
         }
     }
 
-    private static final class StubAccountRepo implements AccountRepository {
-        final Map<String, Account> byName = new HashMap<>();
+    private static final class StubAccountRepo implements GameAccountRepository {
+        final Map<String, GameAccountRecord> byName = new HashMap<>();
 
         @Override
-        public Optional<Account> findByName(String name) {
+        public Optional<GameAccountRecord> findByName(String name) {
             return Optional.ofNullable(byName.get(name));
         }
 
         @Override
-        public Optional<Account> findById(Long id) {
+        public Optional<GameAccountRecord> findById(Long id) {
             return byName.values().stream().filter(a -> id.equals(a.getId())).findFirst();
         }
 
         @Override
-        public void insert(Account account) {
+        public void insert(GameAccountRecord account) {
             if (account.getId() == null) {
                 account.setId((long) byName.size() + 1);
             }
@@ -174,12 +174,12 @@ class AdminSessionServiceTest {
         }
 
         @Override
-        public void update(Account account) {
+        public void update(GameAccountRecord account) {
             byName.put(account.getName(), account);
         }
 
         @Override
-        public List<Account> findByNameLike(String query, int limit) {
+        public List<GameAccountRecord> findByNameLike(String query, int limit) {
             return List.of();
         }
     }

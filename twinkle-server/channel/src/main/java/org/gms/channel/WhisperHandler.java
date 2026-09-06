@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.EventBus;
 import org.gms.i18n.I18n;
 import org.gms.message.MessageTargets;
@@ -49,7 +49,7 @@ public final class WhisperHandler implements PacketHandler {
             session.close(I18n.message("error.whisper.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.whisper.not_in_map"));
             return;
@@ -138,7 +138,7 @@ public final class WhisperHandler implements PacketHandler {
     /** 按角色名解析 id：先查本频道会话表（M4 单频道：在线玩家都在本频道会话表）。 */
     private Long resolvePlayerIdByName(String name) {
         for (PacketSession s : sessions.all()) {
-            Character c = s.getAttr("character");
+            PlayerCharacter c = s.getAttr("character");
             if (c != null && c.getName().equals(name)) {
                 return c.getId();
             }

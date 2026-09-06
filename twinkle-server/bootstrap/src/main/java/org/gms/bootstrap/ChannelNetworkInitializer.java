@@ -1,14 +1,9 @@
 package org.gms.bootstrap;
 
 import io.micronaut.context.annotation.Context;
-import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
-import org.gms.i18n.I18n;
-import org.gms.channel.ChannelHandlerRegistrar;
-import org.gms.channel.ChannelServer;
-import org.gms.net.packet.HandlerRegistry;
 import org.gms.role.ChannelProcessCondition;
 
 /**
@@ -27,13 +22,7 @@ import org.gms.role.ChannelProcessCondition;
 public final class ChannelNetworkInitializer {
 
 
-    public ChannelNetworkInitializer(HandlerRegistry registry,
-                                     ChannelHandlerRegistrar channelHandlers,
-                                     ChannelServer channelServer,
-                                     @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
-                                     @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int port) {
-        channelHandlers.register(registry);
-        channelServer.start(port);
-        log.info(I18n.message("log.bootstrap.channel_started"), channelId, channelServer.boundPort());
+    public ChannelNetworkInitializer(ChannelWorker worker) {
+        worker.startAll();
     }
 }

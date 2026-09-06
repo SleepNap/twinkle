@@ -15,7 +15,7 @@ class LoggingConfigurationTest {
             String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
 
             assertThat(xml).contains("TWINKLE_SQL_LOG_LEVEL:-INFO");
-            assertThat(xml).contains("name=\"org.gms.data.mapper\"");
+            assertThat(xml).contains("name=\"org.gms.persistence.mapper\"");
             assertThat(xml).contains("level=\"${SQL_LOG_LEVEL}\"");
         }
     }

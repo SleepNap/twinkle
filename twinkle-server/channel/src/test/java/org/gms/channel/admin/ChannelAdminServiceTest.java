@@ -1,16 +1,16 @@
 package org.gms.channel.admin;
 
-import org.gms.channel.CharacterLoader;
+import org.gms.channel.PlayerCharacterAssembler;
 import org.gms.channel.ChannelMapManager;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.channel.persist.RestartService;
-import org.gms.data.SimpleDriverDataSource;
-import org.gms.data.mapper.CharacterMapper;
-import org.gms.data.migrate.MigrationRunner;
-import org.gms.data.repo.FlexCharacterRepository;
-import org.gms.domain.game.Character;
+import org.gms.persistence.SimpleDriverDataSource;
+import org.gms.persistence.mapper.PlayerCharacterRecordMapper;
+import org.gms.persistence.migrate.MigrationRunner;
+import org.gms.persistence.repo.FlexPlayerCharacterRepository;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.PetItem;
@@ -60,13 +60,13 @@ class ChannelAdminServiceTest {
         com.mybatisflex.core.MybatisFlexBootstrap flex = new com.mybatisflex.core.MybatisFlexBootstrap();
         flex.setEnvironmentId("chadmin-" + dbPath);
         flex.setDataSource(ds);
-        flex.addMapper(CharacterMapper.class);
+        flex.addMapper(PlayerCharacterRecordMapper.class);
         flex.start();
-        CharacterMapper characterMapper = flex.getMapper(CharacterMapper.class);
+        PlayerCharacterRecordMapper characterMapper = flex.getMapper(PlayerCharacterRecordMapper.class);
 
         DefaultVersionGate versionGate = new DefaultVersionGate();
-        CharacterLoader loader = new CharacterLoader(versionGate);
-        FlexCharacterRepository repo = new FlexCharacterRepository(characterMapper);
+        PlayerCharacterAssembler loader = new PlayerCharacterAssembler(versionGate);
+        FlexPlayerCharacterRepository repo = new FlexPlayerCharacterRepository(characterMapper);
         CharacterSaveQueue saveQueue = new CharacterSaveQueue(repo, loader, players);
         GameTickLoop tickLoop = new GameTickLoop(5);
         EntityReloadCoordinator coordinator = new EntityReloadCoordinator();
@@ -89,7 +89,7 @@ class ChannelAdminServiceTest {
     @Test
     void inventorySnapshotProjectsOnlineMemoryStateWithoutLeakingDomainObjects() throws Exception {
         PlayerStorage players = new PlayerStorage();
-        Character character = new Character(1L);
+        PlayerCharacter character = new PlayerCharacter(1L);
         character.setId(42L);
         character.setName("Hero");
         Equip equip = new Equip(1_040_002);
@@ -106,7 +106,7 @@ class ChannelAdminServiceTest {
         players.add(character);
         ChannelAdminService admin = buildAdmin(players);
 
-        AdminService.PlayerInventory snapshot = admin.inventorySnapshot(42L);
+        AdminService.CharacterInventory snapshot = admin.inventorySnapshot(42L);
 
         assertThat(snapshot).isNotNull();
         assertThat(snapshot.characterId()).isEqualTo(42L);
@@ -210,14 +210,14 @@ class ChannelAdminServiceTest {
         com.mybatisflex.core.MybatisFlexBootstrap flex = new com.mybatisflex.core.MybatisFlexBootstrap();
         flex.setEnvironmentId("chadmin2-" + dbPath);
         flex.setDataSource(ds);
-        flex.addMapper(CharacterMapper.class);
+        flex.addMapper(PlayerCharacterRecordMapper.class);
         flex.start();
-        CharacterMapper characterMapper = flex.getMapper(CharacterMapper.class);
+        PlayerCharacterRecordMapper characterMapper = flex.getMapper(PlayerCharacterRecordMapper.class);
 
         DefaultVersionGate versionGate = new DefaultVersionGate();
-        CharacterLoader loader = new CharacterLoader(versionGate);
+        PlayerCharacterAssembler loader = new PlayerCharacterAssembler(versionGate);
         PlayerStorage players = new PlayerStorage();
-        FlexCharacterRepository repo = new FlexCharacterRepository(characterMapper);
+        FlexPlayerCharacterRepository repo = new FlexPlayerCharacterRepository(characterMapper);
         CharacterSaveQueue saveQueue = new CharacterSaveQueue(repo, loader, players);
         GameTickLoop tickLoop = new GameTickLoop(5);
         EntityReloadCoordinator coordinator = new EntityReloadCoordinator();

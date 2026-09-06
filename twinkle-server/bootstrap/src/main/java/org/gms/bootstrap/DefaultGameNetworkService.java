@@ -4,7 +4,6 @@ import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import lombok.extern.log4j.Log4j2;
-import org.gms.channel.ChannelServer;
 import org.gms.channel.persist.RestartService;
 import org.gms.i18n.I18n;
 import org.gms.net.netty.LoginServer;
@@ -12,6 +11,7 @@ import org.gms.role.ManagementProcessCondition;
 import org.gms.service.network.GameNetworkService;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** 管理 HTTP 与游戏 Netty 之间的生命周期边界；重启任务在虚拟线程执行，不阻塞 HTTP。 */
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class DefaultGameNetworkService implements GameNetworkService {
 
     private final Optional<LoginServer> loginServer;
-    private final Optional<ChannelServer> channelServer;
+    private final Optional<ChannelWorker> channelWorker;
     private final Optional<RestartService> restartService;
     private final int loginPort;
     private final int channelId;
@@ -31,13 +31,13 @@ public final class DefaultGameNetworkService implements GameNetworkService {
 
     public DefaultGameNetworkService(
             Optional<LoginServer> loginServer,
-            Optional<ChannelServer> channelServer,
+            Optional<ChannelWorker> channelWorker,
             Optional<RestartService> restartService,
             @Property(name = "twinkle.net.login.port", defaultValue = "8484") int loginPort,
             @Property(name = "twinkle.net.channel.id", defaultValue = "1") int channelId,
             @Property(name = "twinkle.net.channel.port", defaultValue = "8584") int channelPort) {
         this.loginServer = loginServer;
-        this.channelServer = channelServer;
+        this.channelWorker = channelWorker;
         this.restartService = restartService;
         this.loginPort = loginPort;
         this.channelId = channelId;
@@ -57,13 +57,23 @@ public final class DefaultGameNetworkService implements GameNetworkService {
 
     @Override
     public Status status() {
+        List<ChannelEndpointStatus> channels = channelWorker.stream()
+                .flatMap(worker -> worker.runtimes().stream())
+                .map(runtime -> new ChannelEndpointStatus(runtime.channelId(), runtime.host(),
+                        runtime.server().isRunning() ? runtime.server().boundPort() : runtime.port(),
+                        runtime.server().isRunning()))
+                .sorted(java.util.Comparator.comparingInt(ChannelEndpointStatus::channelId))
+                .toList();
+        ChannelEndpointStatus first = channels.stream().findFirst()
+                .orElse(new ChannelEndpointStatus(channelId, "", channelPort, false));
         return new Status(
                 phase.get(),
                 loginServer.map(LoginServer::isRunning).orElse(false),
                 loginPort,
-                channelServer.map(ChannelServer::isRunning).orElse(false),
-                channelId,
-                channelPort,
+                channels.stream().anyMatch(ChannelEndpointStatus::running),
+                first.channelId(),
+                first.port(),
+                channels,
                 lastError);
     }
 
@@ -71,11 +81,11 @@ public final class DefaultGameNetworkService implements GameNetworkService {
         log.info(I18n.message("log.network.restart_requested"));
         try {
             loginServer.ifPresent(LoginServer::stop);
-            if (channelServer.isPresent()) {
+            if (channelWorker.isPresent()) {
                 RestartService coordinator = restartService.orElseThrow(() ->
                         new IllegalStateException(I18n.message("error.restart.coordinator_missing")));
-                ChannelServer server = channelServer.orElseThrow();
-                coordinator.restartNetwork(server::stop, () -> server.start(channelPort));
+                ChannelWorker worker = channelWorker.orElseThrow();
+                coordinator.restartNetwork(worker::stopAll, worker::startAll);
             }
             loginServer.ifPresent(server -> server.start(loginPort));
             phase.set(Phase.RUNNING);
@@ -89,9 +99,9 @@ public final class DefaultGameNetworkService implements GameNetworkService {
     }
 
     private void restoreListeningSockets() {
-        channelServer.filter(server -> !server.isRunning()).ifPresent(server -> {
+        channelWorker.filter(worker -> !worker.anyRunning()).ifPresent(worker -> {
             try {
-                server.start(channelPort);
+                worker.startAll();
             } catch (RuntimeException restoreError) {
                 log.error(I18n.message("log.network.restore_failed"), "channel", restoreError);
             }

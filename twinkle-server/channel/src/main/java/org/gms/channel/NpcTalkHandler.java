@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.script.ConversationScript;
 import org.gms.domain.script.ScriptManager;
 import org.gms.i18n.I18n;
@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * NPC 对话发起（RecvOpcode.NPC_TALK）。
  *
- * <p>v83 收包 = {@code int oid}（地图对象 id，此处直接作 npcId 用）。流程：
+ * <p>v83 收包 = {@code int oid}，从当前地图查真实 NPC，再解析其模板 id。流程：
  * 打开对话脚本（key {@code "nps/{npcId}"}）→ 会话与宿主存 session attr →
  * invoke {@code start()}。经典脚本走 start+action，nextlevel 脚本走 start+levelXxx。
  *
@@ -32,11 +32,20 @@ public final class NpcTalkHandler implements PacketHandler {
     private final ScriptManager scriptManager;
     private final ItemSystem itemSystem;
     private final QuestSystem questSystem;
+    private final MapTransitionService transitions;
+    private final NpcShopHandler shops;
 
     public NpcTalkHandler(ScriptManager scriptManager, ItemSystem itemSystem, QuestSystem questSystem) {
+        this(scriptManager, itemSystem, questSystem, null, null);
+    }
+
+    public NpcTalkHandler(ScriptManager scriptManager, ItemSystem itemSystem, QuestSystem questSystem,
+                          MapTransitionService transitions, NpcShopHandler shops) {
         this.scriptManager = scriptManager;
         this.itemSystem = itemSystem;
         this.questSystem = questSystem;
+        this.transitions = transitions;
+        this.shops = shops;
     }
 
     @Override
@@ -45,7 +54,7 @@ public final class NpcTalkHandler implements PacketHandler {
             session.close(I18n.message("error.npc.talk.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null) {
             session.close(I18n.message("error.npc.talk.not_in_map"));
             return;
@@ -53,12 +62,23 @@ public final class NpcTalkHandler implements PacketHandler {
         if (session.getAttr("npcConversation") != null) {
             return;     // 已在对话中，忽略重复
         }
-        int npcId = packet.readInt();
+        if (!GameplaySession.canAct(session, chr) || packet.available() < 4) {
+            session.send(GameplayPackets.enableActions());
+            return;
+        }
+        var npc = chr.getMapObject().getNpc(packet.readInt());
+        if (npc == null || !GameplaySession.near(chr, npc.x(), npc.y(), 300)) {
+            session.send(GameplayPackets.enableActions());
+            return;
+        }
+        int npcId = npc.templateId();
+        if (shops != null && shops.open(session, npc)) return;
         NpcConversationHost host = new NpcConversationHost(session, chr, npcId,
-                itemSystem, questSystem, () -> closeConversation(session));
+                itemSystem, questSystem, () -> closeConversation(session), transitions);
         ConversationScript script = scriptManager.openConversation("nps/" + npcId, Map.of("cm", host));
         if (script == null) {
             log.warn(I18n.message("log.npc.script_missing"), npcId);
+            session.send(GameplayPackets.enableActions());
             return;
         }
         session.setAttr("npcConversation", script);

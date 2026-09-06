@@ -15,6 +15,7 @@
     <description>游戏对象模型（Character/MapleMap/Item，纯数据 + 索引/服务）。稳定层，游戏对象不进容器</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- 依赖核心底座：热重载契约（Versioned / VersionGate）等稳定接口 -->
         <dependency>
             <groupId>org.gms</groupId>

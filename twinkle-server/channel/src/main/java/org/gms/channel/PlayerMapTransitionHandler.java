@@ -1,7 +1,7 @@
 package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
@@ -24,7 +24,9 @@ public final class PlayerMapTransitionHandler implements PacketHandler {
             session.close(I18n.message("error.map_transition.outside_stage"));
             return;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
+        if (chr == null) return;
+        session.setAttr("mapTransition", null);
         log.info(I18n.message("log.map_transition.complete"), chr.getName(), chr.getId());
     }
 }

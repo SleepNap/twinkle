@@ -9,7 +9,7 @@ import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
-import org.gms.data.config.DbConfigFacade;
+import org.gms.persistence.config.DbConfigFacade;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.httpapi.application.admin.AdminApiService;

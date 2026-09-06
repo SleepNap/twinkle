@@ -15,6 +15,9 @@
     <description>唯一 main：读 --profile 装配角色模块</description>
 
     <dependencies>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-core</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-slf4j2-impl</artifactId><scope>runtime</scope></dependency>
         <!-- 公共底座 -->
         <dependency>
             <groupId>org.gms</groupId>
@@ -30,11 +33,7 @@
         </dependency>
         <dependency>
             <groupId>org.gms</groupId>
-            <artifactId>twinkle-data</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.gms</groupId>
-            <artifactId>twinkle-db-dialect</artifactId>
+            <artifactId>twinkle-persistence</artifactId>
         </dependency>
         <dependency>
             <groupId>org.gms</groupId>
@@ -70,10 +69,6 @@
         </dependency>
         <dependency>
             <groupId>org.gms</groupId>
-            <artifactId>twinkle-admin</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.gms</groupId>
             <artifactId>twinkle-http-api</artifactId>
         </dependency>
         <!-- Micronaut 运行时入口 -->
@@ -93,4 +88,53 @@
             <scope>runtime</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- packaging/build-release.ps1 先构建 Vite，再把生产前端嵌入同一份可执行 JAR。 -->
+            <resource>
+                <directory>${project.basedir}/../../twinkle-web/dist</directory>
+                <targetPath>public</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- 所有角色共用同一份可执行制品；多进程来自多次启动，不是打出多份角色 jar。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <outputFile>${project.parent.basedir}/target/twinkle-server.jar</outputFile>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.gms.bootstrap.TwinkleApplication</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

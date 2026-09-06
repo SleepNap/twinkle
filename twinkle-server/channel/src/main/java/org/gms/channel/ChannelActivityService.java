@@ -1,11 +1,12 @@
 package org.gms.channel;
+import org.gms.service.intercoord.PlayerPresenceService;
 
 import org.gms.channel.admin.ChannelEventPublisher;
 import org.gms.channel.persist.CharacterSaveQueue;
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
-import org.gms.service.intercoord.IntercoordService.PlayerActivity;
+import org.gms.service.intercoord.PlayerPresenceService.PlayerActivity;
 
 /**
  * 频道连接上的活动状态切换（北斗模式）。
@@ -46,7 +47,7 @@ public final class ChannelActivityService {
         if (session.stage() != SessionStage.IN_GAME) {
             return false;
         }
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr == null || sessions.get(chr.getId()) != session) {
             return false;
         }

@@ -52,7 +52,7 @@ public interface AdminService {
     }
 
     /** 频道内存真值投影；角色不在线时 {@link #inventorySnapshot(long)} 返回 {@code null}。 */
-    public record PlayerInventory(
+    public record CharacterInventory(
             long characterId, String name, long stateVersion, List<InventoryItemView> items) {
     }
 
@@ -71,8 +71,8 @@ public interface AdminService {
     ChannelSummary onlineSummary();
 
     /** 获取在线角色当前背包快照，不回退读取可能过期的数据库存档。 */
-    public default PlayerInventory inventorySnapshot(long characterId) {
-        return null;
+    public default CharacterInventory inventorySnapshot(long characterId) {
+        throw new UnsupportedOperationException("inventorySnapshot is not implemented");
     }
 
     /**
@@ -84,22 +84,22 @@ public interface AdminService {
 
     /** 可供控制台选择的收发包 opcode 目录、默认降噪项与强制敏感项。 */
     public default PacketTrace.Catalog packetTraceCatalog() {
-        return new PacketTrace.Catalog(List.of(), java.util.Set.of(), java.util.Set.of());
+        throw new UnsupportedOperationException("packetTraceCatalog is not implemented");
     }
 
     /** 为在线角色开启或重置临时封包监听；角色不在线返回 {@code null}。 */
     public default PacketTrace.Snapshot startPacketTrace(long characterId, PacketTrace.Config config) {
-        return null;
+        throw new UnsupportedOperationException("startPacketTrace is not implemented");
     }
 
     /** 读取在线角色的监听窗口；角色不在线或会话不支持监听时返回 {@code null}。 */
     public default PacketTrace.Snapshot packetTraceSnapshot(long characterId, long afterSequence, int limit) {
-        return null;
+        throw new UnsupportedOperationException("packetTraceSnapshot is not implemented");
     }
 
     /** 停止在线角色的监听但保留当前窗口；角色不在线返回 {@code null}。 */
     public default PacketTrace.Snapshot stopPacketTrace(long characterId) {
-        return null;
+        throw new UnsupportedOperationException("stopPacketTrace is not implemented");
     }
 
     // ---- M5 admin 控制台运维操作（架构 M5-1：运维操作经 service 接口，管理侧不得直踩游戏内存） ----

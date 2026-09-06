@@ -1,8 +1,8 @@
 package org.gms.httpapi.admin;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.AdminOperationAudit;
-import org.gms.data.repo.AdminOperationAuditRepository;
+import org.gms.persistence.entity.AdminOperationAudit;
+import org.gms.persistence.repo.AdminOperationAuditRepository;
 import org.gms.i18n.I18n;
 
 /** 管理操作不可抵赖审计。写失败不阻断业务响应，但记录错误日志供运维修复。 */

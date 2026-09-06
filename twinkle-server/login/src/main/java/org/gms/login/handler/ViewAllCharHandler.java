@@ -1,9 +1,9 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
-import org.gms.data.entity.InventoryItemEntity;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.entity.InventoryItemEntity;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
 import org.gms.i18n.I18n;
@@ -21,16 +21,18 @@ import java.util.Map;
  * <p>包结构：{@code byte worldCount + byte unknown}（M1 简化，客户端进此界面发本包）。
  * 回包两段：先 {@code showAllCharacter}（总览头：world 数 + 角色总数），
  * 再逐 world 发 {@code showAllCharacterInfo}（每个 world 的角色列表，viewall 布局）。
- * M1 单世界（world=0）。思路参考 BeiDou ViewAllCharHandler，实现自研。
+ * 当前进程提供一个可配置的稳定 world ID（不要求为 0）。思路参考 BeiDou ViewAllCharHandler，实现自研。
  */
 @Log4j2
 public final class ViewAllCharHandler implements PacketHandler {
 
 
     private final LoginService loginService;
+    private final int worldId;
 
-    public ViewAllCharHandler(LoginService loginService) {
+    public ViewAllCharHandler(LoginService loginService, int worldId) {
         this.loginService = loginService;
+        this.worldId = worldId;
     }
 
     @Override
@@ -39,15 +41,14 @@ public final class ViewAllCharHandler implements PacketHandler {
             session.close(I18n.message("error.view_all_char.outside_stage"));
             return;
         }
-        Account account = session.getAttr("account");
+        GameAccountRecord account = session.getAttr("account");
         if (account == null) {
             session.close(I18n.message("error.view_all_char.not_logged_in"));
             return;
         }
-        // M1 单世界：查 world=0 全部角色
-        List<Character> characters = loginService.charactersFor(account.getId(), 0);
+        List<PlayerCharacterRecord> characters = loginService.charactersFor(account.getId(), worldId);
         Map<Long, List<InventoryItemEntity>> equippedByChar = new java.util.HashMap<>();
-        for (Character c : characters) {
+        for (PlayerCharacterRecord c : characters) {
             equippedByChar.put(c.getId(), loginService.equippedItems(c.getId()));
         }
 
@@ -55,6 +56,6 @@ public final class ViewAllCharHandler implements PacketHandler {
         int totalChrs = characters.size();
         log.info(I18n.message("log.view_all_char.request"), account.getName(), totalChrs);
         session.send(LoginPacketFactory.showAllCharacter(totalWorlds, totalChrs));
-        session.send(LoginPacketFactory.showAllCharacterInfo(0, characters, equippedByChar));
+        session.send(LoginPacketFactory.showAllCharacterInfo(worldId, characters, equippedByChar));
     }
 }

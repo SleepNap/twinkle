@@ -1,7 +1,7 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
+import org.gms.persistence.entity.GameAccountRecord;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
 import org.gms.i18n.I18n;
@@ -43,7 +43,7 @@ public final class LoginPasswordHandler implements PacketHandler {
             session.send(LoginPacketFactory.loginStatusFailed(result.errorCode()));
             return;
         }
-        Account account = result.account();
+        GameAccountRecord account = result.account();
         session.setAttr("account", account);
         session.transition(SessionStage.AUTHED);
         log.info(I18n.message("log.login.success"), account.getName(), account.getId());

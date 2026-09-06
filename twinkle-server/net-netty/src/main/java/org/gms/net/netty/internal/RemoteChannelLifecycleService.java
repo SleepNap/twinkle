@@ -1,4 +1,5 @@
 package org.gms.net.netty.internal;
+import org.gms.service.intercoord.ChannelDirectoryService;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
@@ -34,8 +35,8 @@ public final class RemoteChannelLifecycleService implements ChannelLifecycleServ
 
     @Override
     public List<Status> statuses() {
-        List<IntercoordService.ChannelInfo> channels = intercoordService.channels().values().stream()
-                .sorted(Comparator.comparingInt(IntercoordService.ChannelInfo::channelId))
+        List<ChannelDirectoryService.ChannelInfo> channels = intercoordService.channels().values().stream()
+                .sorted(Comparator.comparingInt(ChannelDirectoryService.ChannelInfo::channelId))
                 .toList();
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<Status>> futures = channels.stream()
@@ -70,7 +71,7 @@ public final class RemoteChannelLifecycleService implements ChannelLifecycleServ
         return command(channelId, ChannelLifecycleRpcDispatcher.TERMINATE_METHOD, force);
     }
 
-    private Status status(IntercoordService.ChannelInfo info) {
+    private Status status(ChannelDirectoryService.ChannelInfo info) {
         InternalProtocol.RpcResponse response = rpc(info.channelId(),
                 ChannelLifecycleRpcDispatcher.STATUS_METHOD);
         if (response == null || !response.ok()) {
@@ -85,7 +86,7 @@ public final class RemoteChannelLifecycleService implements ChannelLifecycleServ
     }
 
     private CommandResult command(int channelId, String method, Object... arguments) {
-        IntercoordService.ChannelInfo info = intercoordService.channel(channelId).orElse(null);
+        ChannelDirectoryService.ChannelInfo info = intercoordService.channel(channelId).orElse(null);
         if (info == null) {
             return new CommandResult(false, new Status(channelId, "", 0, 0,
                     State.UNAVAILABLE, Topology.DISTRIBUTED, false,
@@ -108,7 +109,7 @@ public final class RemoteChannelLifecycleService implements ChannelLifecycleServ
         return new CommandResult(result.accepted(), merged);
     }
 
-    private Status unavailable(IntercoordService.ChannelInfo info, String error) {
+    private Status unavailable(ChannelDirectoryService.ChannelInfo info, String error) {
         return new Status(info.channelId(), info.host(), info.port(), info.onlineCount(),
                 State.UNAVAILABLE, Topology.DISTRIBUTED, false,
                 error == null || error.isBlank()

@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
@@ -23,7 +23,7 @@ public final class GeneralChatHandler implements PacketHandler {
             session.close(I18n.message("error.chat.outside_stage"));
             return;
         }
-        Character character = session.getAttr("character");
+        PlayerCharacter character = session.getAttr("character");
         if (character == null) {
             session.close(I18n.message("error.chat.not_in_map"));
             return;

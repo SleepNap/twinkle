@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **热更新、扩展性好的冒险岛后台（MapleStory v83 服务端）**。参考项目：北斗（`E:\LocalGit\GitHub\BeiDou-Server`，GPL，只作理解、禁止逐字复制）。
 
-**M0-M6 全部完成**（2026-08-09）：16 个 Maven 模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
+**M0-M6 全部完成**（2026-08-09）：当前已收敛为 13 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
 
 **Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、能力目录、审计日志、任务监控和 API 文档入口；配置热改、踢下线、按在线角色临时监听封包、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。封包监听支持收发方向、include/exclude opcode 过滤和实时启停，使用频道会话内 4 MiB 有界环形窗口，不写日志/数据库，凭证类 opcode 强制不采集，独立权限为 `admin.packet:trace`。HTTP 路由由 `micronaut-openapi` 生成机器契约和 Swagger UI，第三方公共契约另按主版本冻结。进程级 `ThreadManager` 统一使用命名虚拟线程执行独立后台任务并提供执行器计数快照；`BackgroundTaskRegistry` 提供有界执行历史、真实异步运行、排队/执行耗时、调度启停、立即运行与失败重试，监控 API 已预留后续持久化和集群聚合字段。完整范围见 `docs/in-progress/console-roadmap.md`。**控制台强鉴权 + RBAC + 不可抵赖审计已落地**：所有 `/admin/vN` 由 `AdminAuthFilter` 统一保护（账号 BCrypt 登录 + DB session token），可配置角色表 + 写操作 reason 审计。
 
@@ -26,20 +26,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 构建基线：**JDK 用 GraalVM for JDK 21**，版本须与 pom 的 `graalvm-js.version` 匹配（21.0.N ↔ 23.1.N，当前 23.1.11 ↔ 21.0.11；升 JDK 小版本必须同步改 pom，否则版本检查失败或降级解释执行），见 README「环境要求」。
 
-- **全量构建 + 测试**：`mvn -B verify`（16 模块；含 JaCoCo 覆盖率报告 + ArchUnit 架构测试 + LoggingDiscipline 静态扫描）
+- **全量构建 + 测试**：`mvn -B verify`（13 个子模块；含 JaCoCo 覆盖率报告 + ArchUnit 架构测试 + LoggingDiscipline 静态扫描）
 - **单模块单测**：`mvn -pl <模块> -am -Dtest=<测试类> -Dsurefire.failIfNoSpecifiedTests=false test`（`-am` 带上游依赖；`-Dsurefire.failIfNoSpecifiedTests=false` 防上游模块因无匹配测试报错——实测必需）。例：`mvn -pl bootstrap -am -Dtest=BootstrapContextTest -Dsurefire.failIfNoSpecifiedTests=false test`
 - **只编译不测**：`mvn -B -DskipTests compile`
 - **启动（single 档）**：`./scripts/start.sh`（前置：`mvn -B verify` 产物作 `target/twinkle-server.jar`；默认 `--profile=single`）
 - **split 多进程 / 滚动重启 / 回滚**：`./scripts/split-start.sh` / `./scripts/rolling-restart.sh [频道号]` / `./scripts/rollback.sh`（见 `docs/archived/ops/split-deployment.md`、`docs/archived/ops/switch-to-production.md`）
-- **启动自检**：`curl http://127.0.0.1:8080/admin/v1/health`、`/admin/v1/channels`；`/internal/v1/health` 需携带具有 `server.health:read` Scope 的 API Key。
+- **启动自检**：`curl http://127.0.0.1:8686/admin/v1/health`、`/admin/v1/channels`；`/internal/v1/health` 需携带具有 `server.health:read` Scope 的 API Key。
 
-关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`twinkle.net.channel.host`=`127.0.0.1`（登录服下发给客户端连接频道的 IPv4，不是监听地址）、`micronaut.server.port`=`8080`。HTTP 与客户端 Netty 端口默认监听所有网卡，安全边界由 API Key Scope、管理员 RBAC、TLS/反向代理和防火墙共同承担。`data/twinkle.db` 为运行期产物不入仓。
+关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`twinkle.net.channel.host`=`127.0.0.1`（登录服下发给客户端连接频道的 IPv4，不是监听地址）、`micronaut.server.port`=`8686`。HTTP 与客户端 Netty 端口默认监听所有网卡，安全边界由 API Key Scope、管理员 RBAC、TLS/反向代理和防火墙共同承担。`data/twinkle.db` 为运行期产物不入仓。
 
 **Micronaut 注解处理器增量编译坑**：改动 Repository / bean 接口后若报 `NonUniqueBeanException`（残留旧 `$MyBatisFlexFactory$XxxRepositoryN$Definition` 类），用 `mvn clean verify` 重来。改 Repository 接口须同步更新相关测试桩。
 
 ### Web 控制台（在 `twinkle-web/` 下执行）
 
-Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.0.1:8080`（需后端先起）。
+Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.0.1:8686`（需后端先起）。
 
 - **开发**：`npm run dev`（正式预览打开 Vite 地址；`demo.html` 只是旧书签兼容，不是入口）
 - **构建**：`npm run build`（= `tsc -b && vite build`）；**类型检查**：`npm run typecheck`；**Lint**：`npm run lint`
@@ -51,10 +51,10 @@ Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.
 
 - v1 传输层位于 `org.gms.httpapi.api.v1`：`controller` 只处理 HTTP，`dto.request|response|error` 冻结线上结构，`mapper` 转换应用结果，`contract` 保存版本常量与错误响应工厂。
 - 控制台和内部入口分别位于 `admin.v1.controller`、`internal.v1.controller`。
-- 跨版本复用的用例编排位于 `application.*`，公共 Controller 禁止直接依赖 data entity/repository。
+- 跨版本复用的用例编排位于 `application.*`，公共 Controller 禁止直接依赖 persistence Record/Repository。
 - 新增 v2 必须新增独立入口和 DTO，不得修改 v1 字段、状态码或错误语义。完整规则见 `docs/API-VERSIONING.md`。
 - **生产身份配置**（必配）：`TWINKLE_SERVER_ID` / `TWINKLE_SERVER_NAME` / `TWINKLE_SERVER_ENVIRONMENT` / `TWINKLE_CURSOR_SIGNING_KEY`（≥32 字节 HMAC）；首次签发用 loopback-only 的 `TWINKLE_API_BOOTSTRAP_KEY`。
-- 管理侧/能力面不得依赖 `domain-game`（红线 3）；数据三路：查 DB（data repository）/ 经 `AdminService` core 契约 / 事件快照只读镜像（`OnlinePlayerMirror`）。
+- 管理侧/能力面不得依赖 `domain-game`（红线 3）；数据三路：查 DB（persistence repository）/ 经 `AdminService` core 契约 / 事件快照只读镜像（`OnlinePlayerMirror`）。
 
 ## 架构（三条铁律 + 关键约束）
 
@@ -68,9 +68,9 @@ Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.
 
 ### 模块结构（Maven 多模块，依赖单向无环）
 
-- **公共底座**：`bootstrap`（唯一 main，读 `--profile`）、`core`（DI/EventBus/配置/调度/插件/热更新）、`net-netty`、`net-packet`（v83 opcode/HandlerRegistry）、`data`（MyBatis-Flex + 自研迁移器）、`db-dialect`、`plugin-api`
+- **公共底座**：`bootstrap`（唯一 main，读 `--profile`）、`core`（DI/EventBus/配置/调度/插件/热更新）、`net-netty`、`net-packet`（v83 opcode/HandlerRegistry）、`persistence`（MyBatis-Flex + 自研迁移器 + 方言）、`plugin-api`
 - **游戏域**（频道进程）：`domain-game`、`domain-script`（GraalVM JS）、`wz-provider`、`channel`
-- **管理侧**（管理进程）：`coordinator`、`login`、`admin`、`http-api`
+- **管理侧**（管理进程）：`coordinator`、`login`、`http-api`（含管理应用层，`admin` 不再是独立 Maven 模块）
 
 **管理侧不得依赖 `domain-game`**——分进程时两进程不共享内存，single 档同进程也禁止跨依赖（从编译期杜绝 HTTP 直踩游戏内存）。一个 JVM 进程 = 按 `--profile` 装配一组模块。
 
@@ -87,7 +87,7 @@ Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.
 
 - **内存态是权威，DB 只是持久化 + 查询层**。游戏热路径（tick/战斗/交易）全在内存。
 - DB 按需三档：SQLite（低配默认，WAL + 单写连接 + busy_timeout）/ PostgreSQL（大服）/ MySQL/MariaDB（兼容切换）。
-- ORM 用 MyBatis-Flex；方言差异点（upsert/自增/布尔/时间函数）集中进 `db-dialect`，业务代码禁止出现裸方言差异。
+- ORM 用 MyBatis-Flex；方言差异点（upsert/自增/布尔/时间函数）集中进 `persistence` 的方言包，业务代码禁止出现裸方言差异。
 
 ### 数据库命名与迁移规范（硬约束，写迁移/建表必须遵守）
 
@@ -140,4 +140,4 @@ React 19 + Vite + Tailwind CSS v4 + shadcn（视觉基准固定 `radix-nova` 官
 
 ## 里程碑
 
-按 `ARCHITECTURE.md` 第十一节推进：M0（骨架+基础验证+热更新地基）→ M1（协议+Netty）→ M2（游戏逻辑重写，参考项目作 parity 真值）→ M3（HTTP+渐进重载）→ M4（插件+热更新 L1-L4）→ M5（Web 控制台+迁移）→ M6（分布式）。M0-M6 已完成；当前任务以 `docs/in-progress/console-roadmap.md` 为准。
+按 `ARCHITECTURE.md` 第十一节推进：M0（骨架+基础验证+热更新地基）→ M1（协议+Netty）→ M2（游戏逻辑重写，参考项目作 parity 真值）→ M3（HTTP+渐进重载）→ M4（插件+热更新 L1-L4）→ M5（Web 控制台+迁移）→ M6（分布式）。M0-M6 是基础架构里程碑，不代表全部游戏玩法完成。游戏功能优先按 `docs/in-progress/gameplay-roadmap.md` 推进；控制台范围仍见 `docs/in-progress/console-roadmap.md`。

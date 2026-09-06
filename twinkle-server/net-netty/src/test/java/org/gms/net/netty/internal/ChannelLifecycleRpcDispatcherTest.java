@@ -41,6 +41,34 @@ class ChannelLifecycleRpcDispatcherTest {
         assertThat(forced).isTrue();
     }
 
+    @Test
+    void selectsStatusForTargetChannelInMultiChannelWorker() {
+        ChannelLifecycleService service = new ChannelLifecycleService() {
+            @Override
+            public List<Status> statuses() {
+                return List.of(
+                        new Status(11, "127.0.0.1", 8584, 3, State.RUNNING,
+                                Topology.DISTRIBUTED, true, null),
+                        new Status(12, "127.0.0.1", 8585, 0, State.STOPPED,
+                                Topology.DISTRIBUTED, true, null));
+            }
+
+            @Override public CommandResult requestStart(int channelId) { return null; }
+            @Override public CommandResult requestStop(int channelId) { return null; }
+            @Override public CommandResult requestTerminate(int channelId) { return null; }
+        };
+        ChannelLifecycleRpcDispatcher dispatcher = new ChannelLifecycleRpcDispatcher(service);
+
+        InternalProtocol.RpcResponse response = dispatcher.dispatch(
+                ChannelLifecycleRpcDispatcher.STATUS_METHOD, new String[0], 12);
+        ChannelLifecycleService.Status selected = JsonCodec.decode(
+                response.value(), ChannelLifecycleService.Status.class.getName());
+
+        assertThat(response.ok()).isTrue();
+        assertThat(selected.channelId()).isEqualTo(12);
+        assertThat(selected.state()).isEqualTo(ChannelLifecycleService.State.STOPPED);
+    }
+
     private static ChannelLifecycleService service(AtomicBoolean forced) {
         return new ChannelLifecycleService() {
             @Override

@@ -1,6 +1,6 @@
 package org.gms.service.admin;
 
-import org.gms.service.intercoord.IntercoordService.PlayerActivity;
+import org.gms.service.intercoord.PlayerPresenceService.PlayerActivity;
 
 /**
  * 在线状态变更事件（架构 M3-1 数据三路第③路：事件驱动快照的载荷）。
@@ -14,11 +14,18 @@ public final class OnlinePlayerEvents {
     }
 
     /** 玩家进图。 */
-    public record PlayerOnline(long characterId, String name, int mapId, int level, int job) {
+    public record PlayerOnline(long characterId, String name, int mapId, int level, int job,
+                               int ownerChannelId) {
+        public PlayerOnline(long characterId, String name, int mapId, int level, int job) {
+            this(characterId, name, mapId, level, job, 0);
+        }
     }
 
     /** 玩家下线。 */
-    public record PlayerOffline(long characterId) {
+    public record PlayerOffline(long characterId, int ownerChannelId) {
+        public PlayerOffline(long characterId) {
+            this(characterId, 0);
+        }
     }
 
     /**

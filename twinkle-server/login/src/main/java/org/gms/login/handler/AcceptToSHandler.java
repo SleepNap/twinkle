@@ -1,8 +1,8 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
-import org.gms.data.repo.AccountRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.repo.GameAccountRepository;
 import org.gms.login.LoginPacketFactory;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
@@ -22,9 +22,9 @@ public final class AcceptToSHandler implements PacketHandler {
 
 
 
-    private final AccountRepository accountRepository;
+    private final GameAccountRepository accountRepository;
 
-    public AcceptToSHandler(AccountRepository accountRepository) {
+    public AcceptToSHandler(GameAccountRepository accountRepository) {
         this.accountRepository = accountRepository;
     }
 
@@ -34,7 +34,7 @@ public final class AcceptToSHandler implements PacketHandler {
             session.close(I18n.message("error.accept_tos.outside_stage"));
             return;
         }
-        Account account = session.getAttr("account");
+        GameAccountRecord account = session.getAttr("account");
         if (account == null) {
             session.close(I18n.message("error.accept_tos.not_logged_in"));
             return;

@@ -1,9 +1,9 @@
 package org.gms.httpapi.application.admin;
 
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.CharacterRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.httpapi.mirror.OnlinePlayerMirror;
 import org.gms.service.admin.AdminService;
 
@@ -24,12 +24,12 @@ import java.util.Optional;
  */
 public final class AdminApiService {
 
-    private final AccountRepository accountRepository;
-    private final CharacterRepository characterRepository;
+    private final GameAccountRepository accountRepository;
+    private final PlayerCharacterRepository characterRepository;
     private final AdminService adminService;
     private final OnlinePlayerMirror mirror;
 
-    public AdminApiService(AccountRepository accountRepository, CharacterRepository characterRepository,
+    public AdminApiService(GameAccountRepository accountRepository, PlayerCharacterRepository characterRepository,
                            AdminService adminService, OnlinePlayerMirror mirror) {
         this.accountRepository = accountRepository;
         this.characterRepository = characterRepository;
@@ -51,7 +51,7 @@ public final class AdminApiService {
     }
 
     /** 按角色 id 查存档（查 DB）。 */
-    public Optional<Character> characterById(long characterId) {
+    public Optional<PlayerCharacterRecord> characterById(long characterId) {
         return characterRepository.findById(characterId);
     }
 
@@ -73,12 +73,12 @@ public final class AdminApiService {
         return adminService.kick(characterId);
     }
 
-    private static AccountView accountView(Account account) {
+    private static AccountView accountView(GameAccountRecord account) {
         return new AccountView(account.getId(), account.getName(), account.getBanned() == 1,
                 account.getGender(), account.getCharacterSlots());
     }
 
-    private static CharacterView characterView(Character character) {
+    private static CharacterView characterView(PlayerCharacterRecord character) {
         return new CharacterView(character.getId(), character.getName(), character.getLevel(),
                 character.getJob(), character.getMap(), character.getMeso());
     }

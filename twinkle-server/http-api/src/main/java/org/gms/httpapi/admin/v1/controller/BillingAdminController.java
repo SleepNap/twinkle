@@ -11,14 +11,14 @@ import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.QueryValue;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.PointAccount;
-import org.gms.data.entity.PointTransaction;
-import org.gms.data.entity.SubscriptionPlan;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.PointAccountRepository;
-import org.gms.data.repo.PointTransactionRepository;
-import org.gms.data.repo.SubscriptionPlanRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PointAccount;
+import org.gms.persistence.entity.PointTransaction;
+import org.gms.persistence.entity.SubscriptionPlan;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.PointAccountRepository;
+import org.gms.persistence.repo.PointTransactionRepository;
+import org.gms.persistence.repo.SubscriptionPlanRepository;
 import org.gms.httpapi.billing.BillingException;
 import org.gms.httpapi.billing.BillingService;
 
@@ -36,12 +36,12 @@ import java.util.Map;
 public final class BillingAdminController {
 
     private final BillingService billingService;
-    private final AccountRepository accountRepository;
+    private final GameAccountRepository accountRepository;
     private final PointAccountRepository pointAccountRepository;
     private final SubscriptionPlanRepository planRepository;
     private final PointTransactionRepository transactionRepository;
 
-    public BillingAdminController(BillingService billingService, AccountRepository accountRepository,
+    public BillingAdminController(BillingService billingService, GameAccountRepository accountRepository,
                                   PointAccountRepository pointAccountRepository,
                                   SubscriptionPlanRepository planRepository,
                                   PointTransactionRepository transactionRepository) {
@@ -65,7 +65,7 @@ public final class BillingAdminController {
     @Get("/accounts/{accountId}")
     public Map<String, Object> account(@PathVariable long accountId) {
         BillingService.PointBalance balance = billingService.balance(accountId);
-        String name = accountRepository.findById(accountId).map(Account::getName).orElse("");
+        String name = accountRepository.findById(accountId).map(GameAccountRecord::getName).orElse("");
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("accountId", accountId);
         result.put("name", name);
@@ -153,7 +153,7 @@ public final class BillingAdminController {
     }
 
     private Map<String, Object> accountSummary(PointAccount account) {
-        String name = accountRepository.findById(account.getAccountId()).map(Account::getName).orElse("");
+        String name = accountRepository.findById(account.getAccountId()).map(GameAccountRecord::getName).orElse("");
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("accountId", account.getAccountId());
         result.put("name", name);

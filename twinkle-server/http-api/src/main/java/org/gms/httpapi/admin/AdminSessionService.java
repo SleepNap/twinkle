@@ -1,13 +1,13 @@
 package org.gms.httpapi.admin;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.AccountAdminRole;
-import org.gms.data.entity.AdminSession;
-import org.gms.data.repo.AccountAdminRoleRepository;
-import org.gms.data.repo.AccountRepository;
-import org.gms.data.repo.AdminRoleRepository;
-import org.gms.data.repo.AdminSessionRepository;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.AccountAdminRole;
+import org.gms.persistence.entity.AdminSession;
+import org.gms.persistence.repo.AccountAdminRoleRepository;
+import org.gms.persistence.repo.GameAccountRepository;
+import org.gms.persistence.repo.AdminRoleRepository;
+import org.gms.persistence.repo.AdminSessionRepository;
 import org.gms.i18n.I18n;
 import org.mindrot.jbcrypt.BCrypt;
 
@@ -40,14 +40,14 @@ public final class AdminSessionService {
     private static final String BUILT_IN_ADMIN_PASSWORD_HASH =
             "$2a$12$e/zmn4XpBCBZU.O37Ic8Ue6p/yBoQ5pdQXZyoyrMh4xU0BRa7Zc5S";
 
-    private final AccountRepository accountRepository;
+    private final GameAccountRepository accountRepository;
     private final AdminRoleRepository roleRepository;
     private final AccountAdminRoleRepository accountRoleRepository;
     private final AdminSessionRepository sessionRepository;
     private final SecureRandom secureRandom;
     private final long sessionTtlSeconds;
 
-    public AdminSessionService(AccountRepository accountRepository,
+    public AdminSessionService(GameAccountRepository accountRepository,
                                AdminRoleRepository roleRepository,
                                AccountAdminRoleRepository accountRoleRepository,
                                AdminSessionRepository sessionRepository,
@@ -56,7 +56,7 @@ public final class AdminSessionService {
                 sessionTtlSeconds, new SecureRandom());
     }
 
-    public AdminSessionService(AccountRepository accountRepository,
+    public AdminSessionService(GameAccountRepository accountRepository,
                                AdminRoleRepository roleRepository,
                                AccountAdminRoleRepository accountRoleRepository,
                                AdminSessionRepository sessionRepository,
@@ -75,12 +75,12 @@ public final class AdminSessionService {
     /** 账号 + 密码登录；账号无任何管理员角色或密码错、被封禁时返回 empty。 */
     public Optional<LoginResult> login(String name, String password, String remoteAddress) {
         String normalized = name == null ? "" : name.trim();
-        Optional<Account> found = accountRepository.findByName(normalized);
+        Optional<GameAccountRecord> found = accountRepository.findByName(normalized);
         if (found.isEmpty()) {
             log.warn(I18n.message("log.admin.login_failed"), normalized);
             return Optional.empty();
         }
-        Account account = found.get();
+        GameAccountRecord account = found.get();
         if (account.getBanned() == 1) {
             log.warn(I18n.message("log.admin.login_banned"), normalized);
             return Optional.empty();
@@ -156,15 +156,15 @@ public final class AdminSessionService {
      * 初始化内置管理员。首次启动创建 {@code admin} 账号，之后只补齐角色，不重置已存在账号的密码。
      */
     public void initializeBuiltInAdmin() {
-        Account account = accountRepository.findByName(BUILT_IN_ADMIN_ACCOUNT)
+        GameAccountRecord account = accountRepository.findByName(BUILT_IN_ADMIN_ACCOUNT)
                 .orElseGet(this::createBuiltInAdminAccount);
         if (grantRole(account.getId(), SUPER_ADMIN_ROLE)) {
             log.info(I18n.message("log.admin.built_in_ready"), BUILT_IN_ADMIN_ACCOUNT);
         }
     }
 
-    private Account createBuiltInAdminAccount() {
-        Account account = new Account();
+    private GameAccountRecord createBuiltInAdminAccount() {
+        GameAccountRecord account = new GameAccountRecord();
         account.setName(BUILT_IN_ADMIN_ACCOUNT);
         account.setPassword(BUILT_IN_ADMIN_PASSWORD_HASH);
         account.setWebAdmin(1);

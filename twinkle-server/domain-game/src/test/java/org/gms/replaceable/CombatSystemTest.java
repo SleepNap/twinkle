@@ -1,6 +1,6 @@
 package org.gms.replaceable;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.domain.game.mob.MobData;
 import org.gms.hotreload.versioned.DefaultVersionGate;
@@ -18,8 +18,8 @@ class CombatSystemTest {
     private final VersionGate versionGate = new DefaultVersionGate();
     private final CombatSystem combat = new CombatSystem(versionGate);
 
-    private static Character attacker(int str, int dex) {
-        Character c = new Character(1L);
+    private static PlayerCharacter attacker(int str, int dex) {
+        PlayerCharacter c = new PlayerCharacter(1L);
         c.setStrStat((short) str);
         c.setDexStat((short) dex);
         return c;
@@ -35,7 +35,7 @@ class CombatSystemTest {
     @Test
     @DisplayName("物理攻击扣血并保留存活状态")
     void physicalAttackDealsDamage() {
-        Character chr = attacker(50, 10);
+        PlayerCharacter chr = attacker(50, 10);
         MapleMonster snail = new MapleMonster(snail(100, 0));
 
         CombatSystem.DamageResult result = combat.physicalAttack(chr, snail, CombatSystem.BARE_HAND_WATK);
@@ -48,7 +48,7 @@ class CombatSystemTest {
     @Test
     @DisplayName("多次攻击致死：alive=false、HP 不为负")
     void attackUntilDeath() {
-        Character chr = attacker(500, 10);
+        PlayerCharacter chr = attacker(500, 10);
         MapleMonster snail = new MapleMonster(snail(10, 0));
 
         combat.physicalAttack(chr, snail, 10);
@@ -63,7 +63,7 @@ class CombatSystemTest {
     @Test
     @DisplayName("防御削减伤害（pdd>0 时伤害更低）")
     void defenseReducesDamage() {
-        Character chr = attacker(500, 10);
+        PlayerCharacter chr = attacker(500, 10);
         MapleMonster soft = new MapleMonster(snail(1000, 0));
         MapleMonster armored = new MapleMonster(snail(1000, 100));
 
@@ -76,7 +76,7 @@ class CombatSystemTest {
     @Test
     @DisplayName("版本门拒绝换代后的迟到攻击")
     void versionGateBlocksStaleAttack() {
-        Character chr = new Character(versionGate.currentVersion());
+        PlayerCharacter chr = new PlayerCharacter(versionGate.currentVersion());
         chr.setStrStat((short) 50);
         chr.setDexStat((short) 10);
         MapleMonster snail = new MapleMonster(snail(100, 0));

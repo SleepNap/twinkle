@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 
 import java.util.Collection;
 import java.util.List;
@@ -15,19 +15,19 @@ import java.util.concurrent.ConcurrentMap;
  */
 public final class PlayerStorage {
 
-    private final ConcurrentMap<Long, Character> players = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, PlayerCharacter> players = new ConcurrentHashMap<>();
 
     /** 角色进图登记。 */
-    public void add(Character chr) {
+    public void add(PlayerCharacter chr) {
         players.put(chr.getId(), chr);
     }
 
     /** 角色下线/换图移除（compare-and-remove：仅当登记对象==本对象才删，防旧代际误删新角色）。 */
-    public void remove(Character chr) {
+    public void remove(PlayerCharacter chr) {
         players.remove(chr.getId(), chr);
     }
 
-    public Character getById(long id) {
+    public PlayerCharacter getById(long id) {
         return players.get(id);
     }
 
@@ -36,7 +36,7 @@ public final class PlayerStorage {
     }
 
     /** 全部在线角色（不可变视图）。 */
-    public Collection<Character> all() {
+    public Collection<PlayerCharacter> all() {
         return List.copyOf(players.values());
     }
 }

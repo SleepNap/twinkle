@@ -5,6 +5,7 @@ import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
+import org.gms.bootstrap.ChannelWorker;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
@@ -45,6 +46,7 @@ public class PluginConfig {
     public PluginManager pluginManager(
             @Property(name = "twinkle.plugin.path", defaultValue = "./plugins") String pluginPath,
             HandlerRegistry registry,
+            ChannelWorker worker,
             LogicSystemRegistry logicSystemRegistry,
             TickScheduler tickScheduler,
             EventBus eventBus,
@@ -52,7 +54,10 @@ public class PluginConfig {
             EntityReloadCoordinator entityReloadCoordinator,
             EntityReloadService entityReloadService) {
         Path dir = Path.of(pluginPath);
-        TwinklePluginHost host = new TwinklePluginHost(registry, logicSystemRegistry, tickScheduler,
+        java.util.List<HandlerRegistry> packetRegistries = new java.util.ArrayList<>();
+        packetRegistries.add(registry);
+        packetRegistries.addAll(worker.handlerRegistries());
+        TwinklePluginHost host = new TwinklePluginHost(packetRegistries, logicSystemRegistry, tickScheduler,
                 eventBus, versionGate, entityReloadCoordinator);
         // 命令式贡献点路由：register → host.registerCommand；subscribe → host.subscribeCommand
         ContributionRouter router = new ContributionRouter() {

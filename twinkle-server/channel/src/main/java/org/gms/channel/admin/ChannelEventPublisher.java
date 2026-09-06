@@ -1,10 +1,11 @@
 package org.gms.channel.admin;
+import org.gms.service.intercoord.PlayerPresenceService;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.EventBus;
 import org.gms.net.packet.PacketSession;
 import org.gms.service.admin.OnlinePlayerEvents;
-import org.gms.service.intercoord.IntercoordService.PlayerActivity;
+import org.gms.service.intercoord.PlayerPresenceService.PlayerActivity;
 
 /**
  * 频道在线事件发布（架构 M3-1 数据三路第③路：频道进程推变更 → 管理进程只读镜像）。
@@ -15,20 +16,27 @@ import org.gms.service.intercoord.IntercoordService.PlayerActivity;
 public final class ChannelEventPublisher {
 
     private final EventBus bus;
+    private final int channelId;
 
     public ChannelEventPublisher(EventBus bus) {
+        this(bus, 0);
+    }
+
+    public ChannelEventPublisher(EventBus bus, int channelId) {
         this.bus = bus;
+        this.channelId = channelId;
     }
 
     /** 玩家进图（PlayerLoggedinHandler 完成注册后调用）。 */
-    public void playerOnline(Character chr) {
+    public void playerOnline(PlayerCharacter chr) {
         bus.send(OnlinePlayerEvents.TARGET,
-                new OnlinePlayerEvents.PlayerOnline(chr.getId(), chr.getName(), chr.getMap(), chr.getLevel(), chr.getJob()));
+                new OnlinePlayerEvents.PlayerOnline(chr.getId(), chr.getName(), chr.getMap(), chr.getLevel(),
+                        chr.getJob(), channelId));
     }
 
     /** 玩家断链/下线（DisconnectListener 注销前调用）。 */
     public void playerOffline(long characterId) {
-        bus.send(OnlinePlayerEvents.TARGET, new OnlinePlayerEvents.PlayerOffline(characterId));
+        bus.send(OnlinePlayerEvents.TARGET, new OnlinePlayerEvents.PlayerOffline(characterId, channelId));
     }
 
     /** 玩家保持大区在线，只在同一频道 TCP 会话上切换游戏/商城/MTS 状态。 */
@@ -39,7 +47,7 @@ public final class ChannelEventPublisher {
 
     /** 从会话取角色 id 并发下线事件（断链回调用）。 */
     public void playerOffline(PacketSession session) {
-        Character chr = session.getAttr("character");
+        PlayerCharacter chr = session.getAttr("character");
         if (chr != null) {
             playerOffline(chr.getId());
         }

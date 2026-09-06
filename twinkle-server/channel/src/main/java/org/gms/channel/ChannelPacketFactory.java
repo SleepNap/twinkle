@@ -1,6 +1,6 @@
 package org.gms.channel;
 
-import org.gms.domain.game.Character;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.quest.QuestStatus;
@@ -12,6 +12,7 @@ import org.gms.net.packet.v83.V83CharacterPacketWriter;
 import org.gms.net.packet.v83.V83CharacterStats;
 import org.gms.net.packet.v83.V83FileTime;
 import org.gms.net.packet.v83.V83ItemPacketWriter;
+import org.gms.net.packet.v83.V83ChannelId;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,7 +31,7 @@ public final class ChannelPacketFactory {
     private ChannelPacketFactory() {
     }
 
-    /** 现金背包槽位上限（v83 固定，与 domain-game Character.CASH_SLOT_LIMIT 一致）。 */
+    /** 现金背包槽位上限（v83 固定，与 domain-game PlayerCharacter.CASH_SLOT_LIMIT 一致）。 */
     private static final int CASH_SLOT_LIMIT = 100;
 
     /**
@@ -42,6 +43,19 @@ public final class ChannelPacketFactory {
         p.writeShort(SendOpcode.SERVERMESSAGE.getValue());
         p.writeByte(4); // 公告类型（4 = 顶部滚动）
         p.writeString(message);
+        return p;
+    }
+
+    /** v83 换频道回包：目标端点由 coordinator 查表取得，不能由频道 ID 推导。 */
+    public static OutPacket changeChannel(byte[] ipv4, int port) {
+        if (ipv4 == null || ipv4.length != 4) {
+            throw new IllegalArgumentException("Channel endpoint must use IPv4");
+        }
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.CHANGE_CHANNEL.getValue());
+        p.writeBool(true);
+        p.writeBytes(ipv4);
+        p.writeShort(port);
         return p;
     }
 
@@ -59,10 +73,10 @@ public final class ChannelPacketFactory {
     /**
      * 登录进图核心包（SendOpcode.SET_FIELD + addCharacterInfo），包含完整背包物品、技能和任务状态。
      */
-    public static OutPacket charInfo(Character chr, int channelId) {
+    public static OutPacket charInfo(PlayerCharacter chr, int channelId) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.SET_FIELD.getValue());
-        p.writeInt(channelId - 1);
+        p.writeInt(V83ChannelId.toWire(channelId));
         p.writeByte(1);
         p.writeByte(1);
         p.writeShort(0);
@@ -76,7 +90,7 @@ public final class ChannelPacketFactory {
 
     /* ---------- addCharacterInfo：-1 + 0 + 全量角色数据 ---------- */
 
-    private static void addCharacterInfo(ByteArrayOutPacket p, Character chr) {
+    private static void addCharacterInfo(ByteArrayOutPacket p, PlayerCharacter chr) {
         p.writeLong(-1);
         p.writeByte(0);
         V83CharacterPacketWriter.writeStats(p, toProtocolStats(chr));
@@ -103,7 +117,7 @@ public final class ChannelPacketFactory {
      * 背包信息：5 槽位上限 + 时间 + 各背包段。已穿戴装备（EQUIP 背包负位置行）
      * 用 addItemInfo 编码进 equipped 段（思路参考 BeiDou addInventoryInfo）。
      */
-    private static void addInventoryInfo(ByteArrayOutPacket p, Character chr) {
+    private static void addInventoryInfo(ByteArrayOutPacket p, PlayerCharacter chr) {
         p.writeByte(chr.getEquipSlots());
         p.writeByte(chr.getUseSlots());
         p.writeByte(chr.getSetupSlots());
@@ -140,20 +154,20 @@ public final class ChannelPacketFactory {
         // cash 背包无结束标记
     }
 
-    private static void writeStackInventory(ByteArrayOutPacket p, Character chr, InventoryType type) {
+    private static void writeStackInventory(ByteArrayOutPacket p, PlayerCharacter chr, InventoryType type) {
         for (Item item : sortedItems(chr, type)) {
             V83ItemPacketWriter.write(p, ChannelItemProtocolMapper.toSnapshot(item), true);
         }
     }
 
-    private static List<Item> sortedItems(Character chr, InventoryType type) {
+    private static List<Item> sortedItems(PlayerCharacter chr, InventoryType type) {
         List<Item> items = new ArrayList<>(chr.getInventory(type).items());
         items.sort(Comparator.comparingInt(Item::getPosition));
         return items;
     }
 
     /** v83 技能列表；隐藏的战神派生技能不向客户端重复发送。 */
-    private static void addSkillInfo(ByteArrayOutPacket p, Character chr) {
+    private static void addSkillInfo(ByteArrayOutPacket p, PlayerCharacter chr) {
         p.writeByte(0);                 // start of skills
         List<SkillEntry> skills = chr.skills().values().stream()
                 .filter(skill -> !isHiddenSkill(skill.skillId()))
@@ -186,7 +200,7 @@ public final class ChannelPacketFactory {
     }
 
     /** v83 进行中任务进度 + 已完成任务时间。 */
-    private static void addQuestInfo(ByteArrayOutPacket p, Character chr) {
+    private static void addQuestInfo(ByteArrayOutPacket p, PlayerCharacter chr) {
         List<QuestStatus> started = chr.quests().values().stream()
                 .filter(status -> status.getState() == QuestStatus.State.STARTED)
                 .sorted(Comparator.comparingInt(QuestStatus::getQuestId))
@@ -230,13 +244,13 @@ public final class ChannelPacketFactory {
         }
     }
 
-    private static void addMonsterBookInfo(ByteArrayOutPacket p, Character chr) {
+    private static void addMonsterBookInfo(ByteArrayOutPacket p, PlayerCharacter chr) {
         p.writeInt(chr.getMonsterBookCover());
         p.writeByte(0);
         p.writeShort(0);                // 卡片数
     }
 
-    private static V83CharacterStats toProtocolStats(Character chr) {
+    private static V83CharacterStats toProtocolStats(PlayerCharacter chr) {
         return new V83CharacterStats(
                 (int) chr.getId(), chr.getName(), chr.getGender(), chr.getSkinColor(), chr.getFace(), chr.getHair(),
                 chr.getLevel(), chr.getJob(), chr.getStrStat(), chr.getDexStat(), chr.getIntStat(), chr.getLukStat(),

@@ -1,10 +1,11 @@
 package org.gms.login.handler;
 
 import lombok.extern.log4j.Log4j2;
-import org.gms.data.entity.Account;
-import org.gms.data.entity.Character;
+import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.login.LoginPacketFactory;
 import org.gms.login.LoginService;
+import org.gms.login.ChannelSelectionService;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
@@ -30,9 +31,11 @@ public final class CreateCharHandler implements PacketHandler {
 
 
     private final LoginService loginService;
+    private final int worldId;
 
-    public CreateCharHandler(LoginService loginService) {
+    public CreateCharHandler(LoginService loginService, int worldId) {
         this.loginService = loginService;
+        this.worldId = worldId;
     }
 
     @Override
@@ -42,7 +45,7 @@ public final class CreateCharHandler implements PacketHandler {
             session.close(I18n.message("error.create_char.outside_stage"));
             return;
         }
-        Account account = session.getAttr("account");
+        GameAccountRecord account = session.getAttr("account");
         if (account == null) {
             session.close(I18n.message("error.create_char.not_logged_in"));
             return;
@@ -66,8 +69,10 @@ public final class CreateCharHandler implements PacketHandler {
             return;
         }
 
-        Character chr = loginService.createCharacter(
-                account.getId(), 0, name, job, face, hair + hairColor, skinColor,
+        Integer selectedWorldId = session.getAttr(ChannelSelectionService.SESSION_WORLD_ID);
+        int targetWorldId = selectedWorldId == null ? worldId : selectedWorldId;
+        PlayerCharacterRecord chr = loginService.createCharacter(
+                account.getId(), targetWorldId, name, job, face, hair + hairColor, skinColor,
                 top, bottom, shoes, weapon, gender);
         if (chr == null) {
             log.warn(I18n.message("log.create_char.failed"), account.getName(), name);
@@ -77,12 +82,12 @@ public final class CreateCharHandler implements PacketHandler {
         log.info(I18n.message("log.create_char.created"), account.getName(), name, chr.getId(), job);
         // 建角成功后客户端不会重发角色列表，须把新角色追加进 session 缓存的选角列表，
         // 否则 CharSelectHandler 按缓存校验时误判"选角越权"（新角色不在旧列表里）。
-        List<Character> characters = session.getAttr("characters");
+        List<PlayerCharacterRecord> characters = session.getAttr("characters");
         if (characters != null) {
             characters.add(chr);
         }
         // 新角色外观：带建角默认装备（客户端立即显示全身，非内衣）
-        List<org.gms.data.entity.InventoryItemEntity> equipped = loginService.equippedItems(chr.getId());
+        List<org.gms.persistence.entity.InventoryItemEntity> equipped = loginService.equippedItems(chr.getId());
         session.send(LoginPacketFactory.addNewCharEntry(chr, equipped));
     }
 
