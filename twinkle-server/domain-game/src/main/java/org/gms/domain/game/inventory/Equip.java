@@ -64,4 +64,27 @@ public class Equip extends Item {
         copy.ringId = ringId;
         return copy;
     }
+
+    // 受控写入口：Lombok 的普通 setter 无法校验频道执行归属。
+    public void setUpgradeSlots(byte value) { requireStateAccess(); this.upgradeSlots = value; }
+    public void setLevel(short value) { requireStateAccess(); this.level = value; }
+    public void setStrStat(short value) { requireStateAccess(); this.strStat = value; }
+    public void setDexStat(short value) { requireStateAccess(); this.dexStat = value; }
+    public void setIntStat(short value) { requireStateAccess(); this.intStat = value; }
+    public void setLukStat(short value) { requireStateAccess(); this.lukStat = value; }
+    public void setHp(short value) { requireStateAccess(); this.hp = value; }
+    public void setMp(short value) { requireStateAccess(); this.mp = value; }
+    public void setWAtk(short value) { requireStateAccess(); this.wAtk = value; }
+    public void setMAtk(short value) { requireStateAccess(); this.mAtk = value; }
+    public void setWDef(short value) { requireStateAccess(); this.wDef = value; }
+    public void setMDef(short value) { requireStateAccess(); this.mDef = value; }
+    public void setAcc(short value) { requireStateAccess(); this.acc = value; }
+    public void setAvoid(short value) { requireStateAccess(); this.avoid = value; }
+    public void setHands(short value) { requireStateAccess(); this.hands = value; }
+    public void setSpeed(short value) { requireStateAccess(); this.speed = value; }
+    public void setJump(short value) { requireStateAccess(); this.jump = value; }
+    public void setVicious(byte value) { requireStateAccess(); this.vicious = value; }
+    public void setItemLevel(byte value) { requireStateAccess(); this.itemLevel = value; }
+    public void setItemExp(long value) { requireStateAccess(); this.itemExp = value; }
+    public void setRingId(int value) { requireStateAccess(); this.ringId = value; }
 }

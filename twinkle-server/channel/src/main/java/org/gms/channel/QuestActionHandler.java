@@ -38,45 +38,43 @@ public final class QuestActionHandler implements PacketHandler {
             if (!GameplaySession.canAct(session, character) || packet.available() < 3) return;
             int action = packet.readByte(), questId = packet.readUnsignedShort();
             if (action < 1 || action > 3) return;
-            synchronized (character) {
-                var expected = action == 1 ? QuestStatus.State.NOT_STARTED : QuestStatus.State.STARTED;
-                var target = action == 1 ? QuestStatus.State.STARTED : action == 2
-                        ? QuestStatus.State.COMPLETED : QuestStatus.State.NOT_STARTED;
-                WzNode check = stage("Check.img.xml", questId, action == 1 ? 0 : 1);
-                if (check == null) return;
-                Map<Integer, Integer> changes = new HashMap<>(), limits = new HashMap<>();
-                int money = 0, experience = 0;
-                if (action != 3) {
-                    if (packet.available() < 4 || !valid(character, check, packet.readInt(), questId)) return;
-                    WzNode reward = stage("Act.img.xml", questId, action == 1 ? 0 : 1);
-                    if (reward != null) {
-                        if (!Set.of("exp", "money", "nextQuest").containsAll(reward.values().keySet())
-                                || !Set.of("item").containsAll(reward.children().keySet())) return;
-                        money = reward.getInt("money").orElse(0);
-                        experience = reward.getInt("exp").orElse(0);
-                        if (experience < 0) return;
-                        for (WzNode item : reward.child("item").map(WzNode::children).orElse(Map.of()).values()) {
-                            if (!Set.of("id", "count").containsAll(item.values().keySet()) || !item.children().isEmpty()) return;
-                            int itemId = item.getInt("id").orElse(0), count = item.getInt("count").orElse(0);
-                            var definition = resources.item(itemId);
-                            if (definition == null || Math.abs((long) count) > Short.MAX_VALUE) return;
-                            changes.merge(itemId, count, Math::addExact);
-                            limits.put(itemId, Math.min(Short.MAX_VALUE, definition.getSlotMax()));
-                        }
+            var expected = action == 1 ? QuestStatus.State.NOT_STARTED : QuestStatus.State.STARTED;
+            var target = action == 1 ? QuestStatus.State.STARTED : action == 2
+                    ? QuestStatus.State.COMPLETED : QuestStatus.State.NOT_STARTED;
+            WzNode check = stage("Check.img.xml", questId, action == 1 ? 0 : 1);
+            if (check == null) return;
+            Map<Integer, Integer> changes = new HashMap<>(), limits = new HashMap<>();
+            int money = 0, experience = 0;
+            if (action != 3) {
+                if (packet.available() < 4 || !valid(character, check, packet.readInt(), questId)) return;
+                WzNode reward = stage("Act.img.xml", questId, action == 1 ? 0 : 1);
+                if (reward != null) {
+                    if (!Set.of("exp", "money", "nextQuest").containsAll(reward.values().keySet())
+                            || !Set.of("item").containsAll(reward.children().keySet())) return;
+                    money = reward.getInt("money").orElse(0);
+                    experience = reward.getInt("exp").orElse(0);
+                    if (experience < 0) return;
+                    for (WzNode item : reward.child("item").map(WzNode::children).orElse(Map.of()).values()) {
+                        if (!Set.of("id", "count").containsAll(item.values().keySet()) || !item.children().isEmpty()) return;
+                        int itemId = item.getInt("id").orElse(0), count = item.getInt("count").orElse(0);
+                        var definition = resources.item(itemId);
+                        if (definition == null || Math.abs((long) count) > Short.MAX_VALUE) return;
+                        changes.merge(itemId, count, Math::addExact);
+                        limits.put(itemId, Math.min(Short.MAX_VALUE, definition.getSlotMax()));
                     }
                 }
-                Map<InventoryType, Map<Short, V83ItemSnapshot>> before = new EnumMap<>(InventoryType.class);
-                for (var type : InventoryType.values()) if (type != InventoryType.UNDEFINED)
-                    before.put(type, GameplayPackets.inventory(character, type));
-                if (!system.apply(character, new QuestChange(questId, expected, target, changes, limits,
-                        money, experience, System.currentTimeMillis()))) return;
-                if (target == QuestStatus.State.STARTED) initializeMobProgress(character, questId);
-                before.forEach((type, snapshot) -> GameplayPackets.inventoryChanges(type, snapshot,
-                        GameplayPackets.inventory(character, type)).forEach(session::send));
-                session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, character.getMeso(),
-                        GameplayPackets.EXP, (int) character.getExp())));
-                sendStatus(session, character.getQuestStatus(questId));
             }
+            Map<InventoryType, Map<Short, V83ItemSnapshot>> before = new EnumMap<>(InventoryType.class);
+            for (var type : InventoryType.values()) if (type != InventoryType.UNDEFINED)
+                before.put(type, GameplayPackets.inventory(character, type));
+            if (!system.apply(character, new QuestChange(questId, expected, target, changes, limits,
+                    money, experience, System.currentTimeMillis()))) return;
+            if (target == QuestStatus.State.STARTED) initializeMobProgress(character, questId);
+            before.forEach((type, snapshot) -> GameplayPackets.inventoryChanges(type, snapshot,
+                    GameplayPackets.inventory(character, type)).forEach(session::send));
+            session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, character.getMeso(),
+                    GameplayPackets.EXP, (int) character.getExp())));
+            sendStatus(session, character.getQuestStatus(questId));
         } finally { session.send(GameplayPackets.enableActions()); }
     }
 
@@ -126,23 +124,21 @@ public final class QuestActionHandler implements PacketHandler {
     public void killed(PacketSession session, int mobId) {
         PlayerCharacter character = GameplaySession.character(session);
         if (character == null) return;
-        synchronized (character) {
-            for (var quest : character.quests().values()) {
-                if (quest.getState() != QuestStatus.State.STARTED) continue;
-                WzNode rule = stage("Check.img.xml", quest.getQuestId(), 1);
-                if (rule == null) continue;
-                boolean changed = false;
-                for (WzNode mob : rule.child("mob").map(WzNode::children).orElse(Map.of()).values()) {
-                    int id = mob.getInt("id").orElse(0), cap = mob.getInt("count").orElse(0);
-                    if (id == mobId && quest.getProgress(id) < cap) {
-                        if (system.setProgress(character, quest.getQuestId(), id, quest.getProgress(id) + 1)) {
-                            quest.setProgressText(id, String.format(Locale.ROOT, "%03d", quest.getProgress(id)));
-                            changed = true;
-                        }
+        for (var quest : character.quests().values()) {
+            if (quest.getState() != QuestStatus.State.STARTED) continue;
+            WzNode rule = stage("Check.img.xml", quest.getQuestId(), 1);
+            if (rule == null) continue;
+            boolean changed = false;
+            for (WzNode mob : rule.child("mob").map(WzNode::children).orElse(Map.of()).values()) {
+                int id = mob.getInt("id").orElse(0), cap = mob.getInt("count").orElse(0);
+                if (id == mobId && quest.getProgress(id) < cap) {
+                    if (system.setProgress(character, quest.getQuestId(), id, quest.getProgress(id) + 1)) {
+                        quest.setProgressText(id, String.format(Locale.ROOT, "%03d", quest.getProgress(id)));
+                        changed = true;
                     }
                 }
-                if (changed) sendStatus(session, quest);
             }
+            if (changed) sendStatus(session, quest);
         }
     }
 

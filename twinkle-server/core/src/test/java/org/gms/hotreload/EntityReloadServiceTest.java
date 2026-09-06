@@ -1,5 +1,6 @@
 package org.gms.hotreload;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.hotreload.versioned.VersionGate;
 import org.junit.jupiter.api.Test;
@@ -75,19 +76,16 @@ class EntityReloadServiceTest {
     }
 
     @Test
-    void unInterruptibleEntityIsSkippedButVersionStillAdvances() {
+    public void fakeInterruptionCannotAdvanceVersion() {
         EntityReloadCoordinator c = new EntityReloadCoordinator();
         VersionGate gate = new DefaultVersionGate();
         EntityReloadService service = new EntityReloadService(c, gate);
 
         c.beginOperation(9L);
-        EntityReloadService.ReloadResult result = service.reload(
-                List.of(9L),
-                id -> false);   // 中断失败 → 跳过（等待自然结束）
-
-        assertThat(result.interrupted()).isZero();
-        assertThat(result.safeSwitched()).isZero();
-        assertThat(result.newVersion()).isEqualTo(gate.currentVersion());
+        assertThatThrownBy(() -> service.reload(List.of(9L), id -> true))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(gate.currentVersion()).isEqualTo(1);
+        assertThat(c.inOperation(9L)).isTrue();
     }
 
     @Test

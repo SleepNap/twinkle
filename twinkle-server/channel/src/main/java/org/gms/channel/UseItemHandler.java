@@ -26,14 +26,12 @@ public final class UseItemHandler implements PacketHandler {
             packet.skip(4);
             short slot = packet.readShort();
             int itemId = packet.readInt();
-            synchronized (character) {
-                var before = GameplayPackets.inventory(character, InventoryType.USE);
-                if (!items.consumeRecovery(character, slot, itemId, System.currentTimeMillis())) return;
-                GameplayPackets.inventoryChanges(InventoryType.USE, before,
-                        GameplayPackets.inventory(character, InventoryType.USE)).forEach(session::send);
-                session.send(GameplayPackets.stats(Map.of(GameplayPackets.HP, character.getHp(),
-                        GameplayPackets.MP, character.getMp())));
-            }
+            var before = GameplayPackets.inventory(character, InventoryType.USE);
+            if (!items.consumeRecovery(character, slot, itemId, System.currentTimeMillis())) return;
+            GameplayPackets.inventoryChanges(InventoryType.USE, before,
+                    GameplayPackets.inventory(character, InventoryType.USE)).forEach(session::send);
+            session.send(GameplayPackets.stats(Map.of(GameplayPackets.HP, character.getHp(),
+                    GameplayPackets.MP, character.getMp())));
         } finally {
             session.send(GameplayPackets.enableActions());
         }

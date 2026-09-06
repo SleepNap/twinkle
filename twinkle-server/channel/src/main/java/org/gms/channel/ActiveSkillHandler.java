@@ -38,27 +38,25 @@ public final class ActiveSkillHandler implements PacketHandler {
             if (!GameplaySession.canAct(session, character) || !current(session, character) || packet.available() < 9) return;
             packet.skip(4);
             int skillId = packet.readInt(), requestedLevel = packet.readByte() & 255;
-            synchronized (character) {
-                var skill = character.getSkill(skillId);
-                if (skill == null || skill.level() != requestedLevel) return;
-                BuffDefinition effect = definition(skillId, skill.level());
-                if (!system.castBuff(character, effect, clock.millis())) return;
-                var reply = GameplayPackets.packet(SendOpcode.GIVE_BUFF);
-                reply.writeLong(0);
-                reply.writeLong(effect.stats().keySet().stream().reduce(0L, (mask, value) -> mask | value));
-                new TreeMap<>(effect.stats()).forEach((mask, value) -> {
-                    reply.writeShort(value); reply.writeInt(skillId); reply.writeInt(effect.durationMillis());
-                });
-                reply.writeInt(0); reply.writeByte(0); reply.writeInt(new TreeMap<>(effect.stats()).firstEntry().getValue());
-                session.send(reply);
-                if (sessions != null) {
-                    sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.skillEffect(character.getId(),
-                            skillId, skill.level(), character.getStance() & 1), character.getId());
-                    sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.buff(character.getId(), effect.stats()),
-                            character.getId());
-                }
-                session.send(GameplayPackets.stats(Map.of(GameplayPackets.HP, character.getHp(), GameplayPackets.MP, character.getMp())));
+            var skill = character.getSkill(skillId);
+            if (skill == null || skill.level() != requestedLevel) return;
+            BuffDefinition effect = definition(skillId, skill.level());
+            if (!system.castBuff(character, effect, clock.millis())) return;
+            var reply = GameplayPackets.packet(SendOpcode.GIVE_BUFF);
+            reply.writeLong(0);
+            reply.writeLong(effect.stats().keySet().stream().reduce(0L, (mask, value) -> mask | value));
+            new TreeMap<>(effect.stats()).forEach((mask, value) -> {
+                reply.writeShort(value); reply.writeInt(skillId); reply.writeInt(effect.durationMillis());
+            });
+            reply.writeInt(0); reply.writeByte(0); reply.writeInt(new TreeMap<>(effect.stats()).firstEntry().getValue());
+            session.send(reply);
+            if (sessions != null) {
+                sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.skillEffect(character.getId(),
+                        skillId, skill.level(), character.getStance() & 1), character.getId());
+                sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.buff(character.getId(), effect.stats()),
+                        character.getId());
             }
+            session.send(GameplayPackets.stats(Map.of(GameplayPackets.HP, character.getHp(), GameplayPackets.MP, character.getMp())));
         } finally { session.send(GameplayPackets.enableActions()); }
     }
     public BuffDefinition definition(int skill, int level) {
@@ -78,14 +76,12 @@ public final class ActiveSkillHandler implements PacketHandler {
     public void cancel(PacketSession session, InPacket packet) {
         PlayerCharacter character = GameplaySession.character(session);
         if (character == null || !current(session, character) || packet.available() < 4) return;
-        synchronized (character) {
-            sendCancellation(session, system.cancelBuff(character, packet.readInt(), clock.millis(), false));
-        }
+        sendCancellation(session, system.cancelBuff(character, packet.readInt(), clock.millis(), false));
         session.send(GameplayPackets.enableActions());
     }
     public void expire(PacketSession session) {
         PlayerCharacter character = GameplaySession.character(session);
-        if (character != null && current(session, character)) synchronized (character) {
+        if (character != null && current(session, character)) {
             sendCancellation(session, system.cancelBuff(character, 0, clock.millis(), true));
         }
     }

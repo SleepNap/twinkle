@@ -68,16 +68,14 @@ public final class NpcShopHandler implements PacketHandler {
             int itemId = packet.readInt(), quantity = packet.readShort();
             var type = ItemConstants.getInventoryType(itemId);
             if (type == InventoryType.UNDEFINED) return;
-            synchronized (character) {
-                var before = GameplayPackets.inventory(character, type);
-                if (mode == 0 && slot >= 0 && slot < shop.offers().size()) {
-                    var offer = shop.offers().get(slot);
-                    if (offer.itemId() == itemId) result = items.buy(character, itemId, quantity, offer.price());
-                } else if (mode == 1) result = items.sell(character, type.getType(), slot, itemId, quantity);
-                if (result == ItemSystem.ShopResult.SUCCESS) {
-                    GameplayPackets.inventoryChanges(type, before, GameplayPackets.inventory(character, type)).forEach(session::send);
-                    session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, character.getMeso())));
-                }
+            var before = GameplayPackets.inventory(character, type);
+            if (mode == 0 && slot >= 0 && slot < shop.offers().size()) {
+                var offer = shop.offers().get(slot);
+                if (offer.itemId() == itemId) result = items.buy(character, itemId, quantity, offer.price());
+            } else if (mode == 1) result = items.sell(character, type.getType(), slot, itemId, quantity);
+            if (result == ItemSystem.ShopResult.SUCCESS) {
+                GameplayPackets.inventoryChanges(type, before, GameplayPackets.inventory(character, type)).forEach(session::send);
+                session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, character.getMeso())));
             }
         } finally {
             var reply = GameplayPackets.packet(SendOpcode.CONFIRM_SHOP_TRANSACTION);

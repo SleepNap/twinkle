@@ -153,9 +153,8 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
                 return;
             }
             heartbeat.onInboundPacket(stage(), false);
-            registry.find(opcode).ifPresentOrElse(
-                    handler -> handler.handle(this, packet),
-                    () -> log.warn(I18n.message("log.session.unregistered_opcode"), Integer.toHexString(opcode)));
+            if (registry.find(opcode).isPresent()) registry.dispatch(opcode, this, packet);
+            else log.warn(I18n.message("log.session.unregistered_opcode"), Integer.toHexString(opcode));
         }
     }
 
@@ -181,8 +180,9 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     public void channelInactive(ChannelHandlerContext ctx) {
         log.info(I18n.message("log.session.connection_closed"), ctx.channel().remoteAddress());
         DisconnectListener listener = disconnectListener;
+        setAttr("transportClosed", true);
         if (listener != null) {
-            listener.onDisconnect(this);
+            registry.disconnect(() -> listener.onDisconnect(this));
         }
     }
 

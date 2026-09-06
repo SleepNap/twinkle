@@ -50,4 +50,14 @@ public class PetItem extends Item {
         copy.attribute = attribute;
         return copy;
     }
+
+    // 受控写入口：Lombok 的普通 setter 无法校验频道执行归属。
+    public void setPetName(String value) { requireStateAccess(); this.petName = value; }
+    public void setPetLevel(byte value) { requireStateAccess(); this.petLevel = value; }
+    public void setCloseness(short value) { requireStateAccess(); this.closeness = value; }
+    public void setFullness(byte value) { requireStateAccess(); this.fullness = value; }
+    public void setPetAttribute(short value) { requireStateAccess(); this.petAttribute = value; }
+    public void setPetSkill(short value) { requireStateAccess(); this.petSkill = value; }
+    public void setRemainLife(int value) { requireStateAccess(); this.remainLife = value; }
+    public void setAttribute(short value) { requireStateAccess(); this.attribute = value; }
 }

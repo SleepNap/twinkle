@@ -1,5 +1,9 @@
 package org.gms.channel;
 
+import java.util.List;
+import org.gms.channel.admin.ChannelEventPublisher;
+import org.gms.domain.game.lease.LeaseOwner;
+import org.gms.domain.game.lease.ControllerLeaseService;
 import lombok.extern.log4j.Log4j2;
 import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.domain.game.PlayerCharacter;
@@ -9,6 +13,9 @@ import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
+import org.gms.concurrent.ThreadManager;
+import org.gms.channel.persist.CharacterSaveQueue;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 玩家登录进图处理（RecvOpcode.PLAYER_LOGGEDIN）。
@@ -27,9 +34,11 @@ public final class PlayerLoggedinHandler implements PacketHandler {
     private final PlayerStorage players;
     private final PlayerSessionRegistry sessions;
     private final MonsterSpawnService spawnService;
-    private final org.gms.domain.game.lease.ControllerLeaseService leaseService;
+    private final ControllerLeaseService leaseService;
     private final int channelId;
-    private final org.gms.channel.admin.ChannelEventPublisher eventPublisher;
+    private final ThreadManager background;
+    private final CharacterSaveQueue saves;
+    private final ChannelEventPublisher eventPublisher;
 
     public PlayerLoggedinHandler(PlayerCharacterRepository characterRepo, PlayerCharacterAssembler characterLoader,
                                  ChannelMapManager mapManager, PlayerStorage players,
@@ -40,15 +49,25 @@ public final class PlayerLoggedinHandler implements PacketHandler {
     public PlayerLoggedinHandler(PlayerCharacterRepository characterRepo, PlayerCharacterAssembler characterLoader,
                                  ChannelMapManager mapManager, PlayerStorage players,
                                  PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId,
-                                 org.gms.channel.admin.ChannelEventPublisher eventPublisher) {
+                                 ChannelEventPublisher eventPublisher) {
         this(characterRepo, characterLoader, mapManager, players, sessions, spawnService, channelId, eventPublisher, null);
     }
 
     public PlayerLoggedinHandler(PlayerCharacterRepository characterRepo, PlayerCharacterAssembler characterLoader,
                                  ChannelMapManager mapManager, PlayerStorage players,
                                  PlayerSessionRegistry sessions, MonsterSpawnService spawnService, int channelId,
-                                 org.gms.channel.admin.ChannelEventPublisher eventPublisher,
-                                 org.gms.domain.game.lease.ControllerLeaseService leaseService) {
+                                 ChannelEventPublisher eventPublisher,
+                                 ControllerLeaseService leaseService) {
+        this(characterRepo, characterLoader, mapManager, players, sessions, spawnService, channelId,
+                eventPublisher, leaseService, null, null);
+    }
+
+    public PlayerLoggedinHandler(PlayerCharacterRepository characterRepo, PlayerCharacterAssembler characterLoader,
+                                 ChannelMapManager mapManager, PlayerStorage players, PlayerSessionRegistry sessions,
+                                 MonsterSpawnService spawnService, int channelId,
+                                 ChannelEventPublisher eventPublisher,
+                                 ControllerLeaseService leaseService,
+                                 ThreadManager background, CharacterSaveQueue saves) {
         this.characterRepo = characterRepo;
         this.characterLoader = characterLoader;
         this.mapManager = mapManager;
@@ -58,6 +77,8 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         this.channelId = channelId;
         this.eventPublisher = eventPublisher;
         this.leaseService = leaseService;
+        this.background = background;
+        this.saves = saves;
     }
 
     @Override
@@ -67,12 +88,17 @@ public final class PlayerLoggedinHandler implements PacketHandler {
             return;
         }
         long charId = packet.readInt();
+        if (sessions.execution() != null) { loadAsync(session, charId); return; }
         var dbChar = characterRepo.findById(charId).orElse(null);
         if (dbChar == null) {
             session.close(I18n.message("error.player_login.character_not_found", charId));
             return;
         }
         PlayerCharacter chr = characterLoader.fromData(dbChar);
+        enter(session, chr);
+    }
+
+    private void enter(PacketSession session, PlayerCharacter chr) {
         MapleMap map = mapManager.getMap(chr.getMap());
         chr.setMapObject(map);
         // 会话代际认领（事故报告阶段 B）：新连接认领 = 新代际；先移除地图/在线表里
@@ -96,17 +122,60 @@ public final class PlayerLoggedinHandler implements PacketHandler {
         // 地图对象必须在 SET_FIELD 之后发送，否则客户端尚未创建场景。
         map.npcs().forEach(npc -> session.send(GameplayPackets.npc(npc)));
         spawnService.ensureSpawned(map);
-        spawnService.onPlayerEnter(map, session, new org.gms.domain.game.lease.LeaseOwner(
+        spawnService.onPlayerEnter(map, session, new LeaseOwner(
                 chr.getId(), session.sessionId(), generation));
         if (eventPublisher != null) {
             eventPublisher.playerOnline(chr);
         }
         log.info(I18n.message("log.player_login.entered_map"), chr.getName(), chr.getId(), map.getMapId());
+        Runnable completed = session.getAttr("afterLogin");
+        session.setAttr("afterLogin", null);
+        if (completed != null) completed.run();
+    }
+
+    private void loadAsync(PacketSession session, long characterId) {
+        if (background == null || saves == null) throw new IllegalStateException(I18n.message("error.player_login.background_missing"));
+        if (session.getAttr("stateTransfer") != null) return;
+        Object token = new Object();
+        PacketSession previous = sessions.get(characterId);
+        PlayerCharacter old = previous == null ? null : previous.getAttr("character");
+        if (previous != null && previous.getAttr("stateTransfer") != null
+                || !sessions.beginLogin(characterId, token)) {
+            session.close(I18n.message("error.player_login.transferring"));
+            return;
+        }
+        session.setAttr("stateTransfer", token);
+        if (previous != null) {
+            Runnable cancel = previous.getAttr("cancelTrade");
+            if (cancel != null) cancel.run();
+            NpcTalkHandler.closeConversation(previous);
+            previous.setAttr("stateTransfer", token);
+        }
+        CompletableFuture<Void> stored = old == null ? saves.awaitStored(characterId) : saves.saveAsync(old);
+        stored.thenApplyAsync(ignored -> {
+            var record = characterRepo.findById(characterId).orElseThrow(() -> new IllegalStateException(I18n.message("error.player_login.character_not_found", characterId)));
+            return characterLoader.fromData(record);
+        }, background).whenComplete((character, error) -> {
+            if (sessions.execution().isClosed()) return;
+            sessions.execution().execute(() -> {
+                sessions.endLogin(characterId, token);
+                if (session.getAttr("stateTransfer") != token) return;
+                session.setAttr("stateTransfer", null);
+                if (error != null || Boolean.TRUE.equals(session.getAttr("transportClosed"))) {
+                    if (previous != null && sessions.get(characterId) == previous
+                            && previous.getAttr("stateTransfer") == token) previous.setAttr("stateTransfer", null);
+                    if (error != null) session.close(I18n.message("error.player_login.load_failed"));
+                    return;
+                }
+                enter(session, character);
+                if (previous != null) previous.close(I18n.message("error.player_login.replaced"));
+            });
+        });
     }
 
     /** 移除地图/在线表里同 id 的非自身旧 PlayerCharacter（重复登录，防广播双发；旧代际断链迟到清理由 compare-and-remove 短路）。 */
     private void removeSupersededCharacter(MapleMap map, PlayerCharacter newChr) {
-        for (var c : java.util.List.copyOf(map.characters())) {
+        for (var c : List.copyOf(map.characters())) {
             if (c.getId() == newChr.getId() && c != newChr) {
                 map.removeCharacter(c);
                 players.remove((PlayerCharacter) c);

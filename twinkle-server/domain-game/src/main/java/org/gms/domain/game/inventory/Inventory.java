@@ -1,8 +1,10 @@
 package org.gms.domain.game.inventory;
 
+import org.gms.i18n.I18n;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.gms.concurrent.GameExecution;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -19,6 +21,18 @@ import java.util.Map;
 @Getter
 @Setter
 public class Inventory {
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private GameExecution execution;
+
+    public void bindExecution(GameExecution owner) {
+        owner.requireOwner();
+        if (execution != null && execution != owner) throw new IllegalStateException(I18n.message("error.execution.inventory_owner"));
+        execution = owner;
+        items.values().forEach(item -> item.bindExecution(owner));
+    }
+
+    private void requireStateAccess() { if (execution != null) execution.requireOwner(); }
 
     private final InventoryType type;
     private final int slotLimit;
@@ -32,6 +46,7 @@ public class Inventory {
     }
 
     public Item getItem(short slot) {
+        requireStateAccess();
         return items.get(slot);
     }
 
@@ -41,6 +56,8 @@ public class Inventory {
      * @return 是否放入成功（背包满返回 false）
      */
     public boolean addItem(Item item) {
+        requireStateAccess();
+        if (execution != null) item.bindExecution(execution);
         short slot = getNextFreeSlot();
         if (slot < 0) {
             return false;
@@ -55,16 +72,20 @@ public class Inventory {
      * 不回写 position（调用方已设）；同槽位覆盖。加载存档时用。
      */
     public void putAtSlot(short slot, Item item) {
+        requireStateAccess();
+        if (execution != null) item.bindExecution(execution);
         items.put(slot, item);
     }
 
     /** 移除指定槽位物品（无论是否存在）。 */
     public void removeItem(short slot) {
+        requireStateAccess();
         items.remove(slot);
     }
 
     /** 下一个空闲槽位；满返回 -1。 */
     public short getNextFreeSlot() {
+        requireStateAccess();
         for (short s = 1; s <= slotLimit; s++) {
             if (!items.containsKey(s)) {
                 return s;
@@ -79,6 +100,7 @@ public class Inventory {
 
     /** 空槽数（槽位上限 - 已用）。 */
     public int freeSlots() {
+        requireStateAccess();
         int usedSlots = 0;
         for (short position : items.keySet()) {
             if (position > 0 && position <= slotLimit) {
@@ -90,10 +112,12 @@ public class Inventory {
 
     /** 全部物品（不可变视图）。 */
     public Collection<Item> items() {
+        requireStateAccess();
         return List.copyOf(items.values());
     }
 
     public int size() {
+        requireStateAccess();
         return items.size();
     }
 }

@@ -8,8 +8,8 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
 
 /**
- * 游戏循环单线程实现（架构 5.1：游戏 tick 单线程，换点干净——tick 帧边界暂停、卸载、
- * 加载新 classloader、重注册、恢复，无并发执行中的逻辑）。
+ * 公共时钟单线程实现。频道业务由各自执行队列处理；暂停时钟只排空当前时钟回调，
+ * 频道状态任务还需要所属队列的屏障。
  *
  * <p>线程为 daemon（不阻塞 JVM 退出）、名为 {@code game-tick}。单 handler 异常不中断循环
  * （记录 {@link #lastTickError()} 后继续），单个逻辑出错不拖垮整服。
@@ -27,6 +27,8 @@ public final class GameTickLoop implements TickScheduler {
     private volatile boolean paused;
     private volatile Thread thread;
     private volatile Throwable lastTickError;
+    /** 仅在短的准入/完成区间持有本对象监视器，业务回调在监视器外执行。 */
+    private Thread activeTick;
 
     public GameTickLoop(long intervalMillis) {
         if (intervalMillis <= 0) {
@@ -77,7 +79,16 @@ public final class GameTickLoop implements TickScheduler {
 
     @Override
     public synchronized void pause() {
+        if (activeTick == Thread.currentThread())
+            throw new IllegalStateException(I18n.message("error.tick.self_pause"));
         paused = true;
+        while (activeTick != null) {
+            try { wait(); }
+            catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(I18n.message("error.tick.pause_interrupted"), error);
+            }
+        }
         log.info(I18n.message("log.tick.paused"), tickCount.get());
     }
 
@@ -121,9 +132,20 @@ public final class GameTickLoop implements TickScheduler {
     }
 
     /**
-     * 执行一次 tick（package-private，供测试手动驱动；循环线程也调用它）。
+     * 执行一次 tick（供测试手动驱动；并发唤醒合并，暂停后不再准入）。
      */
     public void tickOnce() {
+        synchronized (this) {
+            if (paused || activeTick != null) return;
+            activeTick = Thread.currentThread();
+        }
+        try { dispatchTick(); }
+        finally {
+            synchronized (this) { activeTick = null; notifyAll(); }
+        }
+    }
+
+    private void dispatchTick() {
         long count = tickCount.incrementAndGet();
         for (TickHandler handler : handlers) {
             try {

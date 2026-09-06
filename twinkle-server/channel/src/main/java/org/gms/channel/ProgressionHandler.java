@@ -34,29 +34,27 @@ public final class ProgressionHandler implements PacketHandler {
             if (!GameplaySession.canAct(session, character) || packet.available() < 8) return;
             packet.skip(4);
             int value = packet.readInt();
-            synchronized (character) {
-                if (!skillPoints) {
-                    if (!system.allocateAp(character, Map.of(value, 1))) return;
-                    int stat = switch (value) { case 0x40 -> character.getStrStat(); case 0x80 -> character.getDexStat();
-                        case 0x100 -> character.getIntStat(); default -> character.getLukStat(); };
-                    session.send(GameplayPackets.stats(Map.of(value, stat, GameplayPackets.AP, character.getAp())));
-                } else if (system.allocateSp(character, definition(value))) {
-                    var learned = character.getSkill(value);
-                    var response = GameplayPackets.packet(SendOpcode.UPDATE_SKILLS);
-                    response.writeByte(1);
-                    response.writeShort(1);
-                    response.writeInt(value);
-                    response.writeInt(learned.level());
-                    response.writeInt(learned.masterLevel());
-                    response.writeLong(V83FileTime.encode(learned.expiration()));
-                    response.writeByte(4);
-                    session.send(response);
-                    var points = GameplayPackets.packet(SendOpcode.STAT_CHANGED);
-                    points.writeBool(true);
-                    points.writeInt(GameplayPackets.SP);
-                    V83SkillPoints.write(points, character.getJob(), character.getSp());
-                    session.send(points);
-                }
+            if (!skillPoints) {
+                if (!system.allocateAp(character, Map.of(value, 1))) return;
+                int stat = switch (value) { case 0x40 -> character.getStrStat(); case 0x80 -> character.getDexStat();
+                    case 0x100 -> character.getIntStat(); default -> character.getLukStat(); };
+                session.send(GameplayPackets.stats(Map.of(value, stat, GameplayPackets.AP, character.getAp())));
+            } else if (system.allocateSp(character, definition(value))) {
+                var learned = character.getSkill(value);
+                var response = GameplayPackets.packet(SendOpcode.UPDATE_SKILLS);
+                response.writeByte(1);
+                response.writeShort(1);
+                response.writeInt(value);
+                response.writeInt(learned.level());
+                response.writeInt(learned.masterLevel());
+                response.writeLong(V83FileTime.encode(learned.expiration()));
+                response.writeByte(4);
+                session.send(response);
+                var points = GameplayPackets.packet(SendOpcode.STAT_CHANGED);
+                points.writeBool(true);
+                points.writeInt(GameplayPackets.SP);
+                V83SkillPoints.write(points, character.getJob(), character.getSp());
+                session.send(points);
             }
         } finally { session.send(GameplayPackets.enableActions()); }
     }

@@ -36,16 +36,16 @@ public final class CombatSystem {
         }
         int damage = DamageCalculator.physicalDamage(
                 attacker.totalStr(), attacker.totalDex(), wAtk, 1.0, target.getData().getPdd());
-        target.takeDamage(damage);
-        return new DamageResult(damage, target.isAlive());
+        var outcome = target.applyDamage(damage);
+        return new DamageResult(outcome.damage(), outcome.alive(), outcome.killed());
     }
 
     /** 攻击结果。 */
-    public record DamageResult(int damage, boolean targetAlive) {
+    public record DamageResult(int damage, boolean targetAlive, boolean killed) {
 
         /** 版本门拒绝/无效攻击的占位结果。 */
         public static DamageResult blocked() {
-            return new DamageResult(0, true);
+            return new DamageResult(0, true, false);
         }
     }
 }

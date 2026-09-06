@@ -6,17 +6,17 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 
 /** 游戏用例测试的内存连接，不依赖真实客户端或外部数据库。 */
 public final class GameplayTestSession implements PacketSession {
     public final PlayerCharacter character;
-    public final List<OutPacket> sent = new ArrayList<>();
-    private final Map<String, Object> attributes = new HashMap<>();
-    private SessionStage stage = SessionStage.IN_GAME;
+    public final List<OutPacket> sent = new CopyOnWriteArrayList<>();
+    private final Map<String, Object> attributes = new ConcurrentHashMap<>();
+    private volatile SessionStage stage = SessionStage.IN_GAME;
 
     public GameplayTestSession(long id, MapleMap map) {
         character = new PlayerCharacter(1);
@@ -36,5 +36,7 @@ public final class GameplayTestSession implements PacketSession {
     @Override public long sessionId() { return character.getId(); }
     @SuppressWarnings("unchecked")
     @Override public <T> T getAttr(String key) { return (T) attributes.get(key); }
-    @Override public void setAttr(String key, Object value) { attributes.put(key, value); }
+    @Override public void setAttr(String key, Object value) {
+        if (value == null) attributes.remove(key); else attributes.put(key, value);
+    }
 }

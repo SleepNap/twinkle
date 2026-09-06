@@ -18,6 +18,9 @@ import org.gms.replaceable.*;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.tick.TickScheduler;
 import org.gms.wz.WzResourceRegistry;
+import org.gms.concurrent.GameExecution;
+import org.gms.hotreload.versioned.VersionGate;
+import org.gms.concurrent.ThreadManager;
 
 /** 构造一个频道的全部私有运行态；失败时回滚已经注册的目录和 tick 资源。 */
 public final class ChannelRuntimeFactory {
@@ -48,6 +51,8 @@ public final class ChannelRuntimeFactory {
     private final long leaseSweepIntervalMillis;
     private final NpcShopCatalog shopCatalog;
     private final ProgressionSystem progressionSystem;
+    private final VersionGate versionGate;
+    private final ThreadManager background;
 
     public ChannelRuntimeFactory(PlayerCharacterRepository characterRepository, PlayerCharacterAssembler characterLoader,
                                  WzResourceRegistry wzResources, GameDataProvider gameData,
@@ -60,7 +65,7 @@ public final class ChannelRuntimeFactory {
                                  ChannelPlayerDirectory playerDirectory, TickScheduler tickScheduler,
                                  HeartbeatConfig heartbeatConfig, int worldId, long leaseTtlSeconds,
                                  long leaseCooldownSeconds, long leaseSweepIntervalMillis, NpcShopCatalog shopCatalog,
-                                 ProgressionSystem progressionSystem) {
+                                 ProgressionSystem progressionSystem, VersionGate versionGate, ThreadManager background) {
         this.characterRepository = characterRepository;
         this.characterLoader = characterLoader;
         this.wzResources = wzResources;
@@ -87,14 +92,18 @@ public final class ChannelRuntimeFactory {
         this.leaseSweepIntervalMillis = leaseSweepIntervalMillis;
         this.shopCatalog = shopCatalog;
         this.progressionSystem = progressionSystem;
+        this.versionGate = versionGate;
+        this.background = background;
     }
 
     public ChannelRuntime create(ChannelWorkerSpec.Endpoint endpoint) {
         int channelId = endpoint.channelId();
-        HandlerRegistry handlers = new HandlerRegistry();
-        ChannelMapManager maps = new ChannelMapManager(wzResources, channelId);
-        PlayerStorage players = new PlayerStorage();
-        PlayerSessionRegistry sessions = new PlayerSessionRegistry();
+        GameExecution execution = new GameExecution("channel-state-" + channelId, versionGate);
+        ChannelTickScheduler channelTicks = new ChannelTickScheduler(tickScheduler, execution);
+        HandlerRegistry handlers = new HandlerRegistry(execution);
+        ChannelMapManager maps = new ChannelMapManager(wzResources, channelId, execution);
+        PlayerStorage players = new PlayerStorage(execution);
+        PlayerSessionRegistry sessions = new PlayerSessionRegistry(execution);
         playerDirectory.register(channelId, players);
 
         DefaultControllerLeaseService leases = null;
@@ -116,6 +125,8 @@ public final class ChannelRuntimeFactory {
                     NpcTalkHandler.closeConversation(session);
                     return;
                 }
+                Runnable cancelTrade = session.getAttr("cancelTrade");
+                if (cancelTrade != null) cancelTrade.run();
                 if (!sessions.unregister(character.getId(), session)) return;
                 publisher.playerOffline(character.getId());
                 players.remove(character);
@@ -130,7 +141,7 @@ public final class ChannelRuntimeFactory {
 
             new ChannelHandlerRegistrar(
                     new PlayerLoggedinHandler(characterRepository, characterLoader, maps, players, sessions,
-                            monsters, channelId, publisher, leases),
+                            monsters, channelId, publisher, leases, background, saveQueue),
                     new PlayerMapTransitionHandler(), new MovePlayerHandler(movementSystem, sessions),
                     new AttackHandler(combatSystem, sessions, leases, false, false),
                     new AttackHandler(combatSystem, sessions, leases, true, false),
@@ -139,7 +150,7 @@ public final class ChannelRuntimeFactory {
                     new NpcTalkHandler(scriptManager, itemSystem, questSystem), new NpcTalkMoreHandler(),
                     new UseItemHandler(itemSystem, gameData),
                     new WhisperHandler(channelId, intercoord, eventBus, sessions),
-                    new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue),
+                    new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue, background),
                     new BuddyHandler(channelId, intercoord, eventBus, sessions, buddyListRepository),
                     new MoveLifeHandler(leases, sessions), new GeneralChatHandler(sessions)).register(handlers);
 
@@ -148,20 +159,20 @@ public final class ChannelRuntimeFactory {
             locations = new ChannelLocationBinder(worldId, channelId, intercoord, eventBus);
             new ChannelActivityService(worldId, channelId, players, sessions, saveQueue, publisher);
             reassign = new MonsterReassignTickHandler(maps, monsters, tickScheduler.ticksFor(10_000L));
-            tickScheduler.register(leases);
-            tickScheduler.register(reassign);
+            channelTicks.register(leases);
+            channelTicks.register(reassign);
             gameplay = new ChannelGameplay(handlers, maps, monsters, leases, channelId, gameData,
-                    sessions, itemSystem, questSystem, scriptManager, shopCatalog, tickScheduler,
+                    sessions, itemSystem, questSystem, scriptManager, shopCatalog, channelTicks,
                     wzResources, progressionSystem);
             return new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
-                    reassign, server, tickScheduler, messages, changes, locations, gameplay);
+                    reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
         } catch (RuntimeException error) {
             closeQuietly(gameplay);
             closeQuietly(locations);
             closeQuietly(changes);
             closeQuietly(messages);
-            if (reassign != null) tickScheduler.unregister(reassign);
-            if (leases != null) tickScheduler.unregister(leases);
+            channelTicks.close();
+            execution.close();
             if (monsters != null) monsters.close();
             playerDirectory.unregister(channelId, players);
             throw error;

@@ -45,11 +45,20 @@ public final class ChannelAdminService implements AdminService {
     private final RestartService restartService;
     private final RestartCoordinator restartCoordinator;
     private final Runnable restartProcess;
+    private final Runnable stopNetwork;
 
     public ChannelAdminService(PlayerStorage players, PlayerSessionRegistry sessions, long channelId,
                                ScriptManager scriptManager, WzReloadCoordinator wzReloadCoordinator,
                                RestartService restartService,
                                RestartCoordinator restartCoordinator, Runnable restartProcess) {
+        this(players, sessions, channelId, scriptManager, wzReloadCoordinator, restartService,
+                restartCoordinator, () -> { }, restartProcess);
+    }
+
+    public ChannelAdminService(PlayerStorage players, PlayerSessionRegistry sessions, long channelId,
+                               ScriptManager scriptManager, WzReloadCoordinator wzReloadCoordinator,
+                               RestartService restartService, RestartCoordinator restartCoordinator,
+                               Runnable stopNetwork, Runnable restartProcess) {
         this.players = players;
         this.sessions = sessions;
         this.channelId = channelId;
@@ -58,10 +67,13 @@ public final class ChannelAdminService implements AdminService {
         this.restartService = restartService;
         this.restartCoordinator = restartCoordinator;
         this.restartProcess = restartProcess;
+        this.stopNetwork = stopNetwork;
     }
 
     @Override
     public ChannelSummary onlineSummary() {
+        if (players.execution() != null && !players.execution().isOwner())
+            return players.execution().call(this::onlineSummary);
         java.util.List<OnlinePlayer> snapshot = players.all().stream()
                 .map(this::toDto)
                 .sorted((a, b) -> Long.compare(a.characterId(), b.characterId()))
@@ -71,6 +83,8 @@ public final class ChannelAdminService implements AdminService {
 
     @Override
     public CharacterInventory inventorySnapshot(long characterId) {
+        if (players.execution() != null && !players.execution().isOwner())
+            return players.execution().call(() -> inventorySnapshot(characterId));
         PlayerCharacter character = players.getById(characterId);
         if (character == null) {
             return null;
@@ -147,7 +161,7 @@ public final class ChannelAdminService implements AdminService {
         log.info(I18n.message("log.admin.restart_requested"));
         Thread.startVirtualThread(() -> {
             try {
-                restartService.restart(restartProcess);
+                restartService.restart(stopNetwork, restartProcess);
             } catch (Exception e) {
                 log.error(I18n.message("log.admin.restart_error"), e);
             }

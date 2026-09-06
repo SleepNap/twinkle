@@ -32,11 +32,9 @@ public final class AvatarHandler {
             PlayerCharacter character = current(session);
             if (!GameplaySession.canAct(session, character) || packet.available() < 4) return;
             int itemId = packet.readInt();
-            synchronized (character) {
-                if (data.item(itemId) == null || !system.sit(character, itemId, clock.millis())) return;
-                sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.chair(character.getId(), itemId),
-                        character.getId());
-            }
+            if (data.item(itemId) == null || !system.sit(character, itemId, clock.millis())) return;
+            sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.chair(character.getId(), itemId),
+                    character.getId());
         } finally { session.send(GameplayPackets.enableActions()); }
     }
 
@@ -52,21 +50,17 @@ public final class AvatarHandler {
     public void refresh(PacketSession session) {
         PlayerCharacter character = current(session);
         if (character == null) return;
-        synchronized (character) {
-            int chair = character.getChairItemId();
-            if (chair != 0 && (character.getHp() <= 0 || !character.ownsUsableItem(chair, (byte) 3, clock.millis()))) {
-                clearChair(session, character);
-            }
+        int chair = character.getChairItemId();
+        if (chair != 0 && (character.getHp() <= 0 || !character.ownsUsableItem(chair, (byte) 3, clock.millis()))) {
+            clearChair(session, character);
         }
     }
 
     private void clearChair(PacketSession session, PlayerCharacter character) {
-        synchronized (character) {
-            if (!system.stand(character)) return;
-            session.send(PlayerPresencePackets.cancelChair());
-            if (character.getMapObject() != null) sessions.broadcastToMap(character.getMapObject(),
-                    PlayerPresencePackets.chair(character.getId(), 0), character.getId());
-        }
+        if (!system.stand(character)) return;
+        session.send(PlayerPresencePackets.cancelChair());
+        if (character.getMapObject() != null) sessions.broadcastToMap(character.getMapObject(),
+                PlayerPresencePackets.chair(character.getId(), 0), character.getId());
     }
 
     private PlayerCharacter current(PacketSession session) {

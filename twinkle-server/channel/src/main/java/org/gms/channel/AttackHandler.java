@@ -87,6 +87,7 @@ public final class AttackHandler implements PacketHandler {
         if (map == null) {
             return;
         }
+        if (sessions.get(chr.getId()) != session || !GameplaySession.canAct(session, chr)) return;
 
         // 注意：opcode 已由 NetworkSession 读出（分发前消费），这里从负载第一个字节开始
         packet.readByte();                              // 跳过
@@ -159,13 +160,14 @@ public final class AttackHandler implements PacketHandler {
                 continue;
             }
             int wAtk = Math.max(CombatSystem.BARE_HAND_WATK, chr.equipmentStats().weaponAttack());
-            int dmg = combatSystem.physicalAttack(chr, monster, wAtk).damage();
+            var outcome = combatSystem.physicalAttack(chr, monster, wAtk);
+            int dmg = outcome.damage();
             int[] lines = new int[t.damages.length];
             for (int j = 0; j < t.damages.length; j++) {
                 lines[j] = dmg;
             }
             damages[i] = lines;
-            if (!monster.isAlive()) {
+            if (outcome.killed()) {
                 anyDead = true;
                 deadOids.add(monster.getObjectId());
                 var session = sessions.get(chr.getId());

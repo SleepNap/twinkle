@@ -1,8 +1,11 @@
 package org.gms.domain.game;
 
+import org.gms.domain.game.map.MapleMap;
+import org.gms.i18n.I18n;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.gms.concurrent.GameExecution;
 import org.gms.domain.game.inventory.Inventory;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Equip;
@@ -38,7 +41,7 @@ import java.util.Set;
  * 逻辑系统（M2-2），经接口访问本类状态。手动 new、不进容器（红线 4）。
  *
  * <p><b>热重载安全</b>：实现 {@link CharacterState}（稳定层 SPI，逻辑系统经它访问），
- * 构造时携带创建它的逻辑版本（来自 {@link org.gms.hotreload.versioned.VersionGate#currentVersion()}）。
+ * 未绑定对象携带创建版本；在线对象的版本来自所属频道当前操作，延迟回调需显式携带版本。
  * 重载换代后，迟到的旧逻辑写操作经版本门识别（架构 5.3）。
  *
  * <p>新角色默认值对齐 v83（思路参考自 BeiDou-Server 的 PlayerCharacter.getDefault）。
@@ -46,13 +49,28 @@ import java.util.Set;
 @Getter
 @Setter
 public class PlayerCharacter implements BuffState, AvatarState, ControlsState, EquipmentState {
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private volatile GameExecution execution;
+
+    public GameExecution execution() { return execution; }
+    public void bindExecution(GameExecution owner) {
+        owner.requireOwner();
+        if (execution != null && execution != owner) throw new IllegalStateException(I18n.message("error.execution.character_owner"));
+        execution = owner;
+        questBook.snapshot().values().forEach(status -> status.bindExecution(owner));
+        for (InventoryType type : InventoryType.values()) {
+            if (type != InventoryType.UNDEFINED) getInventory(type).bindExecution(owner);
+        }
+    }
+    private void requireStateAccess() { if (execution != null) execution.requireOwner(); }
 
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
     private volatile EquipmentStats equipmentStats = EquipmentStats.EMPTY;
 
     @Override public EquipmentStats equipmentStats() { return equipmentStats; }
-    @Override public void setEquipmentStats(EquipmentStats stats) { equipmentStats = Objects.requireNonNull(stats); }
+    @Override public void setEquipmentStats(EquipmentStats stats) { requireStateAccess(); equipmentStats = Objects.requireNonNull(stats); }
     @Override public int equipmentSlotLimit() { return getInventory(InventoryType.EQUIP).getSlotLimit(); }
 
     @Override public synchronized Map<Short, TradeItemSnapshot> equipmentItems() {
@@ -106,7 +124,7 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
     private volatile ControlSettings controls = ControlSettings.defaults();
 
     @Override public ControlSettings controls() { return controls; }
-    @Override public void setControls(ControlSettings controls) { this.controls = Objects.requireNonNull(controls); }
+    @Override public void setControls(ControlSettings controls) { requireStateAccess(); this.controls = Objects.requireNonNull(controls); }
 
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
@@ -116,10 +134,10 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
     private final Map<Integer, Long> skillCooldowns = new HashMap<>();
 
     @Override public synchronized Map<Long, ActiveBuff> buffs() { return Map.copyOf(activeBuffs); }
-    @Override public synchronized void putBuff(ActiveBuff buff) { activeBuffs.put(buff.mask(), buff); }
-    @Override public synchronized void removeBuff(long mask) { activeBuffs.remove(mask); }
+    @Override public synchronized void putBuff(ActiveBuff buff) { requireStateAccess(); activeBuffs.put(buff.mask(), buff); }
+    @Override public synchronized void removeBuff(long mask) { requireStateAccess(); activeBuffs.remove(mask); }
     @Override public synchronized long cooldown(int skillId) { return skillCooldowns.getOrDefault(skillId, 0L); }
-    @Override public synchronized void setCooldown(int skillId, long expiresAt) {
+    @Override public synchronized void setCooldown(int skillId, long expiresAt) { requireStateAccess();
         if (expiresAt <= 0) skillCooldowns.remove(skillId); else skillCooldowns.put(skillId, expiresAt);
     }
 
@@ -241,11 +259,11 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
     @Setter(AccessLevel.NONE)
     private final CharacterRuntimeState runtimeState = new CharacterRuntimeState();
 
-    public org.gms.domain.game.map.MapleMap getMapObject() {
+    public MapleMap getMapObject() {
         return runtimeState.mapObject();
     }
 
-    public void setMapObject(org.gms.domain.game.map.MapleMap mapObject) {
+    public void setMapObject(MapleMap mapObject) { requireStateAccess();
         runtimeState.mapObject(mapObject);
     }
 
@@ -278,32 +296,34 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
     // ---- 持久化字段手写 setter（覆盖 Lombok 生成，赋值后标脏，红线 17 增量 FLUSH 依据） ----
     // 手写同名方法后 Lombok 不再生成该字段 setter；坐标 x/y 不标脏（运行期不落库，map 已持久化）。
 
-    public void setLevel(int level) {
+    public void setLevel(int level) { requireStateAccess();
         this.level = level;
         markDirty();
     }
 
-    public void setExp(long exp) {
+    public void setExp(long exp) { requireStateAccess();
         this.exp = exp;
         markDirty();
     }
 
-    public void setHp(int hp) {
+    public synchronized void setHp(int hp) {
+        requireStateAccess();
         this.hp = hp;
         markDirty();
     }
 
-    public void setMp(int mp) {
+    public synchronized void setMp(int mp) {
+        requireStateAccess();
         this.mp = mp;
         markDirty();
     }
 
-    public void setMaxHp(int maxHp) {
+    public void setMaxHp(int maxHp) { requireStateAccess();
         this.maxHp = maxHp;
         markDirty();
     }
 
-    public void setMaxMp(int maxMp) {
+    public void setMaxMp(int maxMp) { requireStateAccess();
         this.maxMp = maxMp;
         markDirty();
     }
@@ -312,17 +332,17 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
         return meso;
     }
 
-    public synchronized void setMeso(int meso) {
+    public synchronized void setMeso(int meso) { requireStateAccess();
         this.meso = meso;
         markDirty();
     }
 
-    public void setJob(int job) {
+    public void setJob(int job) { requireStateAccess();
         this.job = job;
         markDirty();
     }
 
-    public void setMap(int map) {
+    public void setMap(int map) { requireStateAccess();
         this.map = map;
         markDirty();
     }
@@ -368,6 +388,7 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
      * 加载角色时须先 set 各 slot 字段再访问背包，槽位上限才正确。
      */
     public Inventory getInventory(InventoryType type) {
+        requireStateAccess();
         return inventory.getOrCreate(type, slotLimitFor(type));
     }
 
@@ -383,32 +404,36 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
     }
 
     public SkillEntry getSkill(int skillId) {
+        requireStateAccess();
         return skillBook.get(skillId);
     }
 
-    public void putSkill(SkillEntry entry) {
+    public void putSkill(SkillEntry entry) { requireStateAccess();
         skillBook.put(entry);
         markDirty();
     }
 
-    public void removeSkill(int skillId) {
+    public void removeSkill(int skillId) { requireStateAccess();
         skillBook.remove(skillId);
         markDirty();
     }
 
     /** 全部技能（不可变视图）。 */
     public Map<Integer, SkillEntry> skills() {
+        requireStateAccess();
         return skillBook.snapshot();
     }
 
     /** 加载存档时放入完整任务状态。 */
-    public void putQuest(QuestStatus status) {
+    public void putQuest(QuestStatus status) { requireStateAccess();
+        if (execution != null) status.bindExecution(execution);
         questBook.put(status);
         markDirty();
     }
 
     /** 全部任务状态（不可变视图）。 */
     public Map<Integer, QuestStatus> quests() {
+        requireStateAccess();
         return questBook.snapshot();
     }
 
@@ -525,6 +550,7 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
         updated.setCompleted((previous == null ? 0 : previous.getCompleted())
                 + (change.target() == QuestStatus.State.COMPLETED ? 1 : 0));
         if (change.target() == QuestStatus.State.COMPLETED) updated.setCompletionTime(change.completedAt());
+        if (execution != null) updated.bindExecution(execution);
         questBook.put(updated);
         meso = (int) money;
         exp = experience;
@@ -927,17 +953,20 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
 
     @Override
     public QuestStatus getQuestStatus(int questId) {
+        requireStateAccess();
         return questBook.get(questId);
     }
 
     @Override
     public boolean startQuest(int questId) {
+        requireStateAccess();
         QuestStatus existing = questBook.get(questId);
         if (existing != null && existing.getState() == QuestStatus.State.COMPLETED) {
             return false;   // 已完成不能重开
         }
         QuestStatus qs = new QuestStatus(questId);
         qs.setState(QuestStatus.State.STARTED);
+        if (execution != null) qs.bindExecution(execution);
         questBook.put(qs);
         markDirty();
         return true;
@@ -945,6 +974,7 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
 
     @Override
     public boolean completeQuest(int questId) {
+        requireStateAccess();
         QuestStatus qs = questBook.get(questId);
         if (qs == null || qs.getState() != QuestStatus.State.STARTED) {
             return false;
@@ -958,6 +988,7 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
 
     @Override
     public boolean setQuestProgress(int questId, int key, int value) {
+        requireStateAccess();
         QuestStatus qs = questBook.get(questId);
         if (qs == null || qs.getState() != QuestStatus.State.STARTED) {
             return false;
@@ -969,6 +1000,78 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
 
     @Override
     public long logicVersion() {
-        return logicVersion;
+        return execution == null ? logicVersion : execution.version();
     }
+
+    // 受控写入口：Lombok 的普通 setter 无法校验频道执行归属。
+    public void setId(long value) { requireStateAccess(); this.id = value; if (execution != null) markDirty(); }
+    public void setAccountId(Long value) { requireStateAccess(); this.accountId = value; if (execution != null) markDirty(); }
+    public void setWorld(int value) { requireStateAccess(); this.world = value; if (execution != null) markDirty(); }
+    public void setName(String value) { requireStateAccess(); this.name = value; if (execution != null) markDirty(); }
+    public void setGachaExp(long value) { requireStateAccess(); this.gachaExp = value; if (execution != null) markDirty(); }
+    public void setHpMpUsed(int value) { requireStateAccess(); this.hpMpUsed = value; if (execution != null) markDirty(); }
+    public void setSkinColor(int value) { requireStateAccess(); this.skinColor = value; if (execution != null) markDirty(); }
+    public void setGender(int value) { requireStateAccess(); this.gender = value; if (execution != null) markDirty(); }
+    public void setFame(int value) { requireStateAccess(); this.fame = value; if (execution != null) markDirty(); }
+    public void setFquest(int value) { requireStateAccess(); this.fquest = value; if (execution != null) markDirty(); }
+    public void setHair(int value) { requireStateAccess(); this.hair = value; if (execution != null) markDirty(); }
+    public void setFace(int value) { requireStateAccess(); this.face = value; if (execution != null) markDirty(); }
+    public void setAp(int value) { requireStateAccess(); this.ap = value; if (execution != null) markDirty(); }
+    public void setSp(String value) { requireStateAccess(); this.sp = value; if (execution != null) markDirty(); }
+    public void setSpawnPoint(int value) { requireStateAccess(); this.spawnPoint = value; if (execution != null) markDirty(); }
+    public void setGm(int value) { requireStateAccess(); this.gm = value; if (execution != null) markDirty(); }
+    public void setParty(int value) { requireStateAccess(); this.party = value; if (execution != null) markDirty(); }
+    public void setBuddyCapacity(int value) { requireStateAccess(); this.buddyCapacity = value; if (execution != null) markDirty(); }
+    public void setCreateDate(String value) { requireStateAccess(); this.createDate = value; if (execution != null) markDirty(); }
+    public void setRank(long value) { requireStateAccess(); this.rank = value; if (execution != null) markDirty(); }
+    public void setRankMove(int value) { requireStateAccess(); this.rankMove = value; if (execution != null) markDirty(); }
+    public void setJobRank(long value) { requireStateAccess(); this.jobRank = value; if (execution != null) markDirty(); }
+    public void setJobRankMove(int value) { requireStateAccess(); this.jobRankMove = value; if (execution != null) markDirty(); }
+    public void setGuildId(int value) { requireStateAccess(); this.guildId = value; if (execution != null) markDirty(); }
+    public void setGuildRank(int value) { requireStateAccess(); this.guildRank = value; if (execution != null) markDirty(); }
+    public void setMessengerId(int value) { requireStateAccess(); this.messengerId = value; if (execution != null) markDirty(); }
+    public void setMessengerPosition(int value) { requireStateAccess(); this.messengerPosition = value; if (execution != null) markDirty(); }
+    public void setMountLevel(int value) { requireStateAccess(); this.mountLevel = value; if (execution != null) markDirty(); }
+    public void setMountExp(int value) { requireStateAccess(); this.mountExp = value; if (execution != null) markDirty(); }
+    public void setMountTiredness(int value) { requireStateAccess(); this.mountTiredness = value; if (execution != null) markDirty(); }
+    public void setOmokWins(int value) { requireStateAccess(); this.omokWins = value; if (execution != null) markDirty(); }
+    public void setOmokLosses(int value) { requireStateAccess(); this.omokLosses = value; if (execution != null) markDirty(); }
+    public void setOmokTies(int value) { requireStateAccess(); this.omokTies = value; if (execution != null) markDirty(); }
+    public void setMatchCardWins(int value) { requireStateAccess(); this.matchCardWins = value; if (execution != null) markDirty(); }
+    public void setMatchCardLosses(int value) { requireStateAccess(); this.matchCardLosses = value; if (execution != null) markDirty(); }
+    public void setMatchCardTies(int value) { requireStateAccess(); this.matchCardTies = value; if (execution != null) markDirty(); }
+    public void setMerchantMesos(int value) { requireStateAccess(); this.merchantMesos = value; if (execution != null) markDirty(); }
+    public void setHasMerchant(boolean value) { requireStateAccess(); this.hasMerchant = value; if (execution != null) markDirty(); }
+    public void setEquipSlots(int value) { requireStateAccess(); this.equipSlots = value; if (execution != null) markDirty(); }
+    public void setUseSlots(int value) { requireStateAccess(); this.useSlots = value; if (execution != null) markDirty(); }
+    public void setSetupSlots(int value) { requireStateAccess(); this.setupSlots = value; if (execution != null) markDirty(); }
+    public void setEtcSlots(int value) { requireStateAccess(); this.etcSlots = value; if (execution != null) markDirty(); }
+    public void setFamilyId(int value) { requireStateAccess(); this.familyId = value; if (execution != null) markDirty(); }
+    public void setMonsterBookCover(int value) { requireStateAccess(); this.monsterBookCover = value; if (execution != null) markDirty(); }
+    public void setAllianceRank(int value) { requireStateAccess(); this.allianceRank = value; if (execution != null) markDirty(); }
+    public void setVanquisherStage(int value) { requireStateAccess(); this.vanquisherStage = value; if (execution != null) markDirty(); }
+    public void setAriantPoints(int value) { requireStateAccess(); this.ariantPoints = value; if (execution != null) markDirty(); }
+    public void setDojoPoints(int value) { requireStateAccess(); this.dojoPoints = value; if (execution != null) markDirty(); }
+    public void setLastDojoStage(int value) { requireStateAccess(); this.lastDojoStage = value; if (execution != null) markDirty(); }
+    public void setFinishedDojoTutorial(boolean value) { requireStateAccess(); this.finishedDojoTutorial = value; if (execution != null) markDirty(); }
+    public void setVanquisherKills(int value) { requireStateAccess(); this.vanquisherKills = value; if (execution != null) markDirty(); }
+    public void setSummonValue(int value) { requireStateAccess(); this.summonValue = value; if (execution != null) markDirty(); }
+    public void setPartnerId(int value) { requireStateAccess(); this.partnerId = value; if (execution != null) markDirty(); }
+    public void setMarriageItemId(int value) { requireStateAccess(); this.marriageItemId = value; if (execution != null) markDirty(); }
+    public void setReborns(int value) { requireStateAccess(); this.reborns = value; if (execution != null) markDirty(); }
+    public void setPqPoints(int value) { requireStateAccess(); this.pqPoints = value; if (execution != null) markDirty(); }
+    public void setDataString(String value) { requireStateAccess(); this.dataString = value; if (execution != null) markDirty(); }
+    public void setLastLogoutTime(String value) { requireStateAccess(); this.lastLogoutTime = value; if (execution != null) markDirty(); }
+    public void setLastExpGainTime(String value) { requireStateAccess(); this.lastExpGainTime = value; if (execution != null) markDirty(); }
+    public void setPartySearch(boolean value) { requireStateAccess(); this.partySearch = value; if (execution != null) markDirty(); }
+    public void setJailExpire(long value) { requireStateAccess(); this.jailExpire = value; if (execution != null) markDirty(); }
+    public void setX(int value) { requireStateAccess(); this.x = value; }
+    public void setY(int value) { requireStateAccess(); this.y = value; }
+    public void setStance(int value) { requireStateAccess(); this.stance = value; }
+    public void setFoothold(int value) { requireStateAccess(); this.foothold = value; }
+    public void setChairItemId(int value) { requireStateAccess(); this.chairItemId = value; }
+    public void setStrStat(short value) { requireStateAccess(); this.strStat = value; if (execution != null) markDirty(); }
+    public void setDexStat(short value) { requireStateAccess(); this.dexStat = value; if (execution != null) markDirty(); }
+    public void setLukStat(short value) { requireStateAccess(); this.lukStat = value; if (execution != null) markDirty(); }
+    public void setIntStat(short value) { requireStateAccess(); this.intStat = value; if (execution != null) markDirty(); }
 }

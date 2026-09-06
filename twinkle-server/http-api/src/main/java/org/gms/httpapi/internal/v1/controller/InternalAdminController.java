@@ -77,7 +77,7 @@ public final class InternalAdminController {
     /** 触发按实体渐进重载（架构 5.3：安全点直切 + 在途显式中断 + 换代版本门）。 */
     @Post("/reload")
     public HttpResponse<?> reload() {
-        EntityReloadService.ReloadResult result = reloadService.reloadAllInFlight(id -> true);
+        EntityReloadService.ReloadResult result = reloadService.reloadAllInFlight();
         return HttpResponse.ok(Map.of(
                 "safeSwitched", result.safeSwitched(),
                 "interrupted", result.interrupted(),

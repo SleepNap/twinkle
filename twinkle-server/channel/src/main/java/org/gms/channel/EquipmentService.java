@@ -26,20 +26,18 @@ public final class EquipmentService {
     public boolean move(PacketSession session, short source, short target, int quantity) {
         PlayerCharacter character = GameplaySession.character(session);
         if (character == null) return false;
-        synchronized (character) {
-            if (sessions.get(character.getId()) != session || !GameplaySession.canAct(session, character)) return false;
-            int hp = character.getHp(), mp = character.getMp();
-            EquipmentSystem.Change change = equipment.move(character, source, target, quantity, clock.millis());
-            if (change == null) return false;
-            scheduleRefresh(session, character);
-            Map<Short, V83ItemSnapshot> bound = new HashMap<>();
-            change.boundSlots().forEach(slot -> bound.put(slot,
-                    ChannelItemProtocolMapper.toSnapshot(character.getInventory(InventoryType.EQUIP).getItem(slot))));
-            session.send(GameplayPackets.equipmentMoves(change.moves(), bound));
-            changedHealth(session, character, hp, mp);
-            sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.changedLook(character), character.getId());
-            return true;
-        }
+        if (sessions.get(character.getId()) != session || !GameplaySession.canAct(session, character)) return false;
+        int hp = character.getHp(), mp = character.getMp();
+        EquipmentSystem.Change change = equipment.move(character, source, target, quantity, clock.millis());
+        if (change == null) return false;
+        scheduleRefresh(session, character);
+        Map<Short, V83ItemSnapshot> bound = new HashMap<>();
+        change.boundSlots().forEach(slot -> bound.put(slot,
+                ChannelItemProtocolMapper.toSnapshot(character.getInventory(InventoryType.EQUIP).getItem(slot))));
+        session.send(GameplayPackets.equipmentMoves(change.moves(), bound));
+        changedHealth(session, character, hp, mp);
+        sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.changedLook(character), character.getId());
+        return true;
     }
 
     public void initialize(PacketSession session) { refresh(session, true); }
@@ -49,27 +47,25 @@ public final class EquipmentService {
     private void refresh(PacketSession session, boolean initializing) {
         PlayerCharacter character = GameplaySession.character(session);
         if (character == null) return;
-        synchronized (character) {
-            if (session.stage() != SessionStage.IN_GAME || sessions.get(character.getId()) != session
-                    || !initializing && (session.getAttr("mapTransition") != null || session.getAttr("trade") != null)) return;
-            Long next = session.getAttr("equipmentExpiresAt"), version = session.getAttr("equipmentDataVersion");
-            if (!initializing && next != null && next > clock.millis()
-                    && version != null && version == equipment.dataVersion()) return;
-            int hp = character.getHp(), mp = character.getMp();
-            var before = GameplayPackets.inventory(character, InventoryType.EQUIP);
-            boolean expired = equipment.expire(character, clock.millis());
-            boolean refreshed = equipment.refresh(character, clock.millis());
-            if (!refreshed && !expired) return;
-            if (expired) {
-                GameplayPackets.inventoryChanges(InventoryType.EQUIP, before,
-                        GameplayPackets.inventory(character, InventoryType.EQUIP)).forEach(session::send);
-                if (character.getMapObject() != null) sessions.broadcastToMap(character.getMapObject(),
-                        PlayerPresencePackets.changedLook(character), character.getId());
-            }
-            changedHealth(session, character, hp, mp);
-            if (refreshed) scheduleRefresh(session, character);
-            else session.setAttr("equipmentExpiresAt", null);
+        if (session.stage() != SessionStage.IN_GAME || sessions.get(character.getId()) != session
+                || !initializing && (session.getAttr("mapTransition") != null || session.getAttr("trade") != null)) return;
+        Long next = session.getAttr("equipmentExpiresAt"), version = session.getAttr("equipmentDataVersion");
+        if (!initializing && next != null && next > clock.millis()
+                && version != null && version == equipment.dataVersion()) return;
+        int hp = character.getHp(), mp = character.getMp();
+        var before = GameplayPackets.inventory(character, InventoryType.EQUIP);
+        boolean expired = equipment.expire(character, clock.millis());
+        boolean refreshed = equipment.refresh(character, clock.millis());
+        if (!refreshed && !expired) return;
+        if (expired) {
+            GameplayPackets.inventoryChanges(InventoryType.EQUIP, before,
+                    GameplayPackets.inventory(character, InventoryType.EQUIP)).forEach(session::send);
+            if (character.getMapObject() != null) sessions.broadcastToMap(character.getMapObject(),
+                    PlayerPresencePackets.changedLook(character), character.getId());
         }
+        changedHealth(session, character, hp, mp);
+        if (refreshed) scheduleRefresh(session, character);
+        else session.setAttr("equipmentExpiresAt", null);
     }
 
     /** 常驻扫描仅比较版本和最近到期时间；未换装/未到期时不复制整份背包。 */

@@ -63,7 +63,7 @@ public final class ChannelWorker implements AutoCloseable {
         Runnable restartProcess = exitOnRestart ? () -> System.exit(0) : () -> { };
         runtimes.values().forEach(runtime -> runtime.admin(new ChannelAdminService(
                 runtime.players(), runtime.sessions(), runtime.channelId(), scriptManager,
-                wzReloadCoordinator, restartService, restartCoordinator, restartProcess)));
+                wzReloadCoordinator, restartService, restartCoordinator, this::stopAll, restartProcess)));
     }
 
     public String workerId() { return spec.workerId(); }
@@ -91,6 +91,7 @@ public final class ChannelWorker implements AutoCloseable {
         // 先从拓扑摘除，禁止登录/换线继续路由到正在关闭的监听器。
         intercoord.unregisterChannel(channelId);
         runtime.server().stop();
+        runtime.drainStateTasks();
     }
 
     public synchronized void startAll() {

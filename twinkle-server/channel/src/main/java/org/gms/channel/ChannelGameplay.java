@@ -45,12 +45,14 @@ public final class ChannelGameplay implements AutoCloseable {
         QuestActionHandler questActions = new QuestActionHandler(resources, quests);
         var login = handlers.find(RecvOpcode.PLAYER_LOGGEDIN.getValue()).orElseThrow();
         handlers.replace(RecvOpcode.PLAYER_LOGGEDIN, (session, packet) -> {
+            session.setAttr("afterLogin", (Runnable) () -> {
+                session.setAttr("questActions", questActions);
+                var character = GameplaySession.character(session);
+                if (character != null && character.getParty() != 0) { character.setParty(0); character.markDirty(); }
+                controls.initialize(session);
+                equipment.initialize(session);
+            });
             login.handle(session, packet);
-            session.setAttr("questActions", questActions);
-            var character = GameplaySession.character(session);
-            if (character != null && character.getParty() != 0) { character.setParty(0); character.markDirty(); }
-            controls.initialize(session);
-            equipment.initialize(session);
         }, 2);
         handlers.register(RecvOpcode.PARTY_OPERATION, parties);
         handlers.register(RecvOpcode.MULTI_CHAT, parties::chat);

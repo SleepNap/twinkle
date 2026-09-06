@@ -35,30 +35,26 @@ public final class MapTransitionService {
     public boolean usePortal(PacketSession session, String name, int requestedMap) {
         PlayerCharacter character = GameplaySession.character(session);
         if (!GameplaySession.canAct(session, character)) return false;
-        synchronized (character) {
-            Portal portal = character.getMapObject().portals().stream()
-                    .filter(candidate -> candidate.getName().equals(name)).findFirst().orElse(null);
-            if (portal == null || portal.isScript() || !GameplaySession.near(character, portal.getX(), portal.getY(), 150)
-                    || portal.getTargetMapId() == 999_999_999
-                    || requestedMap >= 0 && requestedMap != portal.getTargetMapId()) return false;
-            return transfer(session, portal.getTargetMapId(), portal.getTargetPortalName(), false);
-        }
+        Portal portal = character.getMapObject().portals().stream()
+                .filter(candidate -> candidate.getName().equals(name)).findFirst().orElse(null);
+        if (portal == null || portal.isScript() || !GameplaySession.near(character, portal.getX(), portal.getY(), 150)
+                || portal.getTargetMapId() == 999_999_999
+                || requestedMap >= 0 && requestedMap != portal.getTargetMapId()) return false;
+        return transfer(session, portal.getTargetMapId(), portal.getTargetPortalName(), false);
     }
 
     public boolean revive(PacketSession session) {
         PlayerCharacter character = GameplaySession.character(session);
         if (character == null || character.getMapObject() == null) return false;
-        synchronized (character) {
-            if (character.getHp() > 0 || session.getAttr("trade") != null) return false;
-            return transfer(session, character.getMapObject().getReturnMapId(), "sp", true);
-        }
+        if (character.getHp() > 0 || session.getAttr("trade") != null) return false;
+        return transfer(session, character.getMapObject().getReturnMapId(), "sp", true);
     }
 
     /** 仅供可信脚本宿主使用，不接受客户端自选地图作为授权依据。 */
     public boolean warp(PacketSession session, int mapId) {
         PlayerCharacter character = GameplaySession.character(session);
         if (!GameplaySession.canAct(session, character)) return false;
-        synchronized (character) { return transfer(session, mapId, "sp", false); }
+        return transfer(session, mapId, "sp", false);
     }
 
     private boolean transfer(PacketSession session, int mapId, String portalName, boolean revive) {

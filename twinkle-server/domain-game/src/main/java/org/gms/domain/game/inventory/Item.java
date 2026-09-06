@@ -1,8 +1,10 @@
 package org.gms.domain.game.inventory;
 
+import org.gms.i18n.I18n;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.gms.concurrent.GameExecution;
 
 import java.util.Objects;
 
@@ -16,6 +18,16 @@ import java.util.Objects;
 @Getter
 @Setter
 public class Item {
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private GameExecution execution;
+
+    public final void bindExecution(GameExecution owner) {
+        owner.requireOwner();
+        if (execution != null && execution != owner) throw new IllegalStateException(I18n.message("error.execution.item_owner"));
+        execution = owner;
+    }
+    protected final void requireStateAccess() { if (execution != null) execution.requireOwner(); }
 
     @Setter(AccessLevel.NONE)
     private final int id;
@@ -77,4 +89,14 @@ public class Item {
     public int hashCode() {
         return Objects.hash(id, cashId, position, quantity, petId, flag, expiration);
     }
+
+    // 受控写入口：Lombok 的普通 setter 无法校验频道执行归属。
+    public void setCashId(int value) { requireStateAccess(); this.cashId = value; }
+    public void setPosition(short value) { requireStateAccess(); this.position = value; }
+    public void setQuantity(short value) { requireStateAccess(); this.quantity = value; }
+    public void setPetId(int value) { requireStateAccess(); this.petId = value; }
+    public void setOwner(String value) { requireStateAccess(); this.owner = value; }
+    public void setFlag(int value) { requireStateAccess(); this.flag = value; }
+    public void setExpiration(long value) { requireStateAccess(); this.expiration = value; }
+    public void setGiftFrom(String value) { requireStateAccess(); this.giftFrom = value; }
 }

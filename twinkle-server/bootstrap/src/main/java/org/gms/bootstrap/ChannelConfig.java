@@ -31,6 +31,7 @@ import org.gms.service.intercoord.IntercoordService;
 import org.gms.tick.TickScheduler;
 import org.gms.wz.WzReloadCoordinator;
 import org.gms.wz.WzResourceRegistry;
+import org.gms.concurrent.ThreadManager;
 
 /** Channel worker 装配：共享资源只建一次，频道运行态由 {@link ChannelWorker} 按清单创建。 */
 @Factory
@@ -80,6 +81,8 @@ public class ChannelConfig {
             HeartbeatConfig heartbeatConfig,
             org.gms.channel.NpcShopCatalog shopCatalog,
             org.gms.replaceable.ProgressionSystem progressionSystem,
+            VersionGate versionGate,
+            ThreadManager background,
             @Property(name = "twinkle.net.world.id", defaultValue = "0") int worldId,
             @Property(name = "twinkle.lease.ttlSeconds", defaultValue = "50") long leaseTtlSeconds,
             @Property(name = "twinkle.lease.cooldownSeconds", defaultValue = "15") long leaseCooldownSeconds,
@@ -91,7 +94,7 @@ public class ChannelConfig {
                 reliableEventBus, reliableReceiver, intercoord, buddyListRepository, saveQueue,
                 playerDirectory, tickScheduler, heartbeatConfig,
                 org.gms.net.packet.v83.V83WorldId.validate(worldId), leaseTtlSeconds,
-                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, progressionSystem);
+                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, progressionSystem, versionGate, background);
         return new ChannelWorker(spec, runtimeFactory, wzResources, scriptManager, restartService,
                 restartCoordinator, intercoord, playerDirectory, tickScheduler, exitOnRestart);
     }

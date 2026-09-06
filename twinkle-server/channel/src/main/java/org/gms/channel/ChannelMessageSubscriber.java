@@ -39,9 +39,13 @@ public final class ChannelMessageSubscriber implements AutoCloseable {
         this.sessions = sessions;
         // 订阅本频道精确 target：跨频道悄悄话/公告投递
         whisperSubscription = eventBus.subscribe(MessageTargets.channel(channelId), WhisperRequest.class,
-                this::deliverWhisper);
+                request -> deliver(() -> deliverWhisper(request)));
         noticeSubscription = eventBus.subscribe(MessageTargets.channel(channelId), NoticeMessage.class,
-                this::deliverNotice);
+                request -> deliver(() -> deliverNotice(request)));
+    }
+
+    private void deliver(Runnable action) {
+        if (sessions.execution() == null) action.run(); else sessions.execution().execute(action);
     }
 
     private void deliverWhisper(WhisperRequest req) {

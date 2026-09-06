@@ -14,6 +14,8 @@ import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.net.packet.v83.V83ChannelId;
+import org.gms.concurrent.ThreadManager;
+import java.util.concurrent.CompletableFuture;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -25,7 +27,7 @@ import java.net.InetAddress;
  * 注册 → 客户端重连（v83 换频道本来就是 loading 界面）。兜底性：升级前把玩家挪到别的频道
  * （MAINTENANCE reason）→ 重启 → 回来，玩家视角只是"换了一次频道"。
  *
- * <p>v83 收包：opcode(2) + 4B 头 + 目标频道（1B，0-based）。M6 跨进程：发送前<b>同步存档</b>
+ * <p>v83 收包：opcode(2) + 4B 头 + 目标频道（1B，0-based）。M6 跨进程：发送前<b>等待异步存档完成</b>
  * （玩家状态落 DB，目标频道重连后从 DB 加载最新态，不掉数据）；目标频道经
  * {@link ChannelChangeReceiver} 消费 CC 请求（恰好一次）。
  */
@@ -40,6 +42,7 @@ public final class ChangeChannelHandler implements PacketHandler {
     private final PlayerSessionRegistry sessions;
     private final PlayerStorage players;
     private final CharacterSaveQueue saveQueue;
+    private final ThreadManager background;
 
     public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
                                 PlayerSessionRegistry sessions) {
@@ -54,12 +57,19 @@ public final class ChangeChannelHandler implements PacketHandler {
     public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
                                 PlayerSessionRegistry sessions, PlayerStorage players,
                                 CharacterSaveQueue saveQueue) {
+        this(channelId, intercoord, reliableBus, sessions, players, saveQueue, null);
+    }
+
+    public ChangeChannelHandler(int channelId, IntercoordService intercoord, ReliableEventBus reliableBus,
+                                PlayerSessionRegistry sessions, PlayerStorage players,
+                                CharacterSaveQueue saveQueue, ThreadManager background) {
         this.channelId = channelId;
         this.intercoord = intercoord;
         this.reliableBus = reliableBus;
         this.sessions = sessions;
         this.players = players;
         this.saveQueue = saveQueue;
+        this.background = background;
     }
 
     @Override
@@ -84,6 +94,11 @@ public final class ChangeChannelHandler implements PacketHandler {
 
         if (targetId == channelId) {
             return; // 同频道，忽略
+        }
+        if (sessions.get(chr.getId()) != session || session.getAttr("stateTransfer") != null) return;
+        if (sessions.execution() != null) {
+            transferAsync(session, chr, targetId);
+            return;
         }
         ChannelDirectoryService.ChannelInfo target = intercoord.channel(targetId).orElse(null);
         if (target == null) {
@@ -130,5 +145,46 @@ public final class ChangeChannelHandler implements PacketHandler {
             throw new IllegalStateException("Target channel host is not an IPv4 address: " + host, e);
         }
         throw new IllegalStateException("Target channel host is not an IPv4 address: " + host);
+    }
+
+    private record Destination(ChannelDirectoryService.ChannelInfo channel, byte[] address) { }
+
+    private void transferAsync(PacketSession session, PlayerCharacter character, int targetId) {
+        if (background == null) throw new IllegalStateException(I18n.message("error.channel.background_missing"));
+        Object token = new Object();
+        Runnable cancelTrade = session.getAttr("cancelTrade");
+        if (cancelTrade != null) cancelTrade.run();
+        NpcTalkHandler.closeConversation(session);
+        session.setAttr("stateTransfer", token);
+        long characterId = character.getId();
+        CompletableFuture<Destination> work = background.supplyAsync(() -> {
+            var target = intercoord.channel(targetId).orElseThrow(() -> new IllegalStateException(I18n.message("error.channel.target_unavailable")));
+            return new Destination(target, resolveIpv4(target.host()));
+        }).thenCompose(destination -> saveQueue.saveAsync(character).thenApply(ignored -> destination))
+                .thenComposeAsync(destination -> {
+                    if (Boolean.TRUE.equals(session.getAttr("transportClosed")))
+                        return CompletableFuture.failedFuture(new IllegalStateException(I18n.message("error.channel.transfer_closed")));
+                    var request = new ChangeChannelRequest(characterId, channelId, targetId,
+                            ChangeChannelRequest.Reason.PLAYER_CHANGE);
+                    return reliableBus.send("cc:player:" + characterId, MessageTargets.channel(targetId), request)
+                            .thenApply(ignored -> destination);
+                }, background).thenApplyAsync(destination -> {
+                    intercoord.beginChannelTransfer(characterId, channelId, targetId);
+                    return destination;
+                }, background);
+        work.whenComplete((destination, error) -> sessions.execution().execute(() -> {
+            if (sessions.get(characterId) != session || session.getAttr("stateTransfer") != token) return;
+            if (error != null) {
+                session.setAttr("stateTransfer", null);
+                session.send(GameplayPackets.enableActions());
+                log.error(I18n.message("log.channel.transfer_failed"), error);
+                return;
+            }
+            if (character.getMapObject() != null) character.getMapObject().removeCharacter(character);
+            if (players != null) players.remove(character);
+            sessions.unregister(characterId, session);
+            session.transition(SessionStage.CHANNEL_TRANSITION);
+            session.send(ChannelPacketFactory.changeChannel(destination.address(), destination.channel().port()));
+        }));
     }
 }

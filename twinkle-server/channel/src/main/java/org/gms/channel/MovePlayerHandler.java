@@ -23,11 +23,9 @@ public final class MovePlayerHandler implements PacketHandler {
         packet.skip(9);
         V83Movement movement = V83Movement.read(packet);
         if (movement == null) return;
-        synchronized (character) {
-            if (!GameplaySession.canAct(session, character) || sessions.get(character.getId()) != session) return;
-            if (!movementSystem.applyMotion(character, movement.x(), movement.y(), movement.stance(), movement.foothold())) return;
-            sessions.broadcastToMap(character.getMapObject(), GamePacketFactory.movePlayer(character.getId(), movement.bytes()),
-                    character.getId());
-        }
+        if (!GameplaySession.canAct(session, character) || sessions.get(character.getId()) != session) return;
+        if (!movementSystem.applyMotion(character, movement.x(), movement.y(), movement.stance(), movement.foothold())) return;
+        sessions.broadcastToMap(character.getMapObject(), GamePacketFactory.movePlayer(character.getId(), movement.bytes()),
+                character.getId());
     }
 }

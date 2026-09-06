@@ -23,12 +23,10 @@ public final class AutoApHandler implements PacketHandler {
                 if (count < 0 || count > Short.MAX_VALUE) return;
                 if (count > 0) increments.merge(mask, count, Integer::sum);
             }
-            synchronized (character) {
-                if (!system.allocateAp(character, increments)) return;
-                session.send(GameplayPackets.stats(Map.of(GameplayPackets.STR, (int) character.getStrStat(),
-                        GameplayPackets.DEX, (int) character.getDexStat(), GameplayPackets.INT, (int) character.getIntStat(),
-                        GameplayPackets.LUK, (int) character.getLukStat(), GameplayPackets.AP, character.getAp())));
-            }
+            if (!system.allocateAp(character, increments)) return;
+            session.send(GameplayPackets.stats(Map.of(GameplayPackets.STR, (int) character.getStrStat(),
+                    GameplayPackets.DEX, (int) character.getDexStat(), GameplayPackets.INT, (int) character.getIntStat(),
+                    GameplayPackets.LUK, (int) character.getLukStat(), GameplayPackets.AP, character.getAp())));
         } finally { session.send(GameplayPackets.enableActions()); }
     }
 }

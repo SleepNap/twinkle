@@ -1,11 +1,15 @@
 package org.gms.hotreload;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import org.gms.i18n.I18n;
 import org.gms.hotreload.versioned.VersionGate;
 
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 按实体渐进重载协调器（架构 5.3：重载原子单元 = 单个玩家/频道，绝不做全服同步原子重载）。
@@ -28,13 +32,37 @@ public final class EntityReloadCoordinator {
 
     /** 在途操作计数：实体 id → 在途操作数（&gt;0 表示不可重载）。 */
     private final ConcurrentMap<Long, Integer> inFlightOperations = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, Runnable> cancellations = new ConcurrentHashMap<>();
+    private final AtomicBoolean reloading = new AtomicBoolean();
+
+    public boolean acceptingOperations() { return !reloading.get(); }
+    public synchronized void beginReload() {
+        if (!reloading.compareAndSet(false, true)) throw new IllegalStateException(I18n.message("error.reload.already_running"));
+    }
+    public void endReload() { reloading.set(false); }
+
+    /** 一次认领双方，避免重载与第二位参与者登记之间产生半笔交易。 */
+    public synchronized boolean beginPair(long first, long second, Runnable cancel) {
+        if (reloading.get() || first == second || !isSafe(first) || !isSafe(second)) return false;
+        inFlightOperations.put(first, 1); inFlightOperations.put(second, 1);
+        cancellations.put(first, cancel); cancellations.put(second, cancel);
+        return true;
+    }
+
+    public boolean interrupt(long entityId) {
+        Runnable cancel = cancellations.get(entityId);
+        if (cancel == null) return false;
+        cancel.run();
+        return isSafe(entityId);
+    }
 
     /**
      * 实体进入长操作（如交易）。重复进入计数 +1。
      *
      * @return true=首次进入（此前无在途）；false=嵌套进入
      */
-    public boolean beginOperation(long entityId) {
+    public synchronized boolean beginOperation(long entityId) {
+        if (reloading.get()) throw new IllegalStateException(I18n.message("error.reload.admission_closed"));
         return inFlightOperations.merge(entityId, 1, Integer::sum) == 1;
     }
 
@@ -43,8 +71,9 @@ public final class EntityReloadCoordinator {
      *
      * @return true=已回到安全点（无在途）；false=仍嵌套在途
      */
-    public boolean endOperation(long entityId) {
+    public synchronized boolean endOperation(long entityId) {
         Integer result = inFlightOperations.computeIfPresent(entityId, (k, v) -> v <= 1 ? null : v - 1);
+        if (result == null) cancellations.remove(entityId);
         return result == null;
     }
 
@@ -60,7 +89,7 @@ public final class EntityReloadCoordinator {
 
     /** 从一组实体中筛出当前在安全点的（逐实体切换用）。 */
     public List<Long> safeOnly(Iterable<Long> entityIds) {
-        java.util.ArrayList<Long> safe = new java.util.ArrayList<>();
+        ArrayList<Long> safe = new ArrayList<>();
         for (Long id : entityIds) {
             if (isSafe(id)) {
                 safe.add(id);
@@ -88,7 +117,7 @@ public final class EntityReloadCoordinator {
      * @param timeout 最长等待
      * @return true=超时前全部回到安全点；false=超时仍有在途
      */
-    public boolean awaitIdle(java.time.Duration timeout) throws InterruptedException {
+    public boolean awaitIdle(Duration timeout) throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (inFlightCount() > 0) {
             if (System.nanoTime() >= deadline) {

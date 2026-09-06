@@ -103,13 +103,20 @@ class DefaultChannelLifecycleServiceTest {
             assertThat(service.requestStart(1).accepted()).isTrue();
             await().untilAsserted(() -> assertThat(server.isRunning()).isTrue());
 
-            operations.beginOperation(43L);
+            AtomicBoolean cancelled = new AtomicBoolean();
+            assertThat(operations.beginPair(43L, 44L, () -> {
+                cancelled.set(true);
+                operations.endOperation(43L);
+                operations.endOperation(44L);
+            })).isTrue();
             assertThat(service.requestStop(1, true).accepted()).isTrue();
             await().untilAsserted(() -> {
                 assertThat(server.isRunning()).isFalse();
                 assertThat(service.statuses().getFirst().state())
                         .isEqualTo(ChannelLifecycleService.State.STOPPED);
             });
+            assertThat(cancelled.get()).isTrue();
+            assertThat(operations.inFlightCount()).isZero();
         } finally {
             server.stop();
             saveQueue.close();
@@ -180,8 +187,10 @@ class DefaultChannelLifecycleServiceTest {
                 assertThat(service.statuses().getFirst().state())
                         .isEqualTo(ChannelLifecycleService.State.STOPPED);
             });
+            assertThat(saveQueue.failedCharacterIds()).contains(29L);
         } finally {
             server.stop();
+            databaseAvailable.set(true);
             saveQueue.close();
         }
     }

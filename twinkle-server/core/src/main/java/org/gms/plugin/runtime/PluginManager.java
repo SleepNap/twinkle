@@ -191,14 +191,14 @@ public final class PluginManager implements Closeable {
      * <p>未注入版本门/渐进重载（M4 测试装配）时退化为 unload + load（纯装卸）。
      */
     public LoadedPlugin reload(PluginDescriptor descriptor) {
-        unload(descriptor.id());
         if (versionGate != null && entityReloadService != null) {
             // reloadAllInFlight 内部已换代版本门（coordinator.advanceVersion → gate.onReload）
             // + 中断在途长操作；这里不重复 onReload，避免版本跳两号
-            var result = entityReloadService.reloadAllInFlight(id -> true);
+            var result = entityReloadService.reloadAllInFlight();
             log.info(I18n.message("log.plugin.reloaded"),
                     result.newVersion(), result.safeSwitched(), result.interrupted());
         }
+        unload(descriptor.id());
         return load(descriptor);
     }
 

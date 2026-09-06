@@ -73,12 +73,14 @@ public final class MonsterSpawnService {
      * 只生成不广播——进图玩家的刷怪包由 {@link #onPlayerEnter} 单独发（避免双发）。
      */
     public void ensureSpawned(MapleMap map) {
-        for (SpawnPoint sp : map.spawnPoints()) {
-            if (hasAliveMonster(map, sp.getMonsterId())) {
-                skippedDuplicate.incrementAndGet();
-                continue;
+        synchronized (map) {
+            for (SpawnPoint sp : map.spawnPoints()) {
+                if (hasAliveMonster(map, sp.getMonsterId())) {
+                    skippedDuplicate.incrementAndGet();
+                    continue;
+                }
+                spawnOne(map, sp);
             }
-            spawnOne(map, sp);
         }
     }
 
@@ -192,11 +194,12 @@ public final class MonsterSpawnService {
         respawnScheduled.incrementAndGet();
         long delayMs = sp.getRespawnInterval() > 0 ? sp.getRespawnInterval() : 10_000;
         respawnScheduler.schedule(() -> {
-            respawnExecuted.incrementAndGet();
-            MapleMonster monster = spawnOne(map, sp);
-            if (monster != null) {
-                broadcastSpawn(map, monster);
-            }
+            Runnable spawn = () -> {
+                respawnExecuted.incrementAndGet();
+                MapleMonster monster = spawnOne(map, sp);
+                if (monster != null) broadcastSpawn(map, monster);
+            };
+            if (sessions.execution() == null) spawn.run(); else sessions.execution().execute(spawn);
         }, delayMs, TimeUnit.MILLISECONDS);
     }
 

@@ -2,6 +2,8 @@ package org.gms.channel;
 
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.PlayerCharacter;
+import org.gms.concurrent.GameExecution;
+import java.util.function.Supplier;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
@@ -24,9 +26,18 @@ import java.util.concurrent.atomic.AtomicLong;
  * 用 compare-and-remove（仅当登记的会话引用==本会话才删），旧连接迟到关闭因代际不匹配
  * 只能成为空操作（记 {@link #supersededCleanupRejectedCount()}），不能清理新一代会话。
  *
- * <p>游戏 tick 单线程，但连接断开关闭可能并发到达，用 {@link ConcurrentMap} 兜底。
+ * <p>频道登记和业务清理由所属执行入口串行完成；ConcurrentMap 只支持跨线程定位会话。
  */
 public final class PlayerSessionRegistry {
+    private final GameExecution execution;
+    public PlayerSessionRegistry() { this(null); }
+    public PlayerSessionRegistry(GameExecution execution) { this.execution = execution; }
+    public GameExecution execution() { return execution; }
+    /** 频道跨角色业务的统一入口；独立测试仍使用同一边界保护。 */
+    public <T> T coordinate(Supplier<T> action) {
+        if (execution != null) return execution.call(action);
+        synchronized (this) { return action.get(); }
+    }
 
     /**
      * 会话登记（连接不可变 sessionId + 认领代际 + 会话引用，报告 §5.4 归属三元组）。
@@ -38,10 +49,22 @@ public final class PlayerSessionRegistry {
     }
 
     private final ConcurrentMap<Long, Entry> sessions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, Object> loading = new ConcurrentHashMap<>();
     private final AtomicLong generationSeq = new AtomicLong();
     private final PlayerVisibilityService visibility = new PlayerVisibilityService(this);
 
     public PlayerVisibilityService visibility() { return visibility; }
+
+    /** 异步读档期间先占住角色入口，避免两个连接同时读旧档再相互覆盖。 */
+    public boolean beginLogin(long characterId, Object token) {
+        if (execution != null) execution.requireOwner();
+        return loading.putIfAbsent(characterId, token) == null;
+    }
+
+    public void endLogin(long characterId, Object token) {
+        if (execution != null) execution.requireOwner();
+        loading.remove(characterId, token);
+    }
     /** 旧代际清理被拒次数（报告 §七：可观测，标准 3 证据）。 */
     private final AtomicLong supersededCleanupRejected = new AtomicLong();
 
@@ -51,9 +74,12 @@ public final class PlayerSessionRegistry {
      * @return 新代际（写入 session attr，供断链/租约层判归属）
      */
     public long claim(long characterId, PacketSession session) {
+        if (execution != null) execution.requireOwner();
         long gen = generationSeq.incrementAndGet();
         Entry previous = sessions.put(characterId, new Entry(session.sessionId(), gen, session));
         if (previous != null && previous.session() != session) {
+            Runnable cancelTrade = previous.session().getAttr("cancelTrade");
+            if (cancelTrade != null) cancelTrade.run();
             visibility.leave(previous.session());
             PlayerCharacter old = previous.session().getAttr("character");
             if (old != null && old.getMapObject() != null) old.getMapObject().removeCharacter(old);
@@ -80,6 +106,7 @@ public final class PlayerSessionRegistry {
      *         只记计数不清理）。
      */
     public boolean unregister(long characterId, PacketSession session) {
+        if (execution != null) execution.requireOwner();
         Entry[] removed = new Entry[1];
         sessions.compute(characterId, (k, e) -> {
             if (e != null && e.session() == session) {

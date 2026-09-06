@@ -4,46 +4,50 @@ import lombok.extern.log4j.Log4j2;
 import org.gms.channel.PlayerCharacterAssembler;
 import org.gms.channel.ChannelPlayerDirectory;
 import org.gms.channel.PlayerStorage;
+import org.gms.concurrent.GameExecution;
+import org.gms.domain.game.PlayerCharacter;
+import org.gms.persistence.entity.PlayerCharacterRecord;
+import org.gms.persistence.entity.InventoryItemEntity;
+import org.gms.persistence.entity.QuestStatusEntity;
+import org.gms.persistence.entity.SkillEntity;
 import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
 import org.gms.persistence.repo.InventoryItemRepository;
-import org.gms.domain.game.PlayerCharacter;
+import org.gms.persistence.repo.QuestProgressSnapshot;
 import org.gms.i18n.I18n;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
-/**
- * 角色存档队列（架构 6.2 ② 单写连接 + 红线 17 增量 FLUSH：只刷脏数据，不做全量落盘）。
- *
- * <p>核心：
- * <ul>
- *   <li><b>单写执行器</b>：所有 DB 写经一个 daemon 线程串行执行（{@code db-writer}），
- *       从构造上消灭 SQLite 并发写（SQLITE_BUSY，架构 6.2 ②）。</li>
- *   <li><b>按角色去重</b>：{@code pending} map 以角色 id 为键，同一角色多次 save 只落一次。</li>
- *   <li>{@link #flushAll}：扫描 {@link PlayerStorage} 中 {@code isDirty()} 的角色入队，落库后清脏
- *       （L4 增量 FLUSH 入口）。</li>
- *   <li>{@link #drain}：DRAINING 阶段排空队列 + 在途写完成（主动重开不丢档的前提，架构 5.4 路径 B）。</li>
- * </ul>
- */
+/** 在频道边界取得独立快照，所有保存（含同步等待、失败重试）只经一个写队列。 */
 @Log4j2
 public final class CharacterSaveQueue implements AutoCloseable {
-
-
-
     private final PlayerCharacterRepository repository;
     private final InventoryItemRepository inventoryItemRepository;
     private final PlayerCharacterSnapshotRepository snapshotRepository;
     private final PlayerCharacterAssembler loader;
-    private final java.util.function.Supplier<java.util.Collection<PlayerCharacter>> onlinePlayers;
+    private final Supplier<Collection<PlayerCharacter>> onlinePlayers;
     private final ExecutorService singleWriter;
-    private final ConcurrentMap<Long, Boolean> pending = new ConcurrentHashMap<>();
-    /** 最近一次落库失败的角色引用；关闭流程会同步重试，成功前禁止退出进程。 */
-    private final ConcurrentMap<Long, PlayerCharacter> failed = new ConcurrentHashMap<>();
+    private final AtomicInteger pending = new AtomicInteger();
+    /** 仅协调同角色、同脏版本的重复请求；不在此锁内读取游戏状态或调用数据库。 */
+    private final Map<PlayerCharacter, Attempt> attempts = new WeakHashMap<>();
+    private final ConcurrentMap<Long, Snapshot> failed = new ConcurrentHashMap<>();
+
+    private record Attempt(long version, CompletableFuture<Void> completion) { }
+    private record Snapshot(PlayerCharacter source, long version, PlayerCharacterRecord character,
+                            List<InventoryItemEntity> items, List<QuestStatusEntity> quests,
+                            List<QuestProgressSnapshot> progress, List<SkillEntity> skills) { }
 
     public CharacterSaveQueue(PlayerCharacterRepository repository, PlayerCharacterAssembler loader, PlayerStorage playerStorage) {
         this(repository, null, null, loader, playerStorage::all);
@@ -70,7 +74,7 @@ public final class CharacterSaveQueue implements AutoCloseable {
                                InventoryItemRepository inventoryItemRepository,
                                PlayerCharacterSnapshotRepository snapshotRepository,
                                PlayerCharacterAssembler loader,
-                               java.util.function.Supplier<java.util.Collection<PlayerCharacter>> onlinePlayers) {
+                               Supplier<Collection<PlayerCharacter>> onlinePlayers) {
         this.repository = repository;
         this.inventoryItemRepository = inventoryItemRepository;
         this.snapshotRepository = snapshotRepository;
@@ -82,177 +86,158 @@ public final class CharacterSaveQueue implements AutoCloseable {
         });
     }
 
-    /**
-     * 入队保存角色（幂等：已有 pending 记录则跳过，落库后清脏）。
-     *
-     * <p>可被任何线程调用（下线/断链/定期 flush）；写动作在单写线程串行执行。
-     */
-    public void save(PlayerCharacter chr) {
-        if (chr == null) {
-            return;
-        }
-        boolean first = pending.putIfAbsent(chr.getId(), Boolean.TRUE) == null;
-        if (!first) {
-            return; // 已在队列，去重
-        }
-        singleWriter.execute(() -> {
-            long savedVersion = chr.dirtyVersion();
-            try {
-                persist(chr);
-                chr.clearDirty(savedVersion);
-                failed.remove(chr.getId());
-            } catch (RuntimeException e) {
-                failed.put(chr.getId(), chr);
-                log.error(I18n.message("log.save.failed"), chr.getId(), e);
-            } finally {
-                pending.remove(chr.getId());
-            }
+    public void save(PlayerCharacter character) {
+        saveAsync(character).exceptionally(error -> {
+            log.error(I18n.message("log.save.async_failed"), error);
+            return null;
         });
     }
 
-    /**
-     * 同步保存单个角色（CC 迁移前用：玩家状态必须落 DB，目标频道重连后从 DB 加载最新态）。
-     *
-     * <p>不同于异步 {@link #save}：本方法直接在调用线程落库 + 清脏，调用方（ChangeChannelHandler）
-     * 返回前保证数据已持久化（架构 4.7：老频道 flush 状态 → 目标频道加载，不掉数据）。
-     * 与 {@link #flushAllSync} 同语义，只针对单角色。
-     */
-    public void flushCharacterSync(PlayerCharacter chr) {
-        if (chr == null) {
-            return;
-        }
-        long savedVersion = chr.dirtyVersion();
+    /** 完成信号代表事务已经提交；新版本请求不会被旧的 pending 标记吞掉。 */
+    public CompletableFuture<Void> saveAsync(PlayerCharacter character) {
+        if (character == null) return CompletableFuture.completedFuture(null);
+        pending.incrementAndGet();
+        GameExecution owner = character.execution();
+        CompletableFuture<Snapshot> captured;
         try {
-            persist(chr);
-            chr.clearDirty(savedVersion);
-        } catch (RuntimeException e) {
-            log.error(I18n.message("log.save.sync_failed"), chr.getId(), e);
+            captured = owner != null && !owner.isOwner()
+                    ? owner.submit(() -> capture(character))
+                    : CompletableFuture.completedFuture(capture(character));
+        } catch (Throwable error) {
+            pending.decrementAndGet();
+            return CompletableFuture.failedFuture(error);
         }
-    }
-
-    /**
-     * 增量 FLUSH：扫描在线表中脏角色入队（红线 17：只刷脏数据）。
-     *
-     * <p>由 tick handler（CharacterFlushTickHandler）周期性调用，异步（单写线程执行）。
-     *
-     * @return 本次入队的脏角色数
-     */
-    public int flushAll() {
-        int dirtyCount = 0;
-        for (PlayerCharacter chr : onlinePlayers.get()) {
-            if (chr.isDirty()) {
-                save(chr);
-                dirtyCount++;
+        return captured.thenCompose(snapshot -> {
+            synchronized (attempts) {
+                Attempt previous = attempts.get(character);
+                if (previous != null && previous.version() >= snapshot.version()
+                        && !previous.completion().isCompletedExceptionally()) return previous.completion();
+                CompletableFuture<Void> result = write(snapshot);
+                attempts.put(character, new Attempt(snapshot.version(), result));
+                return result;
             }
-        }
-        return dirtyCount;
+        }).whenComplete((ignored, error) -> pending.decrementAndGet());
     }
 
-    /**
-     * 同步增量 FLUSH（L4 FLUSH_DIRTY 阶段用）：直接在调用线程落库全部脏角色并清脏。
-     *
-     * <p>重启编排要求"重启前确保落盘"（架构 5.4 路径 B），不能用异步队列（可能未完成）；
-     * 主动重开 = 只 FLUSH 脏数据（红线 17），数量小，同步代价可接受。
-     *
-     * @return 本次落库的脏角色数
-     */
-    public int flushAllSync() {
-        int flushed = 0;
-        for (PlayerCharacter chr : onlinePlayers.get()) {
-            if (chr.isDirty()) {
-                long savedVersion = chr.dirtyVersion();
+    private Snapshot capture(PlayerCharacter character) {
+        // 未绑定频道的加载态/测试对象也保留一致快照；锁在转换完成后立即释放。
+        synchronized (character) {
+            return new Snapshot(character, character.dirtyVersion(), loader.toData(character),
+                    List.copyOf(loader.toInventoryData(character)), List.copyOf(loader.toQuestStatusData(character)),
+                    List.copyOf(loader.toQuestProgressData(character)), List.copyOf(loader.toSkillData(character)));
+        }
+    }
+
+    private CompletableFuture<Void> write(Snapshot snapshot) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        try {
+            singleWriter.execute(() -> {
                 try {
-                    persist(chr);
-                    chr.clearDirty(savedVersion);
-                    failed.remove(chr.getId());
-                    flushed++;
-                } catch (RuntimeException e) {
-                    failed.put(chr.getId(), chr);
-                    throw e;
+                    persist(snapshot);
+                    result.complete(null);
+                } catch (Throwable error) {
+                    failed.put(snapshot.character().getId(), snapshot);
+                    result.completeExceptionally(error);
                 }
-            }
+            });
+        } catch (RuntimeException error) {
+            failed.put(snapshot.character().getId(), snapshot);
+            result.completeExceptionally(error);
         }
-        return flushed;
+        return result;
     }
 
-    private void persist(PlayerCharacter chr) {
-        if (snapshotRepository != null) {
-            synchronized (chr) {
-                snapshotRepository.save(loader.toData(chr), loader.toInventoryData(chr),
-                        loader.toQuestStatusData(chr), loader.toQuestProgressData(chr), loader.toSkillData(chr));
-            }
-            return;
+    /** 只由写线程调用，包括失败重试；失败集合的读取与重写也在该线程内排序。 */
+    private void persist(Snapshot snapshot) {
+        if (snapshotRepository != null) snapshotRepository.save(snapshot.character(), snapshot.items(),
+                snapshot.quests(), snapshot.progress(), snapshot.skills());
+        else {
+            if (repository != null) repository.save(snapshot.character());
+            if (inventoryItemRepository != null)
+                inventoryItemRepository.replaceAll(snapshot.character().getId(), snapshot.items());
         }
-        if (repository != null) {
-            repository.save(loader.toData(chr));
-        }
-        if (inventoryItemRepository != null) {
-            inventoryItemRepository.replaceAll(chr.getId(), loader.toInventoryData(chr));
-        }
+        snapshot.source().clearDirty(snapshot.version());
+        failed.remove(snapshot.character().getId());
     }
 
-    /**
-     * DRAINING：等待队列 + 在途写完成（主动重开前调用，架构 5.4 路径 B）。
-     *
-     * <p>不 shutdown 执行器——DRAINING 后还有 FLUSH_DIRTY 阶段（flushAll）要提交任务；
-     * 执行器真正释放由 {@link #close()} 负责。
-     *
-     * @throws InterruptedException 等待被中断
-     */
-    public void drain() throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (pendingCount() > 0 && System.nanoTime() < deadline) {
-            Thread.sleep(10);
-        }
-        if (pendingCount() > 0) {
-            List<Long> pendingIds = pending.keySet().stream().sorted().toList();
-            log.warn(I18n.message("log.save.drain_timeout"), pendingCount());
-            throw new IllegalStateException(I18n.message("error.save.drain_timeout", pendingIds));
-        }
-
-        retryFailedSync();
-        if (!failed.isEmpty()) {
-            List<Long> failedIds = failedCharacterIds();
-            throw new IllegalStateException(I18n.message("error.save.persist_failed", failedIds));
-        }
-        log.info(I18n.message("log.save.drained"));
+    /** 只供控制面等待；游戏操作必须用 saveAsync 的完成回调继续，不能堵住频道。 */
+    public void flushCharacterSync(PlayerCharacter character) {
+        requireOutsideGame();
+        await(saveAsync(character));
     }
 
-    /** 关闭重试入口：断链后角色已离开在线表，必须保留引用直到确认落库。 */
-    private void retryFailedSync() {
-        for (PlayerCharacter chr : List.copyOf(failed.values())) {
-            long savedVersion = chr.dirtyVersion();
-            try {
-                persist(chr);
-                chr.clearDirty(savedVersion);
-                failed.remove(chr.getId(), chr);
-            } catch (RuntimeException e) {
-                log.error(I18n.message("log.save.sync_failed"), chr.getId(), e);
-            }
-        }
-    }
-
-    /** 当前待写角色数（观测，Sli.WRITE_QUEUE_DEPTH）。 */
-    public int pendingCount() {
-        return pending.size();
-    }
-
-    /** 最近落库失败且尚未重试成功的角色 id。 */
-    public List<Long> failedCharacterIds() {
-        return failed.keySet().stream().sorted().toList();
-    }
-
-    /** 资源释放（进程关停）。 */
-    @Override
-    public void close() {
-        singleWriter.shutdown();
+    /** 登录读取前等待已排入的离线存档；失败未补存时拒绝读取旧档。 */
+    public CompletableFuture<Void> awaitStored(long characterId) {
+        CompletableFuture<Void> completion = new CompletableFuture<>();
         try {
-            if (!singleWriter.awaitTermination(5, TimeUnit.SECONDS)) {
-                singleWriter.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            singleWriter.shutdownNow();
+            singleWriter.execute(() -> {
+                if (failed.containsKey(characterId)) completion.completeExceptionally(
+                        new IllegalStateException(I18n.message("error.save.pending_failure", characterId)));
+                else completion.complete(null);
+            });
+        } catch (RuntimeException error) { completion.completeExceptionally(error); }
+        return completion;
+    }
+
+    public int flushAll() {
+        int count = 0;
+        for (PlayerCharacter character : onlinePlayers.get()) {
+            if (character.isDirty()) { save(character); count++; }
         }
+        return count;
+    }
+
+    public int flushAllSync() {
+        requireOutsideGame();
+        List<CompletableFuture<Void>> jobs = onlinePlayers.get().stream().filter(PlayerCharacter::isDirty)
+                .map(this::saveAsync).toList();
+        jobs.forEach(CharacterSaveQueue::await);
+        return jobs.size();
+    }
+
+    public void drain() throws InterruptedException {
+        requireOutsideGame();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (pending.get() > 0 && System.nanoTime() < deadline) Thread.sleep(10);
+        if (pending.get() > 0) throw new IllegalStateException(I18n.message("error.save.drain_timeout"));
+        CompletableFuture<Void> retried = new CompletableFuture<>();
+        singleWriter.execute(() -> {
+            for (Snapshot snapshot : List.copyOf(failed.values())) {
+                try { persist(snapshot); }
+                catch (Throwable error) { log.error(I18n.message("log.save.retry_failed"), error); }
+            }
+            retried.complete(null);
+        });
+        await(retried);
+        if (!failed.isEmpty()) throw new IllegalStateException(
+                I18n.message("error.save.persist_failed", failedCharacterIds()));
+    }
+
+    private static void requireOutsideGame() {
+        if (GameExecution.inGameOperation()) throw new IllegalStateException(I18n.message("error.save.game_wait"));
+    }
+
+    private static void await(CompletableFuture<Void> completion) {
+        try { completion.join(); }
+        catch (CompletionException error) {
+            if (error.getCause() instanceof RuntimeException cause) throw cause;
+            throw error;
+        }
+    }
+
+    public int pendingCount() { return pending.get(); }
+    public List<Long> failedCharacterIds() { return failed.keySet().stream().sorted().toList(); }
+
+    @Override public void close() {
+        requireOutsideGame();
+        try {
+            drain();
+            singleWriter.shutdown();
+            if (!singleWriter.awaitTermination(5, TimeUnit.SECONDS))
+                throw new IllegalStateException(I18n.message("error.save.writer_timeout"));
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(I18n.message("error.save.interrupted"), error);
+        } finally { singleWriter.shutdown(); }
     }
 }

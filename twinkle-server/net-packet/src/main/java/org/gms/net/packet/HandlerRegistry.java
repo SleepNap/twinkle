@@ -1,7 +1,9 @@
 package org.gms.net.packet;
 
+import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
 import org.gms.net.opcodes.RecvOpcode;
+import org.gms.concurrent.GameExecution;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +24,7 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>线程安全：{@link ConcurrentHashMap}，tick 线程读、管理线程写。
  */
+@Log4j2
 public final class HandlerRegistry {
 
     /** 单条注册项：handler + 声明的贡献点版本。 */
@@ -29,6 +32,29 @@ public final class HandlerRegistry {
     }
 
     private final ConcurrentMap<Integer, Registration> slots = new ConcurrentHashMap<>();
+    private final GameExecution execution;
+
+    public HandlerRegistry() { this(null); }
+    public HandlerRegistry(GameExecution execution) { this.execution = execution; }
+
+    /** 登录服可直接执行；频道服的全部注册项（包括动态插件）统一进入所属队列。 */
+    public void dispatch(int opcode, PacketSession session, InPacket packet) {
+        Runnable action = () -> find(opcode).ifPresent(handler -> handler.handle(session, packet));
+        if (execution == null) action.run();
+        else execution.submit(() -> {
+            if (!Boolean.TRUE.equals(session.getAttr("transportClosed"))
+                    && session.getAttr("stateTransfer") == null) action.run();
+            return null;
+        }).exceptionally(error -> {
+            log.error(I18n.message("log.execution.packet_failed"), opcode, session.sessionId(), error);
+            session.close(I18n.message("error.execution.packet_failed"));
+            return null;
+        });
+    }
+
+    public void disconnect(Runnable action) {
+        if (execution == null) action.run(); else execution.execute(action);
+    }
 
     /**
      * 首次注册（版本 1）。已存在同 opcode 时拒绝（用 {@link #replace} 覆盖）。
@@ -41,6 +67,10 @@ public final class HandlerRegistry {
      * 首次注册（指定版本）。已存在同 opcode 时拒绝。
      */
     public void register(RecvOpcode opcode, PacketHandler handler, int version) {
+        if (execution != null && !execution.isOwner()) {
+            execution.run(() -> register(opcode, handler, version));
+            return;
+        }
         Registration put = slots.putIfAbsent(opcode.getValue(), new Registration(version, handler));
         if (put != null) {
             throw new IllegalStateException(I18n.message("error.handler.opcode_registered", opcode));
@@ -51,6 +81,10 @@ public final class HandlerRegistry {
      * 替换已注册的 handler。新版本必须高于旧版本（防回退）。
      */
     public void replace(RecvOpcode opcode, PacketHandler handler, int version) {
+        if (execution != null && !execution.isOwner()) {
+            execution.run(() -> replace(opcode, handler, version));
+            return;
+        }
         slots.compute(opcode.getValue(), (key, existing) -> {
             if (existing != null && version <= existing.version()) {
                 throw new IllegalStateException(I18n.message("error.handler.version_not_higher",
@@ -74,6 +108,8 @@ public final class HandlerRegistry {
      * @return 存在并移除返回 true；无该 opcode 返回 false
      */
     public boolean unregister(RecvOpcode opcode) {
+        if (execution != null && !execution.isOwner())
+            return execution.call(() -> unregister(opcode));
         return slots.remove(opcode.getValue()) != null;
     }
 

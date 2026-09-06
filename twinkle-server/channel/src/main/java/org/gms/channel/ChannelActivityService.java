@@ -36,11 +36,11 @@ public final class ChannelActivityService {
     }
 
     public boolean enterCashShop(PacketSession session) {
-        return enterAwayActivity(session, PlayerActivity.CASH_SHOP, SessionStage.CASH_SHOP);
+        return sessions.coordinate(() -> enterAwayActivity(session, PlayerActivity.CASH_SHOP, SessionStage.CASH_SHOP));
     }
 
     public boolean enterMts(PacketSession session) {
-        return enterAwayActivity(session, PlayerActivity.MTS, SessionStage.MTS);
+        return sessions.coordinate(() -> enterAwayActivity(session, PlayerActivity.MTS, SessionStage.MTS));
     }
 
     private boolean enterAwayActivity(PacketSession session, PlayerActivity activity, SessionStage stage) {
@@ -51,9 +51,28 @@ public final class ChannelActivityService {
         if (chr == null || sessions.get(chr.getId()) != session) {
             return false;
         }
+        if (session.getAttr("stateTransfer") != null) return false;
+        Runnable cancelTrade = session.getAttr("cancelTrade");
+        if (cancelTrade != null) cancelTrade.run();
+        if (sessions.execution() != null) {
+            Object token = new Object();
+            session.setAttr("stateTransfer", token);
+            saveQueue.saveAsync(chr).whenComplete((ignored, error) -> sessions.execution().execute(() -> {
+                if (sessions.get(chr.getId()) != session || session.getAttr("stateTransfer") != token) return;
+                session.setAttr("stateTransfer", null);
+                if (error != null) { session.send(GameplayPackets.enableActions()); return; }
+                finish(session, chr, activity, stage);
+            }));
+            return true;
+        }
 
         // 先落最新角色态，再退出频道游戏域；商城/MTS 期间会话继续由本频道持有。
         saveQueue.flushCharacterSync(chr);
+        finish(session, chr, activity, stage);
+        return true;
+    }
+
+    private void finish(PacketSession session, PlayerCharacter chr, PlayerActivity activity, SessionStage stage) {
         sessions.visibility().leave(session);
         if (chr.getMapObject() != null) {
             chr.getMapObject().removeCharacter(chr);
@@ -61,6 +80,5 @@ public final class ChannelActivityService {
         players.remove(chr);
         session.transition(stage);
         eventPublisher.playerActivity(chr.getId(), worldId, channelId, activity);
-        return true;
     }
 }

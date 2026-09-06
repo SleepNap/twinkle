@@ -78,6 +78,10 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     @Override
     public void handle(PacketSession session, InPacket packet) {
+        sessions.coordinate(() -> { handleInChannel(session, packet); return null; });
+    }
+
+    private void handleInChannel(PacketSession session, InPacket packet) {
         if (session.stage() != SessionStage.IN_GAME) {
             session.close(I18n.message("error.interaction.outside_stage"));
             return;
@@ -87,6 +91,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
             session.close(I18n.message("error.interaction.not_in_map"));
             return;
         }
+        if (sessions.get(chr.getId()) != session || session.getAttr("stateTransfer") != null) return;
         int action = packet.readByte();
         switch (action) {
             case ACTION_CREATE -> create(session, chr);
@@ -117,34 +122,28 @@ public final class PlayerInteractionHandler implements PacketHandler {
         if (targetChr == null) {
             return;
         }
+        if (session.getAttr(TRADE_ATTR) != null || target.getAttr(TRADE_ATTR) != null
+                || target.stage() != SessionStage.IN_GAME || target.getAttr("stateTransfer") != null
+                || chr.getMapObject() != targetChr.getMapObject()
+                || reloadCoordinator != null && !reloadCoordinator.acceptingOperations()) return;
         // 建交易：双方各持同一实例（存各自会话 attr）
         TradeSide first = new TradeSide(chr);
         TradeSide second = new TradeSide(targetChr);
         Trade trade = tradeSystem.create(first, second);
-        session.setAttr(TRADE_ATTR, trade);
-        target.setAttr(TRADE_ATTR, trade);
         // 长操作跟踪（架构 5.3：交易跨 tick，重载安全点判定用）
         if (reloadCoordinator != null) {
-            reloadCoordinator.beginOperation(chr.getId());
-            reloadCoordinator.beginOperation(targetChr.getId());
+            if (!reloadCoordinator.beginPair(chr.getId(), targetChr.getId(), () -> cancel(session))) return;
         }
+        session.setAttr(TRADE_ATTR, trade);
+        target.setAttr(TRADE_ATTR, trade);
+        session.setAttr("cancelTrade", (Runnable) () -> cancel(session));
+        target.setAttr("cancelTrade", (Runnable) () -> cancel(target));
         // 邀请包（0x13A, INVITE + 3 + 名字 + 4B）
         target.send(tradeInvite(chr));
     }
 
     private void decline(PacketSession session, PlayerCharacter chr) {
-        Trade trade = session.getAttr(TRADE_ATTR);
-        if (trade == null) {
-            return;
-        }
-        // 通知对方取消
-        TradeSide other = trade.sideOf(chr) == trade.getFirst() ? trade.getSecond() : trade.getFirst();
-        PacketSession partnerSession = sessions.get(other.getTrader().getId());
-        if (partnerSession != null) {
-            partnerSession.send(tradeResult(number(partnerSession, trade), (byte) RESULT_PARTNER_CANCEL));
-        }
-        clearTrade(session);
-        endOperations(trade);
+        cancel(session);
     }
 
     private void visit(PacketSession session, PlayerCharacter chr) {
@@ -164,22 +163,25 @@ public final class PlayerInteractionHandler implements PacketHandler {
     }
 
     private void exit(PacketSession session, PlayerCharacter chr) {
-        Trade trade = session.getAttr(TRADE_ATTR);
-        if (trade == null) {
-            return;
-        }
-        TradeSide my = trade.sideOf(chr);
-        TradeSide partner = my == trade.getFirst() ? trade.getSecond() : trade.getFirst();
-        PacketSession partnerSession = sessions.get(partner.getTrader().getId());
-        if (partnerSession != null) {
-            partnerSession.send(tradeResult(number(partnerSession, trade), (byte) RESULT_PARTNER_CANCEL));
-        }
-        session.send(tradeResult(number(session, trade), (byte) RESULT_PARTNER_CANCEL));
-        clearTrade(session);
-        if (partnerSession != null) {
-            clearTrade(partnerSession);
-        }
-        endOperations(trade);
+        cancel(session);
+    }
+
+    /** 取消、断线、迁移和重载共用；先终结交易状态，再清理双方归属。 */
+    public void cancel(PacketSession session) {
+        sessions.coordinate(() -> {
+            Trade trade = session.getAttr(TRADE_ATTR);
+            if (trade == null || !tradeSystem.interrupt(trade)) return null;
+            for (TradeSide side : List.of(trade.getFirst(), trade.getSecond())) {
+                PacketSession participant = sessions.get(side.getTrader().getId());
+                if (participant != null && participant.getAttr(TRADE_ATTR) == trade) {
+                    participant.send(tradeResult(number(participant, trade), (byte) RESULT_PARTNER_CANCEL));
+                    clearTrade(participant);
+                }
+            }
+            if (session.getAttr(TRADE_ATTR) == trade) clearTrade(session);
+            endOperations(trade);
+            return null;
+        });
     }
 
     private void setItems(PacketSession session, PlayerCharacter chr, InPacket packet) {
@@ -371,6 +373,7 @@ public final class PlayerInteractionHandler implements PacketHandler {
 
     private static void clearTrade(PacketSession session) {
         session.setAttr(TRADE_ATTR, null);
+        session.setAttr("cancelTrade", null);
     }
 
     /** 交易结束/中断：释放双方长操作跟踪（回到安全点，可重载）。 */

@@ -7,6 +7,7 @@ import org.gms.domain.game.mob.MobData;
 import org.gms.wz.WzReloadParticipant;
 import org.gms.wz.WzResourceRegistry;
 import org.gms.wz.WzResources;
+import org.gms.concurrent.GameExecution;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -30,6 +31,7 @@ public final class ChannelMapManager implements WzReloadParticipant {
     }
 
     private final WzResourceRegistry resources;
+    private final GameExecution execution;
     private final String participantName;
     private final ConcurrentMap<Integer, MapleMap> maps = new ConcurrentHashMap<>();
 
@@ -38,7 +40,12 @@ public final class ChannelMapManager implements WzReloadParticipant {
     }
 
     public ChannelMapManager(WzResourceRegistry resources, Integer channelId) {
+        this(resources, channelId, null);
+    }
+
+    public ChannelMapManager(WzResourceRegistry resources, Integer channelId, GameExecution execution) {
         this.resources = resources;
+        this.execution = execution;
         this.participantName = channelId == null ? "channel-maps" : "channel-maps:" + channelId;
     }
 
@@ -64,15 +71,16 @@ public final class ChannelMapManager implements WzReloadParticipant {
     }
 
     @Override
-    public synchronized PreparedChange prepare(WzResourceRegistry.PreparedReload preparedResources) {
+    public PreparedChange prepare(WzResourceRegistry.PreparedReload preparedResources) {
         PreparedStaticData prepared = prepareReload(
                 preparedResources.resource(WzResources.MAPS),
                 preparedResources.resource(WzResources.MOBS));
         return () -> commitReload(prepared);
     }
 
-    public synchronized PreparedStaticData prepareReload(org.gms.wz.WzMapCatalog mapsCatalog,
+    public PreparedStaticData prepareReload(org.gms.wz.WzMapCatalog mapsCatalog,
                                                          Map<Integer, MobData> mobData) {
+        if (execution != null && !execution.isOwner()) return execution.call(() -> prepareReload(mapsCatalog, mobData));
         Map<Integer, MapleMap> replacements = new LinkedHashMap<>();
         Map<MapleMonster, MobData> monsters = new LinkedHashMap<>();
         for (Integer mapId : maps.keySet()) {
@@ -90,7 +98,8 @@ public final class ChannelMapManager implements WzReloadParticipant {
         return new PreparedStaticData(replacements, monsters);
     }
 
-    public synchronized int commitReload(PreparedStaticData prepared) {
+    public int commitReload(PreparedStaticData prepared) {
+        if (execution != null && !execution.isOwner()) return execution.call(() -> commitReload(prepared));
         prepared.replacements().forEach((mapId, replacement) -> maps.get(mapId).replaceWzData(replacement));
         prepared.monsters().forEach(MapleMonster::replaceWzData);
         return prepared.replacements().size() + prepared.monsters().size();

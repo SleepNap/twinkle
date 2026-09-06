@@ -38,14 +38,23 @@ public class MapleMonster {
 
     /** 扣血；hp 归零标记死亡（最小值 0）。 */
     public void takeDamage(int damage) {
+        applyDamage(damage);
+    }
+
+    /** 一次受击的扣血与死亡认领不可分割；只有首次从存活转为死亡的操作取得结算权。 */
+    public synchronized DamageOutcome applyDamage(int damage) {
         if (damage <= 0 || !alive) {
-            return;
+            return new DamageOutcome(0, alive, false);
         }
+        int applied = Math.min(hp, damage);
         hp = Math.max(0, hp - damage);
         if (hp == 0) {
             alive = false;
         }
+        return new DamageOutcome(applied, alive, !alive);
     }
+
+    public record DamageOutcome(int damage, boolean alive, boolean killed) { }
 
     public boolean isAlive() {
         return alive;

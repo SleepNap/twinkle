@@ -29,7 +29,7 @@ public final class DefaultVersionGate implements VersionGate {
 
     @Override
     public VersionDecision decide(long writeVersion) {
-        long now = currentVersion.get();
+        long now = VersionScope.effective(this, currentVersion.get());
         if (writeVersion == now) {
             return VersionDecision.ALLOW;
         }

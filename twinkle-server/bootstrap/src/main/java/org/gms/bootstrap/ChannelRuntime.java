@@ -14,6 +14,7 @@ import org.gms.domain.game.lease.DefaultControllerLeaseService;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.service.admin.AdminService;
 import org.gms.tick.TickScheduler;
+import org.gms.concurrent.GameExecution;
 
 import java.util.List;
 
@@ -35,13 +36,15 @@ public final class ChannelRuntime implements AutoCloseable {
     private final TickScheduler tickScheduler;
     private final List<AutoCloseable> subscriptions;
     private ChannelAdminService admin;
+    private final GameExecution execution;
 
-    ChannelRuntime(ChannelWorkerSpec.Endpoint endpoint, HandlerRegistry handlers,
+    public ChannelRuntime(ChannelWorkerSpec.Endpoint endpoint, HandlerRegistry handlers,
                    ChannelMapManager maps, PlayerStorage players, PlayerSessionRegistry sessions,
                    DefaultControllerLeaseService leases, MonsterSpawnService monsters,
                    MonsterReassignTickHandler reassign, ChannelServer server,
                    TickScheduler tickScheduler, ChannelMessageSubscriber messages,
-                   ChannelChangeReceiver changes, ChannelLocationBinder locations, AutoCloseable gameplay) {
+                   ChannelChangeReceiver changes, ChannelLocationBinder locations, AutoCloseable gameplay,
+                   GameExecution execution) {
         this.endpoint = endpoint;
         this.handlers = handlers;
         this.maps = maps;
@@ -53,6 +56,7 @@ public final class ChannelRuntime implements AutoCloseable {
         this.server = server;
         this.tickScheduler = tickScheduler;
         this.subscriptions = List.of(messages, changes, locations, gameplay);
+        this.execution = execution;
     }
 
     public int channelId() { return endpoint.channelId(); }
@@ -64,18 +68,20 @@ public final class ChannelRuntime implements AutoCloseable {
     public ChannelMapManager maps() { return maps; }
     public AdminService admin() { return admin; }
     public HandlerRegistry handlers() { return handlers; }
+    public void drainStateTasks() { execution.run(() -> { }); }
 
-    void admin(ChannelAdminService admin) {
+    public void admin(ChannelAdminService admin) {
         this.admin = admin;
     }
 
     @Override
     public void close() {
         server.stop();
-        subscriptions.reversed().forEach(ChannelRuntime::closeQuietly);
+        execution.run(() -> subscriptions.reversed().forEach(ChannelRuntime::closeQuietly));
         monsters.close();
         tickScheduler.unregister(leases);
         tickScheduler.unregister(reassign);
+        execution.close();
     }
 
     private static void closeQuietly(AutoCloseable closeable) {

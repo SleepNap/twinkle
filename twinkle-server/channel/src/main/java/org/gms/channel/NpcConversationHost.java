@@ -250,12 +250,10 @@ public final class NpcConversationHost implements Cm {
     private void updateItem(int itemId, int quantity, boolean add) {
         var type = ItemConstants.getInventoryType(itemId);
         if (type == InventoryType.UNDEFINED) return;
-        synchronized (chr) {
-            var before = GameplayPackets.inventory(chr, type);
-            boolean changed = add ? itemSystem.giveItem(chr, itemId, quantity) : itemSystem.takeItem(chr, itemId, quantity);
-            if (changed) GameplayPackets.inventoryChanges(type, before, GameplayPackets.inventory(chr, type))
-                    .forEach(session::send);
-        }
+        var before = GameplayPackets.inventory(chr, type);
+        boolean changed = add ? itemSystem.giveItem(chr, itemId, quantity) : itemSystem.takeItem(chr, itemId, quantity);
+        if (changed) GameplayPackets.inventoryChanges(type, before, GameplayPackets.inventory(chr, type))
+                .forEach(session::send);
         session.send(GameplayPackets.enableActions());
     }
 
@@ -271,24 +269,20 @@ public final class NpcConversationHost implements Cm {
 
     @Override
     public void gainExp(int amount) {
-        synchronized (chr) {
-            long total = chr.getExp() + amount;
-            if (total < 0 || total > Integer.MAX_VALUE) return;
-            chr.setExp(total);
-            chr.markDirty();
-            session.send(GameplayPackets.stats(Map.of(GameplayPackets.EXP, (int) total)));
-        }
+        long total = chr.getExp() + amount;
+        if (total < 0 || total > Integer.MAX_VALUE) return;
+        chr.setExp(total);
+        chr.markDirty();
+        session.send(GameplayPackets.stats(Map.of(GameplayPackets.EXP, (int) total)));
     }
 
     @Override
     public void gainMeso(int amount) {
-        synchronized (chr) {
-            long total = (long) chr.getMeso() + amount;
-            if (total < 0 || total > Integer.MAX_VALUE) return;
-            chr.setMeso((int) total);
-            chr.markDirty();
-            session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, chr.getMeso())));
-        }
+        long total = (long) chr.getMeso() + amount;
+        if (total < 0 || total > Integer.MAX_VALUE) return;
+        chr.setMeso((int) total);
+        chr.markDirty();
+        session.send(GameplayPackets.stats(Map.of(GameplayPackets.MESO, chr.getMeso())));
     }
 
     @Override

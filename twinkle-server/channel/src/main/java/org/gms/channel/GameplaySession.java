@@ -9,12 +9,14 @@ public final class GameplaySession {
     private GameplaySession() { }
 
     public static PlayerCharacter character(PacketSession session) {
-        return session.stage() == SessionStage.IN_GAME ? session.getAttr("character") : null;
+        return session.stage() == SessionStage.IN_GAME && session.getAttr("stateTransfer") == null
+                ? session.getAttr("character") : null;
     }
 
     public static boolean canAct(PacketSession session, PlayerCharacter character) {
         return character != null && character.getHp() > 0 && character.getMapObject() != null
                 && session.getAttr("trade") == null && session.getAttr("mapTransition") == null
+                && session.getAttr("stateTransfer") == null
                 && !Boolean.FALSE.equals(session.getAttr("mapVisibilityReady"));
     }
 

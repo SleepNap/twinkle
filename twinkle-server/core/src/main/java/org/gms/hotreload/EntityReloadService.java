@@ -7,7 +7,6 @@ import org.gms.hotreload.versioned.VersionGate;
 import java.util.ArrayList;
 import java.time.Duration;
 import java.util.List;
-import java.util.function.LongConsumer;
 import java.util.function.LongPredicate;
 
 /**
@@ -53,6 +52,12 @@ public final class EntityReloadService {
      * @return 安全切换数 / 中断数 / 新版本号
      */
     public ReloadResult reload(List<Long> targetEntities, LongPredicate interrupt) {
+        coordinator.beginReload();
+        try { return reloadPrepared(targetEntities, interrupt); }
+        finally { coordinator.endReload(); }
+    }
+
+    private ReloadResult reloadPrepared(List<Long> targetEntities, LongPredicate interrupt) {
         int safeSwitched = 0;
         int interrupted = 0;
 
@@ -63,11 +68,11 @@ public final class EntityReloadService {
                 continue;
             }
             // 在途操作：显式中断（交易取消+回滚）。中断后实体回安全点。
-            boolean ok = interrupt != null && interrupt.test(entityId);
-            if (ok) {
+            boolean ok = coordinator.interrupt(entityId) || interrupt != null && interrupt.test(entityId);
+            if (ok && coordinator.isSafe(entityId)) {
                 interrupted++;
             } else {
-                log.warn(I18n.message("log.reload.entity_skip"), entityId);
+                throw new IllegalStateException(I18n.message("error.reload.not_safe", entityId));
             }
         }
 
@@ -80,9 +85,12 @@ public final class EntityReloadService {
 
     /** 便捷：从当前全部在途实体里中断指定的那批。 */
     public ReloadResult reloadAllInFlight(LongPredicate interrupt) {
-        List<Long> inFlight = new ArrayList<>(coordinator.inFlightEntities());
-        return reload(inFlight, interrupt);
+        coordinator.beginReload();
+        try { return reloadPrepared(new ArrayList<>(coordinator.inFlightEntities()), interrupt); }
+        finally { coordinator.endReload(); }
     }
+
+    public ReloadResult reloadAllInFlight() { return reloadAllInFlight(null); }
 
     /** 等待当前全部在途实体操作自然完成。 */
     public boolean awaitIdle(Duration timeout) throws InterruptedException {

@@ -33,22 +33,20 @@ public final class InventoryMoveHandler implements PacketHandler {
             short source = packet.readShort(), target = packet.readShort();
             int quantity = packet.readShort();
             if (type == InventoryType.UNDEFINED) return;
-            synchronized (character) {
-                if (sessions.get(character.getId()) != session || !GameplaySession.canAct(session, character)) return;
-                if (source < 0 || target < 0) {
-                    if (type == InventoryType.EQUIP) equipment.move(session, source, target, quantity);
-                    return;
-                }
-                if (type == InventoryType.EQUIP && target > 0) {
-                    if (quantity < 0 || quantity > 1) return;
-                    quantity = 1;
-                }
-                var before = GameplayPackets.inventory(character, type);
-                boolean changed = target == 0 ? drops.drop(character, inventoryType, source, quantity)
-                        : items.moveItem(character, inventoryType, source, target, quantity);
-                if (changed) GameplayPackets.inventoryChanges(type, before,
-                        GameplayPackets.inventory(character, type)).forEach(session::send);
+            if (sessions.get(character.getId()) != session || !GameplaySession.canAct(session, character)) return;
+            if (source < 0 || target < 0) {
+                if (type == InventoryType.EQUIP) equipment.move(session, source, target, quantity);
+                return;
             }
+            if (type == InventoryType.EQUIP && target > 0) {
+                if (quantity < 0 || quantity > 1) return;
+                quantity = 1;
+            }
+            var before = GameplayPackets.inventory(character, type);
+            boolean changed = target == 0 ? drops.drop(character, inventoryType, source, quantity)
+                    : items.moveItem(character, inventoryType, source, target, quantity);
+            if (changed) GameplayPackets.inventoryChanges(type, before,
+                    GameplayPackets.inventory(character, type)).forEach(session::send);
         } finally { session.send(GameplayPackets.enableActions()); }
     }
 }

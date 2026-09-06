@@ -43,11 +43,17 @@ public final class RestartService {
      * @param restartProcess 关停当前进程的 runnable（如 {@code System.exit(0)}）；测试可注入 mock
      */
     public void restart(Runnable restartProcess) {
+        restart(() -> { }, restartProcess);
+    }
+
+    /** 生产重启先关闭所有频道接入并排空断线清理，防止 flush 后还有新封包修改角色。 */
+    public void restart(Runnable stopNetwork, Runnable restartProcess) {
         coordinator.beginRestart(
                 () -> {
                     // DRAINING：tick 帧边界暂停 → 中断在途 → 存档队列排空
                     tickScheduler.pause();
-                    entityReloadService.reloadAllInFlight(id -> true); // 交易显式中断 + 回滚
+                    stopNetwork.run();
+                    entityReloadService.reloadAllInFlight(); // 交易显式中断 + 回滚
                     drainSaveQueue();
                 },
                 saveQueue::flushAllSync,  // FLUSH_DIRTY：同步落库脏角色（红线 17，确保重启前落盘）
@@ -64,7 +70,7 @@ public final class RestartService {
                     () -> {
                         tickScheduler.pause();
                         stopNetwork.run();
-                        entityReloadService.reloadAllInFlight(id -> true);
+                        entityReloadService.reloadAllInFlight();
                         drainSaveQueue();
                     },
                     saveQueue::flushAllSync,
@@ -99,7 +105,7 @@ public final class RestartService {
                         tickScheduler.pause();
                         stopNetwork.run();
                         if (force) {
-                            entityReloadService.reloadAllInFlight(id -> true);
+                            entityReloadService.reloadAllInFlight();
                         } else {
                             awaitInFlightOperations();
                         }
