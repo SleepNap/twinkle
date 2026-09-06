@@ -28,6 +28,16 @@ public class PartyGameplayTest {
             assertThat(invitation.readInt()).isEqualTo(partyId);
             handler.handle(guest, input(3, partyId));
             assertThat(guest.character.getParty()).isEqualTo(partyId);
+            var outsider = new GameplayTestSession(3, map); sessions.claim(3, outsider);
+            leader.sent.clear(); guest.sent.clear();
+            var chat = new ByteArrayOutPacket(); chat.writeByte(1).writeByte(1).writeInt(3).writeString("集合");
+            handler.chat(leader, new ByteArrayInPacket(chat.getBytes()));
+            assertThat(outsider.sent).isEmpty(); assertThat(leader.sent).isEmpty(); assertThat(guest.sent).hasSize(1);
+            var message = new ByteArrayInPacket(guest.sent.getFirst().getBytes());
+            assertThat(message.readUnsignedShort()).isEqualTo(SendOpcode.MULTICHAT.getValue());
+            assertThat(message.readByte()).isOne(); assertThat(message.readString()).isEqualTo("Player1");
+            assertThat(message.readString()).isEqualTo("集合"); assertThat(message.available()).isZero();
+            handler.chat(outsider, new ByteArrayInPacket(chat.getBytes())); assertThat(guest.sent).hasSize(1);
             sessions.unregister(1, leader);
             handler.refresh();
             assertThat(guest.character.getParty()).isZero();

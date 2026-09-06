@@ -31,12 +31,17 @@ public class SkillGameplayTest {
                 </imgdir></imgdir></imgdir></imgdir>
                 """);
         var resources = new WzResourceRegistry(root, List.of(new SkillResourceLoader()), Runnable::run);
+        var sessions = new PlayerSessionRegistry(); var map = new MapleMap();
+        var session = new GameplayTestSession(1, map); session.character.setMp(30);
+        var peer = new GameplayTestSession(2, map);
+        var otherMap = new GameplayTestSession(3, new MapleMap());
+        sessions.claim(1, session); sessions.claim(2, peer); sessions.claim(3, otherMap);
         var handler = new ActiveSkillHandler(resources, new ProgressionSystem(new DefaultVersionGate()),
-                Clock.fixed(Instant.ofEpochMilli(1000), ZoneOffset.UTC));
-        var session = new GameplayTestSession(1, new MapleMap()); session.character.setMp(30);
+                Clock.fixed(Instant.ofEpochMilli(1000), ZoneOffset.UTC), sessions);
         session.character.putSkill(new SkillEntry(1001003, 1, 0, -1));
         handler.handle(session, cast(1001003, 20));
         assertThat(session.character.getMp()).isEqualTo(30);
+        assertThat(peer.sent).isEmpty();
         session.sent.clear(); handler.handle(session, cast(1001003, 1));
         var response = new ByteArrayInPacket(session.sent.getFirst().getBytes());
         assertThat(response.readUnsignedShort()).isEqualTo(SendOpcode.GIVE_BUFF.getValue());
@@ -47,6 +52,24 @@ public class SkillGameplayTest {
         assertThat(response.readInt()).isEqualTo(75_000);
         response.skip(9); assertThat(response.available()).isZero();
         assertThat(session.character.getMp()).isEqualTo(22);
+        var animation = new ByteArrayInPacket(peer.sent.getFirst().getBytes());
+        assertThat(animation.readUnsignedShort()).isEqualTo(SendOpcode.SHOW_FOREIGN_EFFECT.getValue());
+        assertThat(animation.readInt()).isOne(); assertThat(animation.readByte()).isOne();
+        assertThat(animation.readInt()).isEqualTo(1001003); assertThat(animation.readByte()).isZero();
+        assertThat(animation.readByte()).isOne(); assertThat(animation.readByte()).isZero();
+        assertThat(animation.available()).isZero();
+        var remote = new ByteArrayInPacket(peer.sent.get(1).getBytes());
+        assertThat(remote.readUnsignedShort()).isEqualTo(SendOpcode.GIVE_FOREIGN_BUFF.getValue());
+        assertThat(remote.readInt()).isOne(); assertThat(remote.readLong()).isZero();
+        assertThat(remote.readLong()).isEqualTo(1L << 33); assertThat(remote.readShort()).isEqualTo((short) 2);
+        remote.skip(6); assertThat(remote.available()).isZero();
+        peer.sent.clear(); session.character.setHp(0); handler.expire(session); handler.expire(session);
+        assertThat(peer.sent).hasSize(1);
+        var cancelled = new ByteArrayInPacket(peer.sent.getFirst().getBytes());
+        assertThat(cancelled.readUnsignedShort()).isEqualTo(SendOpcode.CANCEL_FOREIGN_BUFF.getValue());
+        assertThat(cancelled.readInt()).isOne(); assertThat(cancelled.readLong()).isZero();
+        assertThat(cancelled.readLong()).isEqualTo(1L << 33); assertThat(cancelled.available()).isZero();
+        assertThat(otherMap.sent).isEmpty();
     }
     @Test public void autoApCannotPartiallyApplyOrOverspend() {
         var handler = new AutoApHandler(new ProgressionSystem(new DefaultVersionGate()));

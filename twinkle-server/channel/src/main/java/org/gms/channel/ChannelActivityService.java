@@ -54,6 +54,7 @@ public final class ChannelActivityService {
 
         // 先落最新角色态，再退出频道游戏域；商城/MTS 期间会话继续由本频道持有。
         saveQueue.flushCharacterSync(chr);
+        sessions.visibility().leave(session);
         if (chr.getMapObject() != null) {
             chr.getMapObject().removeCharacter(chr);
         }

@@ -10,10 +10,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** v83 角色公共字节段的独立 golden 布局测试。 */
-class V83CharacterPacketWriterTest {
+public class V83CharacterPacketWriterTest {
 
     @Test
-    void writeStats_usesFixedNameAndStableFieldOrder() {
+    public void writeStats_usesFixedNameAndStableFieldOrder() {
         V83CharacterStats stats = new V83CharacterStats(
                 7, "冒险家", 1, 2, 20001, 30001,
                 30, 100, 12, 13, 14, 15,
@@ -57,7 +57,7 @@ class V83CharacterPacketWriterTest {
     }
 
     @Test
-    void writeLook_sortsSlotsAndSeparatesWeaponField() {
+    public void writeLook_keepsOrdinaryWeaponInVisibleSlots() {
         V83CharacterLook look = new V83CharacterLook(
                 0, 3, 20000, 30000,
                 List.of(
@@ -78,12 +78,33 @@ class V83CharacterPacketWriterTest {
         assertThat(in.readInt()).isEqualTo(1040002);
         assertThat(in.readByte()).isEqualTo((byte) 7);
         assertThat(in.readInt()).isEqualTo(1072001);
-        assertThat(in.readByte()).isEqualTo((byte) 0xFF);
-        assertThat(in.readByte()).isEqualTo((byte) 0xFF);
+        assertThat(in.readByte()).isEqualTo((byte) 11);
         assertThat(in.readInt()).isEqualTo(1302000);
+        assertThat(in.readByte()).isEqualTo((byte) 0xFF);
+        assertThat(in.readByte()).isEqualTo((byte) 0xFF);
+        assertThat(in.readInt()).isZero();
         assertThat(in.readInt()).isZero();
         assertThat(in.readInt()).isZero();
         assertThat(in.readInt()).isZero();
         assertThat(in.available()).isZero();
+    }
+
+    @Test
+    public void cashLookMasksOriginalAndUsesSeparateCashWeaponRegardlessOfInputOrder() {
+        var items = List.of(new V83EquippedItem(-105, 1042000), new V83EquippedItem(-5, 1040002),
+                new V83EquippedItem(-111, 1702000), new V83EquippedItem(-11, 1302000),
+                new V83EquippedItem(1, 1002000));
+        var out = new ByteArrayOutPacket();
+        V83CharacterPacketWriter.writeLook(out, new V83CharacterLook(0, 0, 0, 0, items), false);
+        var in = new ByteArrayInPacket(out.getBytes()); in.skip(11);
+        assertThat(in.readByte()).isEqualTo((byte) 5); assertThat(in.readInt()).isEqualTo(1042000);
+        assertThat(in.readByte()).isEqualTo((byte) 11); assertThat(in.readInt()).isEqualTo(1302000);
+        assertThat(in.readByte()).isEqualTo((byte) -1);
+        assertThat(in.readByte()).isEqualTo((byte) 5); assertThat(in.readInt()).isEqualTo(1040002);
+        assertThat(in.readByte()).isEqualTo((byte) -1); assertThat(in.readInt()).isEqualTo(1702000);
+        in.skip(12); assertThat(in.available()).isZero();
+        var reversed = new ByteArrayOutPacket();
+        V83CharacterPacketWriter.writeLook(reversed, new V83CharacterLook(0, 0, 0, 0, items.reversed()), false);
+        assertThat(reversed.getBytes()).isEqualTo(out.getBytes());
     }
 }

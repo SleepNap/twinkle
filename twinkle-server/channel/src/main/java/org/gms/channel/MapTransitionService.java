@@ -16,13 +16,20 @@ public final class MapTransitionService {
     private final MonsterSpawnService monsters;
     private final ControllerLeaseService leases;
     private final int channelId;
+    private final PlayerSessionRegistry sessions;
 
     public MapTransitionService(IntFunction<MapleMap> maps, MonsterSpawnService monsters,
                                 ControllerLeaseService leases, int channelId) {
+        this(maps, monsters, leases, channelId, null);
+    }
+
+    public MapTransitionService(IntFunction<MapleMap> maps, MonsterSpawnService monsters,
+                                ControllerLeaseService leases, int channelId, PlayerSessionRegistry sessions) {
         this.maps = maps;
         this.monsters = monsters;
         this.leases = leases;
         this.channelId = channelId;
+        this.sessions = sessions;
     }
 
     public boolean usePortal(PacketSession session, String name, int requestedMap) {
@@ -66,6 +73,11 @@ public final class MapTransitionService {
         // 先完成全部查找及校验，防止错误目标使角色消失在原地图。
         session.setAttr("mapTransition", true);
         session.setAttr("npcShop", null);
+        if (sessions != null) sessions.visibility().leave(session);
+        if (sessions != null) session.setAttr("mapVisibilityReady", false);
+        character.setChairItemId(0);
+        character.setStance(0);
+        character.setFoothold(0);
         character.getMapObject().removeCharacter(character);
         Long generation = session.getAttr("sessionGeneration");
         if (leases != null && generation != null) leases.onDisconnect(character.getId(), session.sessionId(), generation);

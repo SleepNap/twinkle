@@ -81,6 +81,32 @@ public final class PartyHandler implements PacketHandler, AutoCloseable {
         PlayerCharacter character = GameplaySession.character(session);
         if (character != null) synchronized (state) { state.cancelInvitation(character.getId()); }
     }
+
+    /** MULTI_CHAT 的队伍分支：忽略客户端收件人列表，按服务端队伍及连接代际确定受众。 */
+    public void chat(PacketSession session, InPacket packet) {
+        PlayerCharacter character = GameplaySession.character(session);
+        if (character == null || sessions.get(character.getId()) != session || packet.available() < 4) return;
+        int mode = packet.readByte() & 255, count = packet.readByte() & 255;
+        if (mode != 1 || packet.available() < count * 4 + 2) return;
+        packet.skip(count * 4);
+        int length = packet.readUnsignedShort();
+        if (length == 0 || length > 254 || packet.available() != length) return;
+        String text = new String(packet.readBytes(length), InPacket.DEFAULT_CHARSET).trim();
+        if (text.isEmpty() || text.length() > 127 || text.chars().anyMatch(Character::isISOControl)) return;
+        synchronized (state) {
+            Party party = state.of(character.getId());
+            if (party == null || !accepts.test(character)) return;
+            PartyMember sender = party.members().get(character.getId());
+            if (sender == null || sender.sessionId() != session.sessionId()) return;
+            for (PartyMember member : party.members().values()) {
+                PacketSession peer = sessions.get(member.id());
+                if (peer != null && peer != session && peer.sessionId() == member.sessionId()
+                        && GameplaySession.character(peer) != null) {
+                    peer.send(PlayerUtilityPackets.partyChat(character.getName(), text));
+                }
+            }
+        }
+    }
     private boolean leave(long actor, long target) {
         Party before = system.leave(state, actor, target);
         if (before == null) return false;

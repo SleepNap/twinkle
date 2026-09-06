@@ -14,7 +14,8 @@ public final class GameplaySession {
 
     public static boolean canAct(PacketSession session, PlayerCharacter character) {
         return character != null && character.getHp() > 0 && character.getMapObject() != null
-                && session.getAttr("trade") == null && session.getAttr("mapTransition") == null;
+                && session.getAttr("trade") == null && session.getAttr("mapTransition") == null
+                && !Boolean.FALSE.equals(session.getAttr("mapVisibilityReady"));
     }
 
     public static boolean near(PlayerCharacter character, int x, int y, int distance) {

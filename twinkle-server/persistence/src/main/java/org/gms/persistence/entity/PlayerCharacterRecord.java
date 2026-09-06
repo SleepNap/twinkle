@@ -25,6 +25,8 @@ public class PlayerCharacterRecord {
     private Long accountId;
     private int world;
     private String name;
+    /** 按键、技能宏与快捷栏的版本化文本快照。 */
+    private String controlSettings;
     private int level;
     private long exp;
     private long gachaExp;

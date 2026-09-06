@@ -23,14 +23,19 @@ public final class ActiveSkillHandler implements PacketHandler {
     private final WzResourceRegistry resources;
     private final ProgressionSystem system;
     private final Clock clock;
+    private final PlayerSessionRegistry sessions;
 
     public ActiveSkillHandler(WzResourceRegistry resources, ProgressionSystem system, Clock clock) {
+        this(resources, system, clock, null);
+    }
+    public ActiveSkillHandler(WzResourceRegistry resources, ProgressionSystem system, Clock clock, PlayerSessionRegistry sessions) {
         this.resources = resources; this.system = system; this.clock = clock;
+        this.sessions = sessions;
     }
     @Override public void handle(PacketSession session, InPacket packet) {
         try {
             PlayerCharacter character = GameplaySession.character(session);
-            if (!GameplaySession.canAct(session, character) || packet.available() < 9) return;
+            if (!GameplaySession.canAct(session, character) || !current(session, character) || packet.available() < 9) return;
             packet.skip(4);
             int skillId = packet.readInt(), requestedLevel = packet.readByte() & 255;
             synchronized (character) {
@@ -46,6 +51,12 @@ public final class ActiveSkillHandler implements PacketHandler {
                 });
                 reply.writeInt(0); reply.writeByte(0); reply.writeInt(new TreeMap<>(effect.stats()).firstEntry().getValue());
                 session.send(reply);
+                if (sessions != null) {
+                    sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.skillEffect(character.getId(),
+                            skillId, skill.level(), character.getStance() & 1), character.getId());
+                    sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.buff(character.getId(), effect.stats()),
+                            character.getId());
+                }
                 session.send(GameplayPackets.stats(Map.of(GameplayPackets.HP, character.getHp(), GameplayPackets.MP, character.getMp())));
             }
         } finally { session.send(GameplayPackets.enableActions()); }
@@ -66,18 +77,30 @@ public final class ActiveSkillHandler implements PacketHandler {
     }
     public void cancel(PacketSession session, InPacket packet) {
         PlayerCharacter character = GameplaySession.character(session);
-        if (character == null || packet.available() < 4) return;
-        sendCancellation(session, system.cancelBuff(character, packet.readInt(), clock.millis(), false));
+        if (character == null || !current(session, character) || packet.available() < 4) return;
+        synchronized (character) {
+            sendCancellation(session, system.cancelBuff(character, packet.readInt(), clock.millis(), false));
+        }
         session.send(GameplayPackets.enableActions());
     }
     public void expire(PacketSession session) {
         PlayerCharacter character = GameplaySession.character(session);
-        if (character != null) sendCancellation(session, system.cancelBuff(character, 0, clock.millis(), true));
+        if (character != null && current(session, character)) synchronized (character) {
+            sendCancellation(session, system.cancelBuff(character, 0, clock.millis(), true));
+        }
     }
-    private static void sendCancellation(PacketSession session, long mask) {
+    private boolean current(PacketSession session, PlayerCharacter character) {
+        return sessions == null || sessions.get(character.getId()) == session;
+    }
+    private void sendCancellation(PacketSession session, long mask) {
         if (mask == 0) return;
         var packet = GameplayPackets.packet(SendOpcode.CANCEL_BUFF);
         packet.writeLong(0); packet.writeLong(mask); packet.writeByte(1);
         session.send(packet);
+        PlayerCharacter character = GameplaySession.character(session);
+        if (sessions != null && character != null && character.getMapObject() != null) {
+            sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.cancelBuff(character.getId(), mask),
+                    character.getId());
+        }
     }
 }

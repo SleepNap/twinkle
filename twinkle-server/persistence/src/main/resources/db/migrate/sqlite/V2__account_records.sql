@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS character_records (
     reborns INTEGER NOT NULL DEFAULT 0,
     pq_points INTEGER NOT NULL DEFAULT 0,
     data_string TEXT NOT NULL DEFAULT '',
+    control_settings TEXT,
     last_logout_time TEXT NOT NULL DEFAULT '2015-01-01 05:00:00',
     last_exp_gain_time TEXT NOT NULL DEFAULT '2015-01-01 05:00:00',
     party_search INTEGER NOT NULL DEFAULT 1,

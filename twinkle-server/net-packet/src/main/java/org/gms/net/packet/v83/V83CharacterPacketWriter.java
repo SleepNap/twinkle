@@ -54,7 +54,8 @@ public final class V83CharacterPacketWriter {
     /**
      * 写入 v83 addCharLook 公共段。
      *
-     * <p>当前协议投影覆盖普通已穿戴装备；现金外观覆盖与宠物槽在获得真实录包后扩展。
+     * <p>普通武器属于可见装备列表，现金武器使用独立字段；现金服饰覆盖原部位，原装备进入遮盖列表。
+     * 字段含义核对自 BeiDou-Server addCharEquips；按两组槽位投影独立实现。宠物槽待接入。
      */
     public static void writeLook(OutPacket packet, V83CharacterLook look, boolean mega) {
         packet.writeByte(look.gender());
@@ -67,25 +68,28 @@ public final class V83CharacterPacketWriter {
 
     private static void writeEquippedItems(OutPacket packet, V83CharacterLook look) {
         Map<Integer, Integer> visible = new TreeMap<>();
-        int weapon = 0;
+        Map<Integer, Integer> cosmetics = new TreeMap<>();
+        Map<Integer, Integer> masked = new TreeMap<>();
+        int cashWeapon = 0;
         for (V83EquippedItem item : look.equippedItems()) {
-            int slot = Math.abs(item.position());
-            if (slot == 0) {
-                continue;
-            }
-            if (slot == 11) {
-                weapon = item.itemId();
-                continue;
-            }
-            visible.put(slot, item.itemId());
+            if (item.position() >= 0) continue;
+            int slot = -item.position();
+            if (slot == 111) cashWeapon = item.itemId();
+            else if (slot > 0 && slot < 100) visible.put(slot, item.itemId());
+            else if (slot > 100 && slot < 200) cosmetics.put(slot - 100, item.itemId());
         }
+        cosmetics.forEach((slot, item) -> {
+            Integer original = visible.put(slot, item);
+            if (original != null) masked.put(slot, original);
+        });
         for (Map.Entry<Integer, Integer> entry : visible.entrySet()) {
             packet.writeByte(entry.getKey());
             packet.writeInt(entry.getValue());
         }
         packet.writeByte(0xFF);          // 普通装备结束
-        packet.writeByte(0xFF);          // masked 装备结束（现金覆盖后续扩展）
-        packet.writeInt(weapon);
+        masked.forEach((slot, item) -> { packet.writeByte(slot); packet.writeInt(item); });
+        packet.writeByte(0xFF);          // 被现金外观遮盖的装备结束
+        packet.writeInt(cashWeapon);
         packet.writeInt(0);              // 宠物 x3
         packet.writeInt(0);
         packet.writeInt(0);

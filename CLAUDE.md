@@ -140,4 +140,6 @@ React 19 + Vite + Tailwind CSS v4 + shadcn（视觉基准固定 `radix-nova` 官
 
 ## 里程碑
 
+当前游戏推进顺序（2026-09-06 用户要求）：先连续迁移封包，客户端联调与完整场景验收后续统一做，不以每批联调为继续迁移的前置。迁移期间保留编译、相关自动回归与架构检查。
+
 按 `ARCHITECTURE.md` 第十一节推进：M0（骨架+基础验证+热更新地基）→ M1（协议+Netty）→ M2（游戏逻辑重写，参考项目作 parity 真值）→ M3（HTTP+渐进重载）→ M4（插件+热更新 L1-L4）→ M5（Web 控制台+迁移）→ M6（分布式）。M0-M6 是基础架构里程碑，不代表全部游戏玩法完成。游戏功能优先按 `docs/in-progress/gameplay-roadmap.md` 推进；控制台范围仍见 `docs/in-progress/console-roadmap.md`。

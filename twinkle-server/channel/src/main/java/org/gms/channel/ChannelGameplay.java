@@ -8,6 +8,8 @@ import org.gms.net.packet.HandlerRegistry;
 import org.gms.replaceable.ItemSystem;
 import org.gms.replaceable.QuestSystem;
 import org.gms.replaceable.ProgressionSystem;
+import org.gms.replaceable.AvatarSystem;
+import org.gms.replaceable.ControlsSystem;
 import org.gms.wz.WzResourceRegistry;
 import java.time.Clock;
 import org.gms.tick.TickHandler;
@@ -28,12 +30,14 @@ public final class ChannelGameplay implements AutoCloseable {
         this.scheduler = scheduler;
         this.drops = new GroundDropService(items, data, sessions, Clock.systemUTC());
         this.parties = new PartyHandler(sessions, channelId, Clock.systemUTC(), progression::accepts);
-        ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC());
+        ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC(), sessions);
+        AvatarHandler avatars = new AvatarHandler(sessions, new AvatarSystem(progression::accepts), data, Clock.systemUTC());
+        ControlsHandler controls = new ControlsHandler(sessions, new ControlsSystem(progression::accepts, data), Clock.systemUTC());
         long sweepTicks = scheduler.ticksFor(1000);
         this.expiration = count -> { if (count % sweepTicks == 0) {
-            drops.expire(); parties.refresh(); sessions.all().forEach(skills::expire);
+            drops.expire(); parties.refresh(); sessions.all().forEach(skills::expire); sessions.all().forEach(avatars::refresh);
         } };
-        MapTransitionService transitions = new MapTransitionService(maps::getMap, monsters, leases, channelId);
+        MapTransitionService transitions = new MapTransitionService(maps::getMap, monsters, leases, channelId, sessions);
         NpcShopHandler shops = new NpcShopHandler(shopCatalog, data, items);
         QuestActionHandler questActions = new QuestActionHandler(resources, quests);
         var login = handlers.find(RecvOpcode.PLAYER_LOGGEDIN.getValue()).orElseThrow();
@@ -42,8 +46,18 @@ public final class ChannelGameplay implements AutoCloseable {
             session.setAttr("questActions", questActions);
             var character = GameplaySession.character(session);
             if (character != null && character.getParty() != 0) { character.setParty(0); character.markDirty(); }
+            controls.initialize(session);
         }, 2);
         handlers.register(RecvOpcode.PARTY_OPERATION, parties);
+        handlers.register(RecvOpcode.MULTI_CHAT, parties::chat);
+        handlers.register(RecvOpcode.CHANGE_KEYMAP, controls::keys);
+        handlers.register(RecvOpcode.SKILL_MACRO, controls::macros);
+        handlers.register(RecvOpcode.CHANGE_QUICKSLOT, controls::quickSlots);
+        handlers.register(RecvOpcode.CHAR_INFO_REQUEST, new CharacterInfoHandler(sessions));
+        handlers.register(RecvOpcode.MESO_DROP, new MesoDropHandler(sessions, drops));
+        handlers.register(RecvOpcode.FACE_EXPRESSION, avatars::express);
+        handlers.register(RecvOpcode.USE_CHAIR, avatars::sit);
+        handlers.register(RecvOpcode.CANCEL_CHAIR, avatars::stand);
         handlers.register(RecvOpcode.DENY_PARTY_REQUEST, (session, packet) -> parties.deny(session));
         handlers.register(RecvOpcode.QUEST_ACTION, questActions);
         handlers.register(RecvOpcode.SPECIAL_MOVE, skills);
@@ -56,6 +70,7 @@ public final class ChannelGameplay implements AutoCloseable {
         handlers.register(RecvOpcode.USE_INNER_PORTAL, new ChangeMapHandler(transitions, true));
         handlers.replace(RecvOpcode.PLAYER_MAP_TRANSFER, (session, packet) -> {
             new PlayerMapTransitionHandler().handle(session, packet);
+            sessions.visibility().enter(session);
             drops.enter(session);
         }, 2);
         handlers.register(RecvOpcode.ITEM_MOVE, new InventoryMoveHandler(items, drops));

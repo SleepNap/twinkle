@@ -1,12 +1,13 @@
 package org.gms.channel;
 
 import org.gms.domain.game.map.MapleMap;
+import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
+import org.gms.net.packet.SessionStage;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -38,6 +39,9 @@ public final class PlayerSessionRegistry {
 
     private final ConcurrentMap<Long, Entry> sessions = new ConcurrentHashMap<>();
     private final AtomicLong generationSeq = new AtomicLong();
+    private final PlayerVisibilityService visibility = new PlayerVisibilityService(this);
+
+    public PlayerVisibilityService visibility() { return visibility; }
     /** 旧代际清理被拒次数（报告 §七：可观测，标准 3 证据）。 */
     private final AtomicLong supersededCleanupRejected = new AtomicLong();
 
@@ -48,7 +52,12 @@ public final class PlayerSessionRegistry {
      */
     public long claim(long characterId, PacketSession session) {
         long gen = generationSeq.incrementAndGet();
-        sessions.put(characterId, new Entry(session.sessionId(), gen, session));
+        Entry previous = sessions.put(characterId, new Entry(session.sessionId(), gen, session));
+        if (previous != null && previous.session() != session) {
+            visibility.leave(previous.session());
+            PlayerCharacter old = previous.session().getAttr("character");
+            if (old != null && old.getMapObject() != null) old.getMapObject().removeCharacter(old);
+        }
         return gen;
     }
 
@@ -83,6 +92,7 @@ public final class PlayerSessionRegistry {
             supersededCleanupRejected.incrementAndGet();
             return false;
         }
+        visibility.leave(session);
         return true;
     }
 
@@ -123,7 +133,9 @@ public final class PlayerSessionRegistry {
                 continue;
             }
             Entry e = sessions.get(chr.getId());
-            if (e != null) {
+            if (e != null && e.session().stage() == SessionStage.IN_GAME
+                    && e.session().getAttr("character") == chr && e.session().getAttr("mapTransition") == null
+                    && !Boolean.FALSE.equals(e.session().getAttr("mapVisibilityReady"))) {
                 e.session().send(packet);
             }
         }

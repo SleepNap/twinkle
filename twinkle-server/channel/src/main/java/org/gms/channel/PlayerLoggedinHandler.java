@@ -87,6 +87,8 @@ public final class PlayerLoggedinHandler implements PacketHandler {
             leaseService.onClaim(chr.getId(), session.sessionId(), generation);
         }
         session.setAttr("character", chr);
+        session.setAttr("mapTransition", true);
+        session.setAttr("mapVisibilityReady", false);
         session.transition(SessionStage.IN_GAME);
         var portal = map.getPortal(chr.getSpawnPoint());
         if (portal != null) { chr.setX(portal.getX()); chr.setY(portal.getY()); }

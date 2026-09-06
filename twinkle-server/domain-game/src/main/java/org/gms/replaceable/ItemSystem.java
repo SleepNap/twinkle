@@ -24,6 +24,15 @@ public final class ItemSystem {
 
     public enum ShopResult { SUCCESS, INVALID, NO_MONEY, NO_SPACE }
 
+    /** 货币变更先验证版本和整数边界；掉落认领失败时原余额保持不变。 */
+    public boolean changeMeso(CharacterState state, int delta) {
+        synchronized (state) {
+            long balance = (long) state.getMeso() + delta;
+            if (versionGate.decide(state) != VersionDecision.ALLOW || balance < 0 || balance > Integer.MAX_VALUE) return false;
+            state.setMeso((int) balance); state.markDirty(); return true;
+        }
+    }
+
     /** 普通恢复药：复验客户端指定槽位，在同一角色锁内扣物品并恢复生命/魔力。 */
     public boolean consumeRecovery(CharacterState state, short slot, int itemId, long now) {
         synchronized (state) {

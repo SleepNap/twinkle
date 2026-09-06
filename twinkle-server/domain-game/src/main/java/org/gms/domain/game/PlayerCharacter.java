@@ -15,6 +15,9 @@ import org.gms.domain.game.skill.ActiveBuff;
 import org.gms.domain.game.spi.BuffState;
 import org.gms.domain.game.quest.QuestChange;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.spi.AvatarState;
+import org.gms.domain.game.spi.ControlsState;
+import org.gms.domain.game.control.ControlSettings;
 import org.gms.domain.game.spi.TradeItemSnapshot;
 
 import java.util.HashSet;
@@ -40,7 +43,14 @@ import java.util.Set;
  */
 @Getter
 @Setter
-public class PlayerCharacter implements BuffState {
+public class PlayerCharacter implements BuffState, AvatarState, ControlsState {
+
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private volatile ControlSettings controls = ControlSettings.defaults();
+
+    @Override public ControlSettings controls() { return controls; }
+    @Override public void setControls(ControlSettings controls) { this.controls = Objects.requireNonNull(controls); }
 
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
@@ -158,6 +168,17 @@ public class PlayerCharacter implements BuffState {
     /** 地图内坐标（运行时，非持久化；地图 id 见 {@code map} 持久化字段）。 */
     private int x;
     private int y;
+    /** 同屏动作状态，不持久化、不混入角色基础属性。 */
+    private int stance;
+    private int foothold;
+    private int chairItemId;
+
+    @Override public synchronized boolean ownsUsableItem(int itemId, byte type, long now) {
+        Inventory selected = getInventory(InventoryType.getByType(type));
+        if (selected == null) return false;
+        return selected.items().stream().anyMatch(item -> item.getPosition() > 0 && item.getId() == itemId
+                && item.getQuantity() > 0 && (item.getExpiration() < 0 || item.getExpiration() > now));
+    }
 
     /** 当前所在地图对象（运行时，非持久化；进图时由频道装配，换图时更新）。 */
     @Getter(AccessLevel.NONE)

@@ -2,6 +2,7 @@ package org.gms.replaceable;
 
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.spi.CharacterState;
+import org.gms.domain.game.spi.AvatarState;
 import org.gms.hotreload.versioned.VersionDecision;
 import org.gms.hotreload.versioned.VersionGate;
 
@@ -20,6 +21,18 @@ public final class MovementSystem {
 
     public MovementSystem(VersionGate versionGate) {
         this.versionGate = versionGate;
+    }
+
+    /** 已验证移动流的位置与姿态一次提交；跳跃不提前吸到地面，版本拒绝时不得广播。 */
+    public boolean applyMotion(AvatarState state, Integer x, Integer y, Integer stance, Integer foothold) {
+        synchronized (state) {
+            if (versionGate.decide(state) != VersionDecision.ALLOW || state.getHp() <= 0
+                    || state.getChairItemId() != 0) return false;
+            if (x != null && y != null) { state.setX(x); state.setY(y); }
+            if (stance != null) state.setStance(stance);
+            if (foothold != null) state.setFoothold(foothold);
+            return true;
+        }
     }
 
     /**
