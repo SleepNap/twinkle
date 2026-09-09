@@ -1,6 +1,8 @@
 package org.gms.channel;
 
 import org.gms.domain.game.map.MapleMap;
+import org.gms.concurrent.GameExecution;
+import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
@@ -12,6 +14,42 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** 组队收发包与离线清理，使用内存连接模拟两名玩家。 */
 public class PartyGameplayTest {
+    @Test public void waitingForSaveDoesNotDisbandPartyAndAllEntrypointsUseTheOwner() {
+        try (var execution = new GameExecution("party-owner", new DefaultVersionGate())) {
+            var sessions = new PlayerSessionRegistry(execution);
+            var players = new PlayerStorage(execution);
+            var leader = new GameplayTestSession(1, new MapleMap());
+            var guest = new GameplayTestSession(2, leader.character.getMapObject());
+            execution.run(() -> {
+                players.add(leader.character); players.add(guest.character);
+                sessions.claim(1, leader); sessions.claim(2, guest);
+            });
+            try (var handler = new PartyHandler(sessions, 1, Clock.systemUTC(), state -> {
+                execution.requireOwner(); return true;
+            })) {
+                // 从频道外调用也必须由统一入口完成，不能只依赖 Netty 分发器。
+                handler.handle(leader, input(1));
+                int party = execution.call(leader.character::getParty);
+                var invite = new ByteArrayOutPacket(); invite.writeByte(4); invite.writeString("Player2");
+                handler.handle(leader, new ByteArrayInPacket(invite.getBytes()));
+                handler.handle(guest, input(3, party));
+                leader.setAttr("stateTransfer", new Object());
+                handler.refresh();
+                assertThat(execution.call(guest.character::getParty)).isEqualTo(party);
+                leader.setAttr("stateTransfer", null);
+                handler.refresh();
+                assertThat(execution.call(leader.character::getParty)).isEqualTo(party);
+                guest.setAttr("stateTransfer", new Object());
+                execution.run(() -> sessions.unregister(1, leader));
+                handler.refresh();
+                assertThat(execution.call(guest.character::getParty)).isEqualTo(party);
+                guest.setAttr("stateTransfer", null);
+                handler.refresh();
+                assertThat(execution.call(guest.character::getParty)).isZero();
+            }
+        }
+    }
+
     @Test public void createInviteJoinAndDisconnectUpdatesBothClients() {
         var map = new MapleMap();
         var leader = new GameplayTestSession(1, map); var guest = new GameplayTestSession(2, map);

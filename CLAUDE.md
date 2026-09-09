@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目状态
 
+**最新整改（2026-09-09）**：已对照北斗与 datas-server 近期修复，收口队伍/掉落/可见性入口，修复冻结误退队、跨地图实例掉落冲突、换线后旧连接输出、进图失败残留，并增加 WZ 每频道资源视图与提交重检。新增 9 项回归，完整后端 `verify` 486 项通过、5 项可选检查跳过。具体边界见 [修复对照记录](docs/in-progress/reference-fix-audit.md)。内置 Java 整包热更新仍未完成；继续扩展大批玩法前，按 [热更新对照表](docs/HOT-UPDATE.md) 落实稳定调用契约与真实换代闭环，同时继续剩余并发治理。下方早期里程碑不代表全部目标已验收。
+
 **热更新、扩展性好的冒险岛后台（MapleStory v83 服务端）**。参考项目：北斗（`E:\LocalGit\GitHub\BeiDou-Server`，GPL，只作理解、禁止逐字复制）。
 
 **M0-M6 基础架构里程碑已完成**（2026-08-09），不代表全部游戏玩法完成。当前已收敛为 13 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。

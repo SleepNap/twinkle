@@ -14,6 +14,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
+import java.util.Objects;
 
 /** 稳定的频道执行归属；网络、Tick 和回调只投递任务，不各自锁游戏对象。 */
 @Log4j2
@@ -23,6 +25,7 @@ public final class GameExecution implements AutoCloseable {
     private final VersionGate versions;
     private final Semaphore admissions = new Semaphore(4096);
     private long operationVersion;
+    private Consumer<Runnable> operationScope;
 
     public GameExecution(String name, VersionGate versions) {
         this.versions = versions;
@@ -39,6 +42,15 @@ public final class GameExecution implements AutoCloseable {
 
     public void requireOwner() {
         if (!isOwner()) throw new IllegalStateException(I18n.message("error.execution.foreign_state"));
+    }
+
+    /** 稳定宿主在装配时绑定资源作用域；每个完整操作固定资源代际，不能在业务中临时换代。 */
+    public void bindOperationScope(Consumer<Runnable> scope) {
+        Objects.requireNonNull(scope, "scope");
+        run(() -> {
+            if (operationScope != null) throw new IllegalStateException(I18n.message("error.execution.scope_bound"));
+            operationScope = scope;
+        });
     }
 
     public void execute(Runnable action) {
@@ -62,10 +74,12 @@ public final class GameExecution implements AutoCloseable {
                 CURRENT.set(this);
                 operationVersion = versions.currentVersion();
                 try {
-                    VersionScope.call(versions, operationVersion, () -> {
+                    Runnable operation = () -> VersionScope.call(versions, operationVersion, () -> {
                         result.complete(action.get());
                         return null;
                     });
+                    if (operationScope == null) operation.run();
+                    else operationScope.accept(operation);
                 }
                 catch (Throwable error) { result.completeExceptionally(error); }
                 finally { CURRENT.remove(); }

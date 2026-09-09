@@ -4,8 +4,9 @@ package org.gms.wz;
  * WZ 换代的运行态参与者。
  *
  * <p>资源 loader 只负责构建不可见的候选快照；参与者负责把候选快照预投影为在线对象可用的变更。
- * {@link #prepare(WzResourceRegistry.PreparedReload)} 必须完成所有可能失败的解析与校验，返回的
- * {@link PreparedChange#publish()} 只做内存引用发布。以后新增需要刷新在线状态的 WZ 子系统，只需
+ * {@link #prepare(WzResourceRegistry.PreparedReload)} 预先解析与校验已知对象；运行态仍可变化，
+ * {@link PreparedChange#publish()} 必须在所属执行入口重新校验新增对象，完成校验后才整体提交。
+ * 频道参与者同时推进资源视图，校验失败保持该频道旧代，不承诺多频道同时回滚。新增 WZ 子系统只需
  * 注册一个实现，无需修改重载编排器或管理接口。
  */
 public interface WzReloadParticipant {
@@ -18,7 +19,7 @@ public interface WzReloadParticipant {
 
     @FunctionalInterface
     interface PreparedChange {
-        /** 发布已经完整准备好的内存变更，并返回受影响的运行态对象数。 */
+        /** 在所属入口核验并发布内存变更，返回受影响的对象数；不得在失败时留下半更新的频道。 */
         int publish();
     }
 }

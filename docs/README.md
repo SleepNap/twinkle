@@ -30,9 +30,11 @@
 
 跨版本 API 的选择性分叉、历史兼容、退役和自动 OpenAPI 文档规则见 [`API-VERSIONING.md`](API-VERSIONING.md)。
 
+修改哪个模块能热重载、哪个必须重启，直接查 [`HOT-UPDATE.md`](HOT-UPDATE.md)。表中区分当前能力与改造目标。
+
 后端 Maven 模块收敛、强类型契约、`PlayerCharacter`/`GameAccountRecord` 命名与聚合拆分方案见
 [`in-progress/backend-structure-refactor.md`](in-progress/backend-structure-refactor.md)。
 
 游戏功能的迁移批次、已实现范围、自动验证记录与下一步路线以
 [`in-progress/gameplay-roadmap.md`](in-progress/gameplay-roadmap.md) 为准。
-截至 2026-09-06 已接入四批迁移，最新一批为装备穿脱与属性；下一步继续战斗相关封包，客户端联调与完整场景后续统一验证。
+截至 2026-09-06 已接入四批迁移，最新一批为装备穿脱与属性。2026-09-07 补充前置要求：先落实热更新编译/调用边界并验证真实逻辑换代闭环，再大规模扩展 Java 玩法；客户端联调与完整场景后续统一验证。

@@ -95,42 +95,46 @@ public final class PlayerLoggedinHandler implements PacketHandler {
             return;
         }
         PlayerCharacter chr = characterLoader.fromData(dbChar);
-        enter(session, chr);
+        PacketSession previous = sessions.get(charId);
+        try {
+            enter(session, chr);
+            if (previous != null && previous != session) previous.close(I18n.message("error.player_login.replaced"));
+        } catch (RuntimeException | Error error) {
+            abortLogin(session, previous, charId, null, error);
+        }
     }
 
     private void enter(PacketSession session, PlayerCharacter chr) {
         MapleMap map = mapManager.getMap(chr.getMap());
         chr.setMapObject(map);
-        // 会话代际认领（事故报告阶段 B）：新连接认领 = 新代际；先移除地图/在线表里
-        // 同 id 的旧 PlayerCharacter（防广播双发），再由 claim 覆盖会话登记。
-        removeSupersededCharacter(map, chr);
-        map.addCharacter(chr);
-        players.add(chr);
+        var portal = map.getPortal(chr.getSpawnPoint());
+        if (portal != null) { chr.setX(portal.getX()); chr.setY(portal.getY()); }
+        // 编码失败必须发生在替换旧会话之前，避免坏档把仍可用的连接一起挤掉。
+        var initialField = ChannelPacketFactory.charInfo(chr, channelId);
+        session.setAttr("character", chr);
         long generation = sessions.claim(chr.getId(), session);
         session.setAttr("sessionGeneration", generation);
+        removeSupersededCharacter(map, chr);
+        players.add(chr);
+        map.addCharacter(chr);
         if (leaseService != null) {
             // 新认领：旧代际租约立即失效（SESSION_REPLACED）
             leaseService.onClaim(chr.getId(), session.sessionId(), generation);
         }
-        session.setAttr("character", chr);
         session.setAttr("mapTransition", true);
         session.setAttr("mapVisibilityReady", false);
         session.transition(SessionStage.IN_GAME);
-        var portal = map.getPortal(chr.getSpawnPoint());
-        if (portal != null) { chr.setX(portal.getX()); chr.setY(portal.getY()); }
-        session.send(ChannelPacketFactory.charInfo(chr, channelId));
+        session.send(initialField);
         // 地图对象必须在 SET_FIELD 之后发送，否则客户端尚未创建场景。
         map.npcs().forEach(npc -> session.send(GameplayPackets.npc(npc)));
         spawnService.ensureSpawned(map);
         spawnService.onPlayerEnter(map, session, new LeaseOwner(
                 chr.getId(), session.sessionId(), generation));
-        if (eventPublisher != null) {
-            eventPublisher.playerOnline(chr);
-        }
-        log.info(I18n.message("log.player_login.entered_map"), chr.getName(), chr.getId(), map.getMapId());
         Runnable completed = session.getAttr("afterLogin");
         session.setAttr("afterLogin", null);
         if (completed != null) completed.run();
+        if (eventPublisher != null) eventPublisher.playerOnline(chr);
+        log.info(I18n.message("log.player_login.entered_map"), chr.getName(), chr.getId(), map.getMapId());
     }
 
     private void loadAsync(PacketSession session, long characterId) {
@@ -145,32 +149,67 @@ public final class PlayerLoggedinHandler implements PacketHandler {
             return;
         }
         session.setAttr("stateTransfer", token);
-        if (previous != null) {
-            Runnable cancel = previous.getAttr("cancelTrade");
-            if (cancel != null) cancel.run();
-            NpcTalkHandler.closeConversation(previous);
-            previous.setAttr("stateTransfer", token);
-        }
-        CompletableFuture<Void> stored = old == null ? saves.awaitStored(characterId) : saves.saveAsync(old);
-        stored.thenApplyAsync(ignored -> {
-            var record = characterRepo.findById(characterId).orElseThrow(() -> new IllegalStateException(I18n.message("error.player_login.character_not_found", characterId)));
-            return characterLoader.fromData(record);
-        }, background).whenComplete((character, error) -> {
-            if (sessions.execution().isClosed()) return;
-            sessions.execution().execute(() -> {
-                sessions.endLogin(characterId, token);
-                if (session.getAttr("stateTransfer") != token) return;
-                session.setAttr("stateTransfer", null);
-                if (error != null || Boolean.TRUE.equals(session.getAttr("transportClosed"))) {
-                    if (previous != null && sessions.get(characterId) == previous
-                            && previous.getAttr("stateTransfer") == token) previous.setAttr("stateTransfer", null);
-                    if (error != null) session.close(I18n.message("error.player_login.load_failed"));
-                    return;
-                }
-                enter(session, character);
-                if (previous != null) previous.close(I18n.message("error.player_login.replaced"));
+        try {
+            if (previous != null) {
+                Runnable cancel = previous.getAttr("cancelTrade");
+                if (cancel != null) cancel.run();
+                NpcTalkHandler.closeConversation(previous);
+                previous.setAttr("stateTransfer", token);
+            }
+            CompletableFuture<Void> stored = old == null ? saves.awaitStored(characterId) : saves.saveAsync(old);
+            stored.thenApplyAsync(ignored -> {
+                var record = characterRepo.findById(characterId).orElseThrow(() -> new IllegalStateException(I18n.message("error.player_login.character_not_found", characterId)));
+                return characterLoader.fromData(record);
+            }, background).whenComplete((character, error) -> {
+                if (sessions.execution().isClosed()) return;
+                sessions.execution().execute(() -> {
+                    try {
+                        if (session.getAttr("stateTransfer") != token) return;
+                        if (error != null || Boolean.TRUE.equals(session.getAttr("transportClosed"))) {
+                            abortLogin(session, previous, characterId, token, error);
+                            return;
+                        }
+                        session.setAttr("stateTransfer", null);
+                        enter(session, character);
+                        if (previous != null) previous.close(I18n.message("error.player_login.replaced"));
+                    } catch (RuntimeException | Error failure) {
+                        abortLogin(session, previous, characterId, token, failure);
+                    } finally {
+                        sessions.endLogin(characterId, token);
+                    }
+                });
             });
-        });
+        } catch (RuntimeException | Error error) {
+            try { abortLogin(session, previous, characterId, token, error); }
+            finally { sessions.endLogin(characterId, token); }
+        }
+    }
+
+    /** 失败候选不得进入断线存档；已提交认领则清理新代，尚未认领则恢复旧连接。 */
+    private void abortLogin(PacketSession session, PacketSession previous, long characterId, Object token, Throwable error) {
+        PlayerCharacter candidate = session.getAttr("character");
+        if (sessions.get(characterId) == session) {
+            sessions.unregister(characterId, session);
+            Long generation = session.getAttr("sessionGeneration");
+            if (leaseService != null && generation != null)
+                leaseService.onDisconnect(characterId, session.sessionId(), generation);
+        }
+        if (candidate != null) {
+            players.remove(candidate);
+            if (candidate.getMapObject() != null) candidate.getMapObject().removeCharacter(candidate);
+        }
+        session.setAttr("character", null);
+        session.setAttr("afterLogin", null);
+        session.setAttr("stateTransfer", null);
+        if (previous != null && previous != session) {
+            if (sessions.get(characterId) == previous) {
+                if (previous.getAttr("stateTransfer") == token) previous.setAttr("stateTransfer", null);
+            } else {
+                previous.close(I18n.message("error.player_login.replaced"));
+            }
+        }
+        session.close(I18n.message("error.player_login.load_failed"));
+        if (error != null) log.error(I18n.message("log.player_login.failed"), characterId, error);
     }
 
     /** 移除地图/在线表里同 id 的非自身旧 PlayerCharacter（重复登录，防广播双发；旧代际断链迟到清理由 compare-and-remove 短路）。 */

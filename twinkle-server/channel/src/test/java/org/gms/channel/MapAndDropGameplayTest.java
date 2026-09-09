@@ -23,6 +23,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** 换图和拾取按真实地图/角色状态验证，覆盖并发认领和失败回滚。 */
 public class MapAndDropGameplayTest {
+    @Test public void identicalMapIdsKeepIndependentDropInventories() {
+        var first = new GameplayTestSession(1, map(100));
+        var second = new GameplayTestSession(2, map(100));
+        var sessions = new PlayerSessionRegistry(); sessions.claim(1, first); sessions.claim(2, second);
+        var data = GameDataProvider.fixed(Map.of(2000000, new ItemData(2000000)), Map.of());
+        var items = new ItemSystem(new DefaultVersionGate(), data);
+        items.giveItem(first.character, 2000000, 2); items.giveItem(second.character, 2000000, 7);
+        try (var drops = new GroundDropService(items, data, sessions, Clock.systemUTC())) {
+            assertThat(drops.drop(first.character, (byte) 2, (short) 1, 2)).isTrue();
+            assertThat(drops.drop(second.character, (byte) 2, (short) 1, 7)).isTrue();
+            var a = new ByteArrayInPacket(first.sent.getFirst().getBytes()); a.skip(3);
+            var b = new ByteArrayInPacket(second.sent.getFirst().getBytes()); b.skip(3);
+            int oid = a.readInt(); assertThat(b.readInt()).isEqualTo(oid);
+            assertThat(drops.pickup(first.character, oid)).isTrue();
+            assertThat(drops.pickup(second.character, oid)).isTrue();
+            assertThat(first.character.getItemCount(2000000)).isEqualTo(2);
+            assertThat(second.character.getItemCount(2000000)).isEqualTo(7);
+        }
+    }
+
     @Test public void portalUsesServerDestinationAndRejectsRemoteOrForgedRequests() {
         MapleMap origin = map(100), target = map(200);
         Portal exit = portal(1, "out", 200, "sp", 10, 20);

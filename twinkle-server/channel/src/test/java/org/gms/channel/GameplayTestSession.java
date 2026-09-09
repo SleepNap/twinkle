@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /** 游戏用例测试的内存连接，不依赖真实客户端或外部数据库。 */
 public final class GameplayTestSession implements PacketSession {
@@ -30,6 +31,10 @@ public final class GameplayTestSession implements PacketSession {
         attributes.put("character", character);
     }
     @Override public void send(OutPacket packet) { sent.add(packet); }
+    @Override public CompletableFuture<Void> redirect(OutPacket packet) {
+        send(packet);
+        return CompletableFuture.completedFuture(null);
+    }
     @Override public void close(String reason) { stage = SessionStage.HANDSHAKE; }
     @Override public SessionStage stage() { return stage; }
     @Override public void transition(SessionStage value) { stage = value; }

@@ -21,11 +21,15 @@ public final class PlayerVisibilityService {
     public PlayerVisibilityService(PlayerSessionRegistry sessions) { this.sessions = sessions; }
 
     public void enter(PacketSession session) {
+        sessions.coordinate(() -> { enterOwned(session); return null; });
+    }
+
+    private void enterOwned(PacketSession session) {
         PlayerCharacter character = GameplaySession.character(session);
         if (character == null || sessions.get(character.getId()) != session
                 || session.getAttr("mapTransition") != null || character.getMapObject() == null) return;
         MapleMap map = character.getMapObject();
-        // 在可见性锁外构造快照，锁内不申请角色锁，避免换图/断线与角色写操作锁序反转。
+        // 快照、可见成员变更与通知同属一次频道操作，不再持有可见性锁调用角色或连接。
         Map<PacketSession, List<OutPacket>> snapshots = new HashMap<>();
         for (var member : map.characters()) {
             PacketSession peer = sessions.get(member.getId());
@@ -34,24 +38,26 @@ public final class PlayerVisibilityService {
         }
         List<OutPacket> own = snapshots.get(session);
         if (own == null) return;
-        synchronized (this) {
-            if (sessions.get(character.getId()) != session || character.getMapObject() != map
-                    || session.getAttr("mapTransition") != null) return;
-            Presence previous = visible.get(session);
-            if (previous != null && previous.map() == map) return; // 重复确认不重复生成
-            leave(session);
-            for (var entry : visible.entrySet()) {
-                if (entry.getValue().map() != map || !snapshots.containsKey(entry.getKey())) continue;
-                snapshots.get(entry.getKey()).forEach(session::send);
-                own.forEach(entry.getKey()::send);
-            }
-            visible.put(session, new Presence(character, map));
-            session.setAttr("mapVisibilityReady", true);
+        if (sessions.get(character.getId()) != session || character.getMapObject() != map
+                || session.getAttr("mapTransition") != null) return;
+        Presence previous = visible.get(session);
+        if (previous != null && previous.map() == map) return; // 重复确认不重复生成
+        leave(session);
+        for (var entry : visible.entrySet()) {
+            if (entry.getValue().map() != map || !snapshots.containsKey(entry.getKey())) continue;
+            snapshots.get(entry.getKey()).forEach(session::send);
+            own.forEach(entry.getKey()::send);
         }
+        visible.put(session, new Presence(character, map));
+        session.setAttr("mapVisibilityReady", true);
     }
 
     /** 不依赖当前 stage/map；使用进入时的归属，换频道或旧连接关闭不会误删新连接。 */
-    public synchronized void leave(PacketSession session) {
+    public void leave(PacketSession session) {
+        sessions.coordinate(() -> { leaveOwned(session); return null; });
+    }
+
+    private void leaveOwned(PacketSession session) {
         Presence departed = visible.remove(session);
         if (departed == null) return;
         session.setAttr("mapVisibilityReady", false);

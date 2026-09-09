@@ -44,6 +44,64 @@ import static org.awaitility.Awaitility.await;
 
 /** 异步边界用闩锁控制数据库等待，不需要真实客户端或数据库。 */
 public class AsyncCharacterHandoffTest {
+    @Test public void failedInitializerRemovesCandidateAndAllowsRetry(@TempDir Path root) throws Exception {
+        failedLoginCanRetry(root, false);
+    }
+
+    @Test public void missingMapPreservesPreviousSessionAndAllowsRetry(@TempDir Path root) throws Exception {
+        failedLoginCanRetry(root, true);
+    }
+
+    private static void failedLoginCanRetry(Path root, boolean missingMap) throws Exception {
+        Path mapFile = Files.createDirectories(root.resolve("Map.wz/Map/Map1")).resolve("100000000.img.xml");
+        Files.writeString(mapFile, "<imgdir name=\"100000000.img\"><imgdir name=\"info\">"
+                + "<int name=\"returnMap\" value=\"100000000\"/></imgdir></imgdir>");
+        var versions = new DefaultVersionGate(); var loader = new PlayerCharacterAssembler(versions);
+        var template = new MapleMap(); template.setMapId(100000000);
+        var previous = new GameplayTestSession(1, template);
+        var saved = loader.toData(previous.character);
+        if (missingMap) saved.setMap(999999999);
+        var repository = proxy(PlayerCharacterRepository.class, (p, method, args) ->
+                method.getName().equals("findById") ? Optional.of(saved) : null);
+        try (var execution = new GameExecution("failed-login", versions); var background = new ThreadManager();
+             var queue = new CharacterSaveQueue((PlayerCharacterSnapshotRepository) (c, i, q, p, s) -> { },
+                     loader, new PlayerStorage())) {
+            var sessions = new PlayerSessionRegistry(execution); var players = new PlayerStorage(execution);
+            var resources = new WzResourceRegistry(root, List.of(new MapResourceLoader()), Runnable::run);
+            var maps = new ChannelMapManager(resources, 1, execution);
+            var spawns = new MonsterSpawnService(GameDataProvider.fixed(Map.of(), Map.of()), sessions, null);
+            try {
+                execution.run(() -> { players.add(previous.character); sessions.claim(1, previous); });
+                var handler = new PlayerLoggedinHandler(repository, loader, maps, players, sessions, spawns,
+                        1, null, null, background, queue);
+                var failed = new GameplayTestSession(1, template);
+                failed.transition(SessionStage.LOGIN); failed.setAttr("character", null);
+                failed.setAttr("afterLogin", (Runnable) () -> { throw new IllegalStateException("模拟初始化失败"); });
+                var input = new ByteArrayOutPacket(); input.writeInt(1);
+                execution.run(() -> handler.handle(failed, new ByteArrayInPacket(input.getBytes())));
+                await().atMost(Duration.ofSeconds(5)).until(() -> failed.stage() == SessionStage.HANDSHAKE);
+                assertThat(execution.call(() -> failed.getAttr("character") == null)).isTrue();
+                assertThat(execution.call(() -> failed.getAttr("afterLogin") == null)).isTrue();
+                assertThat(execution.call(players::count)).isEqualTo(missingMap ? 1 : 0);
+                if (missingMap) {
+                    assertThat(sessions.get(1)).isSameAs(previous);
+                    assertThat(previous.stage()).isEqualTo(SessionStage.IN_GAME);
+                    assertThat((Object) previous.getAttr("stateTransfer")).isNull();
+                    assertThat(template.characters()).contains(previous.character);
+                } else {
+                    assertThat(sessions.get(1)).isNull();
+                    assertThat(execution.call(() -> maps.getMap(100000000).characters())).isEmpty();
+                }
+                saved.setMap(100000000);
+                var retry = new GameplayTestSession(1, template);
+                retry.transition(SessionStage.LOGIN); retry.setAttr("character", null);
+                execution.run(() -> handler.handle(retry, new ByteArrayInPacket(input.getBytes())));
+                await().atMost(Duration.ofSeconds(5)).until(() -> execution.call(() -> sessions.get(1) == retry));
+                assertThat(execution.call(players::count)).isEqualTo(1);
+            } finally { spawns.close(); }
+        }
+    }
+
     @Test public void transferFreezesOnlyTheMovingPlayerAndPublishesAfterCommit() throws Exception {
         var versions = new DefaultVersionGate();
         CountDownLatch saving = new CountDownLatch(1), release = new CountDownLatch(1);

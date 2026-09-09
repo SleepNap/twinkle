@@ -20,8 +20,12 @@ import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -57,6 +61,8 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
 
     private volatile Channel channel;
     private volatile SessionStage stage = SessionStage.HANDSHAKE;
+    /** 只由本连接的 EventLoop 读写；重定向是不可恢复的输出终态。 */
+    private boolean outboundSealed;
     /** null=从未开启；非 null 且 disabled=已停止但保留窗口。 */
     private volatile PacketTraceBuffer packetTrace;
 
@@ -203,13 +209,56 @@ public final class NetworkSession extends ChannelInboundHandlerAdapter implement
     @Override
     public void send(OutPacket packet) {
         Channel c = channel;
-        if (c != null && c.isActive()) {
-            PacketTraceBuffer trace = packetTrace;
-            if (trace != null && trace.enabled()) {
-                trace.capture(PacketTrace.Direction.OUTBOUND, packet.getBytes());
+        if (c == null || !c.isActive()) return;
+        Runnable write = () -> {
+            if (outboundSealed || !c.isActive()) return;
+            traceOutbound(packet);
+            c.writeAndFlush(packet).addListener(result -> { if (!result.isSuccess()) c.close(); });
+        };
+        if (c.eventLoop().inEventLoop()) write.run();
+        else c.eventLoop().execute(write);
+    }
+
+    @Override
+    public CompletableFuture<Void> redirect(OutPacket packet) {
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        Channel c = channel;
+        if (c == null || !c.isActive()) return CompletableFuture.failedFuture(new ClosedChannelException());
+        Runnable write = () -> {
+            if (outboundSealed || !c.isActive()) {
+                completion.completeExceptionally(new ClosedChannelException());
+                return;
             }
-            c.writeAndFlush(packet);
-        }
+            outboundSealed = true;
+            var timeout = c.eventLoop().schedule(() -> {
+                if (completion.completeExceptionally(new TimeoutException(I18n.message("error.session.redirect_timeout")))) c.close();
+            }, 10, TimeUnit.SECONDS);
+            c.closeFuture().addListener(ignored -> completion.completeExceptionally(new ClosedChannelException()));
+            completion.whenComplete((ignored, error) -> timeout.cancel(false));
+            try {
+                traceOutbound(packet);
+                c.writeAndFlush(packet).addListener(result -> {
+                    if (result.isSuccess()) completion.complete(null);
+                    else {
+                        completion.completeExceptionally(result.cause());
+                        c.close();
+                    }
+                });
+            } catch (RuntimeException error) {
+                completion.completeExceptionally(error);
+                c.close();
+            }
+        };
+        try {
+            if (c.eventLoop().inEventLoop()) write.run();
+            else c.eventLoop().execute(write);
+        } catch (RuntimeException error) { completion.completeExceptionally(error); c.close(); }
+        return completion;
+    }
+
+    private void traceOutbound(OutPacket packet) {
+        PacketTraceBuffer trace = packetTrace;
+        if (trace != null && trace.enabled()) trace.capture(PacketTrace.Direction.OUTBOUND, packet.getBytes());
     }
 
     @Override

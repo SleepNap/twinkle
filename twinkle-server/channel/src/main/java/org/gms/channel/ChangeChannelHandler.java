@@ -132,7 +132,8 @@ public final class ChangeChannelHandler implements PacketHandler {
         }
         sessions.unregister(chr.getId(), session);
         session.transition(SessionStage.CHANNEL_TRANSITION);
-        session.send(ChannelPacketFactory.changeChannel(targetIp, target.port()));
+        session.redirect(ChannelPacketFactory.changeChannel(targetIp, target.port()))
+                .exceptionally(error -> { session.close(I18n.message("error.channel.transfer_closed")); return null; });
         // 玩家重连目标频道端口 → PlayerLoggedinHandler 重新进图（v83 loading 界面）
         log.info(I18n.message("log.channel.change.complete"), chr.getName(), targetId, targetId);
     }
@@ -184,7 +185,12 @@ public final class ChangeChannelHandler implements PacketHandler {
             if (players != null) players.remove(character);
             sessions.unregister(characterId, session);
             session.transition(SessionStage.CHANNEL_TRANSITION);
-            session.send(ChannelPacketFactory.changeChannel(destination.address(), destination.channel().port()));
+            session.redirect(ChannelPacketFactory.changeChannel(destination.address(), destination.channel().port()))
+                    .exceptionally(failure -> {
+                        log.error(I18n.message("log.channel.redirect_failed"), failure);
+                        session.close(I18n.message("error.channel.transfer_closed"));
+                        return null;
+                    });
         }));
     }
 }

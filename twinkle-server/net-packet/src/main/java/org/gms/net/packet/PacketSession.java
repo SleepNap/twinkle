@@ -1,6 +1,7 @@
 package org.gms.net.packet;
 
 import org.gms.diagnostics.PacketTrace;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 连接会话最小接口（handler 的对外出口，定义在协议层使 net-packet 零依赖）。
@@ -20,6 +21,14 @@ public interface PacketSession {
      * 发送一个包到对端。
      */
     void send(OutPacket packet);
+
+    /**
+     * 在连接发包队列中发送最后一个换线指令，此后拒绝旧连接的所有输出。
+     * 完成表示实际写出；失败/超时关闭源连接，成功等待客户端自行迁移。
+     */
+    default CompletableFuture<Void> redirect(OutPacket packet) {
+        return CompletableFuture.failedFuture(new UnsupportedOperationException());
+    }
 
     /**
      * 主动关闭连接并记录原因。
