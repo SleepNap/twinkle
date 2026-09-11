@@ -5,7 +5,7 @@ import org.gms.domain.game.control.ControlSettings.Binding;
 import org.gms.domain.game.control.ControlSettings.Macro;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ControlsSystem;
+import org.gms.domain.game.logic.ControlsSystem;
 
 import java.time.Clock;
 import java.util.ArrayList;

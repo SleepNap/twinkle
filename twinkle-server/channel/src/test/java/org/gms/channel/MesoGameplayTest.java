@@ -1,11 +1,11 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultItemSystem;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
-import org.gms.replaceable.ItemSystem;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -22,7 +22,7 @@ public class MesoGameplayTest {
         var owner = joined(sessions, 1, map); var first = joined(sessions, 2, map); var second = joined(sessions, 3, map);
         owner.character.setMeso(1000);
         var data = GameDataProvider.fixed(Map.of(), Map.of());
-        try (var drops = new GroundDropService(new ItemSystem(new DefaultVersionGate(), data), data, sessions, Clock.systemUTC());
+        try (var drops = new GroundDropService(new DefaultItemSystem(new DefaultVersionGate(), data), data, sessions, Clock.systemUTC());
              var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             assertThat(drops.dropMesos(owner.character, -1)).isFalse();
             assertThat(drops.dropMesos(owner.character, 50001)).isFalse();
@@ -50,7 +50,7 @@ public class MesoGameplayTest {
         var owner = joined(sessions, 1, map); var outsider = joined(sessions, 2, new MapleMap());
         var versions = new DefaultVersionGate(); var data = GameDataProvider.fixed(Map.of(), Map.of());
         owner.character.setMeso(1000);
-        try (var drops = new GroundDropService(new ItemSystem(versions, data), data, sessions, Clock.systemUTC())) {
+        try (var drops = new GroundDropService(new DefaultItemSystem(versions, data), data, sessions, Clock.systemUTC())) {
             assertThat(drops.dropMesos(owner.character, 500)).isTrue();
             var wire = new ByteArrayInPacket(owner.sent.getLast().getBytes()); wire.skip(3); int oid = wire.readInt();
             assertThat(drops.pickup(outsider.character, oid)).isFalse();

@@ -21,6 +21,12 @@ import java.util.Map;
  * </ul>
  */
 public interface AdminService {
+    public default LogicReloadReport reloadLogic(String module) { throw new UnsupportedOperationException("未接入逻辑加载器"); }
+
+    /** 独立角色奖励，完成结果由资产与幂等回执的持久化状态决定。 */
+    public default RewardResult grantReward(RewardGrant grant) {
+        throw new UnsupportedOperationException("grantReward is not implemented");
+    }
 
     /** 在线玩家只读快照（DTO，不含会话/角色内存对象）。 */
     public record OnlinePlayer(long characterId, String name, int mapId, int level, int job) {

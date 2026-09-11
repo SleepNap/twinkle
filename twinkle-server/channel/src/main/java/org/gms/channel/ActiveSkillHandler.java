@@ -6,7 +6,7 @@ import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ProgressionSystem;
+import org.gms.domain.game.logic.ProgressionSystem;
 import org.gms.wz.WzNode;
 import org.gms.wz.WzResourceRegistry;
 import org.gms.wz.WzResources;

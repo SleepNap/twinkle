@@ -101,6 +101,7 @@ class MyBatisFlexRepositoryTest {
         hero.setWorld(0);
         hero.setName("SnapshotHero");
         hero.setControlSettings("AQ==");
+        hero.setRewardReceipts("v1\nbefore=" + "a".repeat(64) + "\n");
         hero.setLevel(10);
         characterRepository.insert(hero);
 
@@ -119,6 +120,7 @@ class MyBatisFlexRepositoryTest {
         changed.setLevel(99);
         assertThat(changed.getControlSettings()).isEqualTo("AQ==");
         changed.setControlSettings("Ag==");
+        changed.setRewardReceipts("v1\nafter=" + "b".repeat(64) + "\n");
         InventoryItemEntity invalid = new InventoryItemEntity();
         invalid.setCharacterId(hero.getId().intValue());
         invalid.setAccountId(1);
@@ -136,6 +138,8 @@ class MyBatisFlexRepositoryTest {
 
         assertThat(characterRepository.findById(hero.getId()).orElseThrow().getLevel()).isEqualTo(10);
         assertThat(characterRepository.findById(hero.getId()).orElseThrow().getControlSettings()).isEqualTo("AQ==");
+        assertThat(characterRepository.findById(hero.getId()).orElseThrow().getRewardReceipts())
+                .isEqualTo("v1\nbefore=" + "a".repeat(64) + "\n");
         assertThat(inventoryRepository.findByCharacterId(hero.getId()))
                 .singleElement()
                 .satisfies(saved -> {

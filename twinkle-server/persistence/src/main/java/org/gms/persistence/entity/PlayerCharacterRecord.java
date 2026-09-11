@@ -27,6 +27,8 @@ public class PlayerCharacterRecord {
     private String name;
     /** 按键、技能宏与快捷栏的版本化文本快照。 */
     private String controlSettings;
+    /** 奖励幂等回执，与角色资产在同一快照事务保存。 */
+    private String rewardReceipts;
     private int level;
     private long exp;
     private long gachaExp;

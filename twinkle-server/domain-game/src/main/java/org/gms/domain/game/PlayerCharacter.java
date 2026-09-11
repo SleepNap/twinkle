@@ -24,6 +24,9 @@ import org.gms.domain.game.spi.EquipmentState;
 import org.gms.domain.game.spi.EquipmentStats;
 import org.gms.domain.game.control.ControlSettings;
 import org.gms.domain.game.spi.TradeItemSnapshot;
+import org.gms.domain.game.spi.RewardState;
+import org.gms.service.admin.RewardGrant;
+import org.gms.service.admin.RewardResult;
 
 import java.util.HashSet;
 import java.util.HashMap;
@@ -48,7 +51,45 @@ import java.util.Set;
  */
 @Getter
 @Setter
-public class PlayerCharacter implements BuffState, AvatarState, ControlsState, EquipmentState {
+public class PlayerCharacter implements BuffState, AvatarState, ControlsState, EquipmentState, RewardState {
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private final Map<String, String> rewardReceipts = new HashMap<>();
+
+    public Map<String, String> rewardReceipts() { requireStateAccess(); return Map.copyOf(rewardReceipts); }
+
+    /** 仅加载态恢复已持久化回执；不能在在线发奖时清空历史以绕过幂等。 */
+    public void restoreRewardReceipts(Map<String, String> receipts) {
+        if (execution != null) throw new IllegalStateException(I18n.message("error.reward.restore_online"));
+        rewardReceipts.clear();
+        rewardReceipts.putAll(receipts);
+    }
+
+    @Override
+    public synchronized RewardResult.Status applyReward(RewardGrant grant, List<TradeItemSnapshot> incoming,
+                                                          Map<Integer, Integer> slotLimits) {
+        requireStateAccess();
+        if (grant.characterId() != id) return RewardResult.Status.INVALID;
+        String fingerprint = grant.fingerprint();
+        String previous = rewardReceipts.get(grant.batchId());
+        if (previous != null) return previous.equals(fingerprint)
+                ? RewardResult.Status.ALREADY_APPLIED : RewardResult.Status.IDEMPOTENCY_CONFLICT;
+        long money = (long) meso + grant.meso();
+        if (money > Integer.MAX_VALUE || exp < 0 || exp > Integer.MAX_VALUE - grant.experience())
+            return RewardResult.Status.INVALID;
+        EnumMap<InventoryType, Inventory> prepared = copyInventories();
+        if (!addTradeItems(prepared, incoming, slotLimits)) return RewardResult.Status.NO_SPACE;
+        // 新背包和物品先绑定所属执行器，提交阶段不再调用外部逻辑。
+        if (execution != null) prepared.values().forEach(bag -> bag.bindExecution(execution));
+        inventory.mutableInventories().clear();
+        inventory.mutableInventories().putAll(prepared);
+        meso = (int) money;
+        exp += grant.experience();
+        rewardReceipts.put(grant.batchId(), fingerprint);
+        markDirty();
+        return RewardResult.Status.APPLIED;
+    }
+
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
     private volatile GameExecution execution;

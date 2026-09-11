@@ -5,7 +5,7 @@ import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.v83.V83Movement;
-import org.gms.replaceable.MovementSystem;
+import org.gms.domain.game.logic.MovementSystem;
 
 /** 玩家移动：验证整个片段流、提交位置和姿态，再向同地图其他有效会话转发。 */
 public final class MovePlayerHandler implements PacketHandler {

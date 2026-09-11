@@ -70,6 +70,7 @@ public final class PlayerCharacterAssembler {
         chr.setWorld(db.getWorld());
         chr.setName(db.getName());
         chr.setControls(ControlSettingsCodec.decode(db.getControlSettings()));
+        chr.restoreRewardReceipts(RewardReceiptCodec.decode(db.getRewardReceipts()));
         chr.setLevel(db.getLevel());
         chr.setExp(db.getExp());
         chr.setGachaExp(db.getGachaExp());
@@ -381,6 +382,7 @@ public final class PlayerCharacterAssembler {
         db.setWorld(chr.getWorld());
         db.setName(chr.getName());
         db.setControlSettings(ControlSettingsCodec.encode(chr.controls()));
+        db.setRewardReceipts(RewardReceiptCodec.encode(chr.rewardReceipts()));
         db.setLevel(chr.getLevel());
         db.setExp(chr.getExp());
         db.setGachaExp(chr.getGachaExp());

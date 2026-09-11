@@ -16,18 +16,24 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.function.Consumer;
 import java.util.Objects;
+import java.util.List;
+import java.util.ArrayList;
 
 /** 稳定的频道执行归属；网络、Tick 和回调只投递任务，不各自锁游戏对象。 */
 @Log4j2
 public final class GameExecution implements AutoCloseable {
     private static final ThreadLocal<GameExecution> CURRENT = new ThreadLocal<>();
     private final ThreadPoolExecutor executor;
-    private final VersionGate versions;
+    private VersionGate versions;
+    private final String name;
+    private final List<Runnable> closeHooks = new ArrayList<>();
     private final Semaphore admissions = new Semaphore(4096);
     private long operationVersion;
     private Consumer<Runnable> operationScope;
+    private boolean resourceScopeBound;
 
     public GameExecution(String name, VersionGate versions) {
+        this.name = name;
         this.versions = versions;
         this.executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(),
@@ -36,6 +42,16 @@ public final class GameExecution implements AutoCloseable {
     }
 
     public boolean isOwner() { return CURRENT.get() == this; }
+    public String name() { return name; }
+    public void bindVersionGate(VersionGate versions) { run(() -> this.versions = Objects.requireNonNull(versions)); }
+    public void onClose(Runnable hook) { run(() -> closeHooks.add(hook)); }
+    /** 多个稳定宿主作用域嵌套，完整操作同时固定资源和逻辑代际。 */
+    public void addOperationScope(Consumer<Runnable> scope) {
+        run(() -> {
+            Consumer<Runnable> previous = operationScope;
+            operationScope = previous == null ? scope : action -> scope.accept(() -> previous.accept(action));
+        });
+    }
     public static boolean inGameOperation() { return CURRENT.get() != null; }
     public static GameExecution current() { return CURRENT.get(); }
     public long version() { return isOwner() ? operationVersion : versions.currentVersion(); }
@@ -48,8 +64,10 @@ public final class GameExecution implements AutoCloseable {
     public void bindOperationScope(Consumer<Runnable> scope) {
         Objects.requireNonNull(scope, "scope");
         run(() -> {
-            if (operationScope != null) throw new IllegalStateException(I18n.message("error.execution.scope_bound"));
-            operationScope = scope;
+            if (resourceScopeBound) throw new IllegalStateException(I18n.message("error.execution.scope_bound"));
+            resourceScopeBound = true;
+            Consumer<Runnable> previous = operationScope;
+            operationScope = previous == null ? scope : action -> previous.accept(() -> scope.accept(action));
         });
     }
 
@@ -65,6 +83,9 @@ public final class GameExecution implements AutoCloseable {
                 new RejectedExecutionException(I18n.message("error.execution.full")));
         return submitControl(action).whenComplete((ignored, error) -> admissions.release());
     }
+
+    /** 管理安全点仍进入同一 FIFO；调用方可超时取消自己的切换令牌。 */
+    public <T> CompletableFuture<T> submitBarrier(Supplier<T> action) { return submitControl(action); }
 
     /** 已接入任务的清理、存档回调和管理屏障共用 FIFO，不受普通封包配额挤占。 */
     private <T> CompletableFuture<T> submitControl(Supplier<T> action) {
@@ -119,6 +140,8 @@ public final class GameExecution implements AutoCloseable {
         try {
             if (!executor.awaitTermination(10, TimeUnit.SECONDS))
                 throw new IllegalStateException(I18n.message("error.execution.drain_timeout"));
+            closeHooks.forEach(Runnable::run);
+            closeHooks.clear();
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(I18n.message("error.execution.drain_interrupted"), error);

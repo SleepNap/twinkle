@@ -5,7 +5,7 @@ import org.gms.domain.game.inventory.InventoryType;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.net.packet.v83.V83ItemSnapshot;
-import org.gms.replaceable.EquipmentSystem;
+import org.gms.domain.game.logic.EquipmentSystem;
 
 import java.time.Clock;
 import java.util.HashMap;

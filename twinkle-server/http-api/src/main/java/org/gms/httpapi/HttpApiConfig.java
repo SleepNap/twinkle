@@ -22,7 +22,6 @@ import org.gms.event.EventBus;
 import org.gms.httpapi.limit.ApiRateLimiter;
 import org.gms.httpapi.docs.PublicApiContractService;
 import org.gms.httpapi.version.ApiVersionCatalog;
-import org.gms.httpapi.admin.AdminAccessPolicy;
 import org.gms.httpapi.admin.AdminAuditService;
 import org.gms.httpapi.admin.AdminSessionService;
 import org.gms.httpapi.auth.ApiAccessPolicy;
@@ -111,12 +110,6 @@ public class HttpApiConfig {
     @Singleton
     public PublicApiContractService publicApiContractService(org.gms.i18n.I18nService i18n) {
         return new PublicApiContractService(i18n);
-    }
-
-    @Bean
-    @Singleton
-    public AdminAccessPolicy adminAccessPolicy() {
-        return new AdminAccessPolicy();
     }
 
     @Bean

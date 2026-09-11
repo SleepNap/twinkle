@@ -11,7 +11,7 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
-import org.gms.replaceable.CombatSystem;
+import org.gms.domain.game.logic.CombatSystem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,8 +33,6 @@ import java.util.Set;
  */
 @Log4j2
 public final class AttackHandler implements PacketHandler {
-
-
 
     /** 带 charge 字段的技能集（v83 值，思路参考自 BeiDou；命中即多读 4 字节）。 */
     private static final Set<Integer> CHARGE_SKILLS = Set.of(

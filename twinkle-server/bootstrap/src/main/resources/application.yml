@@ -9,6 +9,10 @@ twinkle:
   service:
     language: ${TWINKLE_SERVICE_LANGUAGE:zh-CN}
 
+  # 独立业务制品；留空时使用主 JAR 旁边的 logic/。
+  logic:
+    path: ${TWINKLE_LOGIC_PATH:}
+
   # ============== 数据库（架构 6.2：按需三档） ==============
   # 默认：SQLite（低配 standalone，路径相对运行目录）
   # 大服 PostgreSQL：-Dtwinkle.db.url=jdbc:postgresql://host:5432/dbname

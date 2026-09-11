@@ -4,6 +4,10 @@ import org.gms.service.intercoord.ChannelDirectoryService;
 import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.service.admin.AdminService;
+import org.gms.service.admin.LogicReloadReport;
+import org.gms.module.ModuleRuntime;
+import org.gms.service.admin.RewardGrant;
+import org.gms.service.admin.RewardResult;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.util.ArrayList;
@@ -16,6 +20,25 @@ import java.util.concurrent.Future;
 
 /** 管理进程的集群 AdminService：频道操作按频道路由，资源重载按 worker 去重并发执行。 */
 public final class ClusterRemoteAdminService implements AdminService {
+
+    @Override public LogicReloadReport reloadLogic(String module) {
+        List<List<ModuleRuntime.Update>> reports = parallel(workerRepresentatives(), channel -> {
+            try {
+                return remote(channel).reloadLogic(module).updates().stream().map(update -> {
+                    Map<String,String> targets = new LinkedHashMap<>();
+                    update.targets().forEach((name,status) -> targets.put("channel:" + channel + "/" + name, status));
+                    return new ModuleRuntime.Update(update.module(), update.digest(), targets);
+                }).toList();
+            } catch (RuntimeException failure) {
+                return List.of(new ModuleRuntime.Update(module, "", Map.of("channel:" + channel, "UNKNOWN")));
+            }
+        });
+        return new LogicReloadReport(reports.stream().flatMap(List::stream).toList());
+    }
+
+    @Override public RewardResult grantReward(RewardGrant grant) {
+        return remote(channelFor(grant.characterId())).grantReward(grant);
+    }
 
     private final CoordinatorLink link;
     private final IntercoordService intercoord;

@@ -36,6 +36,7 @@ const PERMISSION_OPTIONS: { value: string; key: MessageKey }[] = [
   { value: "admin:read", key: "roles.perm.read" },
   { value: "admin.config:write", key: "roles.perm.configWrite" },
   { value: "admin.player:kick", key: "roles.perm.kick" },
+  { value: "admin.reward:grant", key: "roles.perm.rewardGrant" },
   { value: "admin.packet:trace", key: "roles.perm.packetTrace" },
   { value: "admin.reload:logic", key: "roles.perm.reloadLogic" },
   { value: "admin.reload:scripts", key: "roles.perm.reloadScripts" },

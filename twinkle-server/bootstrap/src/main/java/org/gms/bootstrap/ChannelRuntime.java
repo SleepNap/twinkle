@@ -37,6 +37,8 @@ public final class ChannelRuntime implements AutoCloseable {
     private final List<AutoCloseable> subscriptions;
     private ChannelAdminService admin;
     private final GameExecution execution;
+    private org.gms.channel.RewardDeliveryService rewards;
+    public void rewards(org.gms.channel.RewardDeliveryService rewards) { this.rewards = rewards; }
 
     public ChannelRuntime(ChannelWorkerSpec.Endpoint endpoint, HandlerRegistry handlers,
                    ChannelMapManager maps, PlayerStorage players, PlayerSessionRegistry sessions,
@@ -72,6 +74,7 @@ public final class ChannelRuntime implements AutoCloseable {
 
     public void admin(ChannelAdminService admin) {
         this.admin = admin;
+        admin.bindRewards(rewards);
     }
 
     @Override

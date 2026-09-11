@@ -1,5 +1,6 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultItemSystem;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.map.MapleMap;
@@ -9,7 +10,6 @@ import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
-import org.gms.replaceable.ItemSystem;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -28,7 +28,7 @@ public class MapAndDropGameplayTest {
         var second = new GameplayTestSession(2, map(100));
         var sessions = new PlayerSessionRegistry(); sessions.claim(1, first); sessions.claim(2, second);
         var data = GameDataProvider.fixed(Map.of(2000000, new ItemData(2000000)), Map.of());
-        var items = new ItemSystem(new DefaultVersionGate(), data);
+        var items = new DefaultItemSystem(new DefaultVersionGate(), data);
         items.giveItem(first.character, 2000000, 2); items.giveItem(second.character, 2000000, 7);
         try (var drops = new GroundDropService(items, data, sessions, Clock.systemUTC())) {
             assertThat(drops.drop(first.character, (byte) 2, (short) 1, 2)).isTrue();
@@ -79,7 +79,7 @@ public class MapAndDropGameplayTest {
         sessions.claim(1, owner); sessions.claim(2, first); sessions.claim(3, second);
         ItemData potion = new ItemData(2000000);
         var data = GameDataProvider.fixed(Map.of(2000000, potion), Map.of());
-        var items = new ItemSystem(new DefaultVersionGate(), data);
+        var items = new DefaultItemSystem(new DefaultVersionGate(), data);
         items.giveItem(owner.character, 2000000, 3);
         owner.character.getInventory(InventoryType.USE).getItem((short) 1).setOwner("来源");
         try (var drops = new GroundDropService(items, data, sessions, Clock.systemUTC());
@@ -107,7 +107,7 @@ public class MapAndDropGameplayTest {
         var sessions = new PlayerSessionRegistry();
         sessions.claim(1, owner); sessions.claim(2, picker);
         var data = GameDataProvider.fixed(Map.of(2000000, new ItemData(2000000)), Map.of());
-        var items = new ItemSystem(new DefaultVersionGate(), data);
+        var items = new DefaultItemSystem(new DefaultVersionGate(), data);
         items.giveItem(owner.character, 2000000, 1);
         items.giveItem(picker.character, 2000000, 2400);
         try (var drops = new GroundDropService(items, data, sessions,

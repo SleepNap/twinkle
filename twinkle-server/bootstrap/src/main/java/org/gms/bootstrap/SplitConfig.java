@@ -18,7 +18,6 @@ import org.gms.net.netty.internal.ChannelConnectionRegistry;
 import org.gms.net.netty.internal.CoordinatorFrameRouter;
 import org.gms.net.netty.internal.CoordinatorLink;
 import org.gms.net.netty.internal.DefaultInternalFrame;
-import org.gms.net.netty.internal.InternalConnection;
 import org.gms.net.netty.internal.InternalFrame;
 import org.gms.net.netty.internal.InternalProtocol;
 import org.gms.net.netty.internal.InternalServer;
@@ -34,7 +33,6 @@ import org.gms.service.channel.ChannelLifecycleService;
 import org.gms.service.intercoord.IntercoordService;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
 
 /**
  * split 档装配（架构 4.5 内部通信：星形拓扑，coordinator 是中心路由器）。
@@ -55,8 +53,6 @@ import java.util.Map;
 @Factory
 @Log4j2
 public class SplitConfig {
-
-
 
     // ==================== coordinator 角色（管理进程） ====================
 
@@ -196,7 +192,7 @@ public class SplitConfig {
                 String method = env.request().method();
                 int channelId = env.request().targetChannelId() == null
                         ? -1 : env.request().targetChannelId();
-                AdminService targetAdmin = channelId > 0 && worker.runtime(channelId) != null
+                AdminService targetAdmin = !"reloadLogic".equals(method) && channelId > 0 && worker.runtime(channelId) != null
                         ? worker.runtime(channelId).admin() : adminService;
                 InternalProtocol.RpcResponse response = lifecycleDispatcher.supports(method)
                         ? lifecycleDispatcher.dispatch(method, env.request().args(),

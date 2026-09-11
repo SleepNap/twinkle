@@ -1,5 +1,9 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultProgressionSystem;
+import org.gms.logic.game.DefaultItemSystem;
+import org.gms.logic.game.DefaultEquipmentSystem;
+import org.gms.logic.game.DefaultCombatSystem;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.InventoryType;
@@ -15,10 +19,7 @@ import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.persistence.entity.InventoryItemEntity;
 import org.gms.persistence.repo.InventoryItemRepository;
-import org.gms.replaceable.CombatSystem;
-import org.gms.replaceable.EquipmentSystem;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.ProgressionSystem;
+import org.gms.domain.game.logic.CombatSystem;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -39,7 +40,7 @@ public class EquipmentGameplayTest {
 
     @Test public void itemMoveUsesSignedEquipmentSlotsAndSendsAppearanceOnlyToOtherVisiblePlayers() {
         var owner = session(1); var observer = session(2);
-        var data = data(false); var items = new ItemSystem(versions, data);
+        var data = data(false); var items = new DefaultItemSystem(versions, data);
         var service = service(data);
         try (var drops = new GroundDropService(items, data, sessions, clock)) {
             var handler = new InventoryMoveHandler(items, drops, service, sessions);
@@ -85,7 +86,7 @@ public class EquipmentGameplayTest {
 
     @Test public void rejectsWrongInventoryOldConnectionsTransitionTradeAndTruncatedPackets() {
         var owner = session(1); var observer = session(2);
-        var data = data(false); var items = new ItemSystem(versions, data);
+        var data = data(false); var items = new DefaultItemSystem(versions, data);
         try (var drops = new GroundDropService(items, data, sessions, clock)) {
             var handler = new InventoryMoveHandler(items, drops, service(data), sessions);
             items.giveItem(owner.character, 1302000, 1);
@@ -106,7 +107,7 @@ public class EquipmentGameplayTest {
 
     @Test public void bindingUpdatesTheFullItemAndExpiredEquipmentIncludesRemovalRecalculationFlag() {
         var owner = session(1); var observer = session(2);
-        var data = data(true); var items = new ItemSystem(versions, data); var service = service(data);
+        var data = data(true); var items = new DefaultItemSystem(versions, data); var service = service(data);
         items.giveItem(owner.character, 1302000, 1);
         owner.character.getInventory(InventoryType.EQUIP).getItem((short) 1).setExpiration(1500);
         assertThat(service.move(owner, (short) 1, (short) -11, 1)).isTrue();
@@ -122,7 +123,7 @@ public class EquipmentGameplayTest {
         assertThat(packet.readShort()).isEqualTo((short) -11);
         assertThat(owner.character.getInventory(InventoryType.EQUIP).getItem((short) -11).getFlag() & 8).isEqualTo(8);
         owner.sent.clear(); observer.sent.clear(); owner.character.setHp(140);
-        new EquipmentService(new EquipmentSystem(new ProgressionSystem(versions)::accepts, data), sessions,
+        new EquipmentService(new DefaultEquipmentSystem(new DefaultProgressionSystem(versions)::accepts, data), sessions,
                 Clock.fixed(Instant.ofEpochMilli(1500), ZoneOffset.UTC)).refresh(owner);
         assertThat(owner.character.getInventory(InventoryType.EQUIP).getItem((short) -11)).isNull();
         assertThat(owner.character.getHp()).isEqualTo(100);
@@ -138,7 +139,7 @@ public class EquipmentGameplayTest {
     }
 
     @Test public void saveReloadPreservesBaseStatsAndRebuildsEquipmentBonusesFromTheSavedInstance() {
-        var owner = session(1); var data = data(false); var items = new ItemSystem(versions, data);
+        var owner = session(1); var data = data(false); var items = new DefaultItemSystem(versions, data);
         items.giveItem(owner.character, 1302000, 1);
         service(data).move(owner, (short) 1, (short) -11, 0);
         owner.character.setHp(140);
@@ -170,10 +171,10 @@ public class EquipmentGameplayTest {
 
     @Test public void existingPhysicalDamageEntryReadsEquipmentStats() {
         var owner = session(1); var data = data(false);
-        var items = new ItemSystem(versions, data);
+        var items = new DefaultItemSystem(versions, data);
         var monsterData = new MobData(1); monsterData.setMaxHp(10000);
         var monster = new MapleMonster(monsterData);
-        var combat = new CombatSystem(versions);
+        var combat = new DefaultCombatSystem(versions);
         int bare = combat.physicalAttack(owner.character, monster, CombatSystem.BARE_HAND_WATK).damage();
         items.giveItem(owner.character, 1302000, 1);
         service(data).move(owner, (short) 1, (short) -11, 0);
@@ -191,7 +192,7 @@ public class EquipmentGameplayTest {
         return GameDataProvider.fixed(Map.of(1302000, sword), Map.of());
     }
     private EquipmentService service(GameDataProvider data) {
-        return new EquipmentService(new EquipmentSystem(new ProgressionSystem(versions)::accepts, data), sessions, clock);
+        return new EquipmentService(new DefaultEquipmentSystem(new DefaultProgressionSystem(versions)::accepts, data), sessions, clock);
     }
     private static ByteArrayInPacket request(int type, int source, int target, int quantity) {
         var packet = new ByteArrayOutPacket();

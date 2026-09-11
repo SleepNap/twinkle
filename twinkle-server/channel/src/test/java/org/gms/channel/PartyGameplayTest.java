@@ -6,6 +6,8 @@ import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
+import org.gms.logic.game.DefaultPartySystem;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -24,7 +26,7 @@ public class PartyGameplayTest {
                 players.add(leader.character); players.add(guest.character);
                 sessions.claim(1, leader); sessions.claim(2, guest);
             });
-            try (var handler = new PartyHandler(sessions, 1, Clock.systemUTC(), state -> {
+            try (var handler = new PartyHandler(new DefaultPartySystem(), sessions, 1, Clock.systemUTC(), state -> {
                 execution.requireOwner(); return true;
             })) {
                 // 从频道外调用也必须由统一入口完成，不能只依赖 Netty 分发器。
@@ -54,7 +56,7 @@ public class PartyGameplayTest {
         var map = new MapleMap();
         var leader = new GameplayTestSession(1, map); var guest = new GameplayTestSession(2, map);
         var sessions = new PlayerSessionRegistry(); sessions.claim(1, leader); sessions.claim(2, guest);
-        try (var handler = new PartyHandler(sessions, 1, Clock.systemUTC(), state -> true)) {
+        try (var handler = new PartyHandler(new DefaultPartySystem(), sessions, 1, Clock.systemUTC(), state -> true)) {
             handler.handle(leader, input(1));
             int partyId = leader.character.getParty();
             assertThat(partyId).isPositive();

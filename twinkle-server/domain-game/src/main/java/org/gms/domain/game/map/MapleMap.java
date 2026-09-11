@@ -1,4 +1,5 @@
 package org.gms.domain.game.map;
+import org.gms.domain.game.spi.MapGeometry;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -23,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Getter
 @Setter
-public class MapleMap {
+public class MapleMap implements MapGeometry {
 
     // ---------- 静态属性（WZ 加载填充，红线 1 字节级兼容） ----------
 

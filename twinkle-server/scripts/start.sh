@@ -13,6 +13,8 @@ set -euo pipefail
 JAR="${TWINKLE_JAR:-target/twinkle-server.jar}"
 [ -f "$JAR" ] || { echo "错误：找不到 $JAR，请先构建（mvn -B verify）"; exit 1; }
 
+export TWINKLE_LOGIC_PATH="${TWINKLE_LOGIC_PATH:-$(dirname "$JAR")/logic}"
+
 export TWINKLE_DB_URL="${TWINKLE_DB_URL:-jdbc:sqlite:./data/twinkle.db}"
 export TWINKLE_WZ_PATH="${TWINKLE_WZ_PATH:-./wz}"
 export TWINKLE_SCRIPT_PATH="${TWINKLE_SCRIPT_PATH:-./scripts}"

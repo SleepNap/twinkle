@@ -5,6 +5,7 @@ import java.util.Set;
 /** Web 控制台管理面的稳定权限点（RBAC）。读操作统一 {@code admin:read}，写操作按端点细分。 */
 public final class AdminPermission {
 
+    public static final String REWARD_GRANT = "admin.reward:grant";
     public static final String READ = "admin:read";
     public static final String CONFIG_WRITE = "admin.config:write";
     public static final String PLAYER_KICK = "admin.player:kick";
@@ -22,7 +23,7 @@ public final class AdminPermission {
     public static final String ALL = "*";
 
     public static final Set<String> SUPPORTED = Set.of(
-            READ, CONFIG_WRITE, PLAYER_KICK, PACKET_TRACE, RELOAD_LOGIC, RELOAD_SCRIPTS, RELOAD_WZ,
+            REWARD_GRANT, READ, CONFIG_WRITE, PLAYER_KICK, PACKET_TRACE, RELOAD_LOGIC, RELOAD_SCRIPTS, RELOAD_WZ,
             RESTART, TASK_MANAGE, BILLING_MANAGE, ROLE_MANAGE, ACCOUNT_MANAGE);
 
     private AdminPermission() {

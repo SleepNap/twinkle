@@ -15,6 +15,7 @@
     <description>频道、玩家在线表、CC 迁移。游戏域（频道进程）</description>
 
     <dependencies>
+        <dependency><groupId>org.gms</groupId><artifactId>twinkle-game-logic</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <!-- 游戏对象模型 -->
         <dependency>

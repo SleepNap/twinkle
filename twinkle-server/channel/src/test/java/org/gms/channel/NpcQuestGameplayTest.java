@@ -1,5 +1,7 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultQuestSystem;
+import org.gms.logic.game.DefaultItemSystem;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.map.MapNpc;
 import org.gms.domain.game.map.MapleMap;
@@ -8,8 +10,6 @@ import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.QuestSystem;
 import org.gms.wz.WzResourceRegistry;
 import org.gms.wz.resource.QuestResourceLoader;
 import org.junit.jupiter.api.Test;
@@ -31,7 +31,7 @@ public class NpcQuestGameplayTest {
         var session = new GameplayTestSession(1, map); session.character.setMeso(500);
         ItemData potion = new ItemData(2000000); potion.setPrice(25);
         var data = GameDataProvider.fixed(Map.of(2000000, potion, 2000001, new ItemData(2000001)), Map.of());
-        var handler = new NpcShopHandler(new NpcShopCatalog(config.toString()), data, new ItemSystem(new DefaultVersionGate(), data));
+        var handler = new NpcShopHandler(new NpcShopCatalog(config.toString()), data, new DefaultItemSystem(new DefaultVersionGate(), data));
         handler.handle(session, shop(0, 0, 2000000, 1));
         assertThat(session.character.getItemCount(2000000)).isZero();
         assertThat(handler.open(session, npc)).isTrue();
@@ -55,7 +55,7 @@ public class NpcQuestGameplayTest {
         MapleMap map = new MapleMap(); map.setMapId(100);
         map.putNpc(new MapNpc(99, 2101, 0, 0, 0, 0, 0, true));
         var session = new GameplayTestSession(1, map);
-        var handler = new QuestActionHandler(resources, new QuestSystem(new DefaultVersionGate()));
+        var handler = new QuestActionHandler(resources, new DefaultQuestSystem(new DefaultVersionGate()));
         handler.handle(session, quest(1, 1000, 999));
         assertThat(session.character.getQuestStatus(1000)).isNull();
         handler.handle(session, quest(1, 1000, 2101));
@@ -75,7 +75,7 @@ public class NpcQuestGameplayTest {
         var resources = resources(root, "<int name=\"interval\" value=\"60\"/>");
         MapleMap map = new MapleMap(); map.putNpc(new MapNpc(99, 2101, 0, 0, 0, 0, 0, true));
         var session = new GameplayTestSession(1, map);
-        var handler = new QuestActionHandler(resources, new QuestSystem(new DefaultVersionGate()));
+        var handler = new QuestActionHandler(resources, new DefaultQuestSystem(new DefaultVersionGate()));
         handler.handle(session, quest(1, 1000, 2101));
         assertThat(session.character.getQuestStatus(1000)).isNull();
     }

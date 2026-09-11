@@ -10,7 +10,7 @@ import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.v83.V83FileTime;
 import org.gms.net.packet.v83.V83ItemSnapshot;
-import org.gms.replaceable.QuestSystem;
+import org.gms.domain.game.logic.QuestSystem;
 import org.gms.wz.WzNode;
 import org.gms.wz.WzResourceRegistry;
 import org.gms.wz.WzResources;

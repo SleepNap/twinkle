@@ -207,16 +207,6 @@ public final class AdminConsoleController {
         return HttpResponse.notFound(Map.of("error", "character_not_online", "characterId", characterId));
     }
 
-    /** 逻辑重载（架构 5.3：安全点直切 + 在途显式中断 + 换代版本门）。 */
-    @Post("/reload/logic")
-    public HttpResponse<?> reloadLogic() {
-        EntityReloadService.ReloadResult result = reloadService.reloadAllInFlight();
-        return HttpResponse.ok(Map.of(
-                "safeSwitched", result.safeSwitched(),
-                "interrupted", result.interrupted(),
-                "newVersion", result.newVersion()));
-    }
-
     /** 脚本重载（L2 热重载，② AdminService.reloadScripts）。 */
     @Post("/reload/scripts")
     public Map<String, Object> reloadScripts() {

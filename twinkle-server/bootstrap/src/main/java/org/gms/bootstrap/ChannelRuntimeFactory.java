@@ -14,7 +14,7 @@ import org.gms.event.ReliableReceiver;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.net.netty.HeartbeatConfig;
 import org.gms.net.packet.HandlerRegistry;
-import org.gms.replaceable.*;
+import org.gms.domain.game.logic.*;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.tick.TickScheduler;
 import org.gms.wz.WzResourceRegistry;
@@ -53,6 +53,7 @@ public final class ChannelRuntimeFactory {
     private final ProgressionSystem progressionSystem;
     private final VersionGate versionGate;
     private final ThreadManager background;
+    private final GameLogicRuntime logic;
 
     public ChannelRuntimeFactory(PlayerCharacterRepository characterRepository, PlayerCharacterAssembler characterLoader,
                                  WzResourceRegistry wzResources, GameDataProvider gameData,
@@ -65,7 +66,7 @@ public final class ChannelRuntimeFactory {
                                  ChannelPlayerDirectory playerDirectory, TickScheduler tickScheduler,
                                  HeartbeatConfig heartbeatConfig, int worldId, long leaseTtlSeconds,
                                  long leaseCooldownSeconds, long leaseSweepIntervalMillis, NpcShopCatalog shopCatalog,
-                                 ProgressionSystem progressionSystem, VersionGate versionGate, ThreadManager background) {
+                                 ProgressionSystem progressionSystem, VersionGate versionGate, ThreadManager background, GameLogicRuntime logic) {
         this.characterRepository = characterRepository;
         this.characterLoader = characterLoader;
         this.wzResources = wzResources;
@@ -94,6 +95,7 @@ public final class ChannelRuntimeFactory {
         this.progressionSystem = progressionSystem;
         this.versionGate = versionGate;
         this.background = background;
+        this.logic = logic;
     }
 
     public ChannelRuntime create(ChannelWorkerSpec.Endpoint endpoint) {
@@ -114,6 +116,14 @@ public final class ChannelRuntimeFactory {
         MonsterReassignTickHandler reassign = null;
         ChannelGameplay gameplay = null;
         try {
+            logic.bind(execution, () -> {
+                for (var player : players.all()) {
+                    if (!entityReloadCoordinator.isSafe(player.getId())
+                            && !entityReloadCoordinator.interrupt(player.getId())) {
+                        throw new IllegalStateException("频道仍有未完成操作：" + player.getId());
+                    }
+                }
+            });
             leases = new DefaultControllerLeaseService(leaseTtlSeconds, leaseCooldownSeconds,
                     leaseSweepIntervalMillis, tickScheduler.intervalMillis());
             monsters = new MonsterSpawnService(gameData, sessions, leases);
@@ -163,9 +173,12 @@ public final class ChannelRuntimeFactory {
             channelTicks.register(reassign);
             gameplay = new ChannelGameplay(handlers, maps, monsters, leases, channelId, gameData,
                     sessions, itemSystem, questSystem, scriptManager, shopCatalog, channelTicks,
-                    wzResources, progressionSystem);
-            return new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
+                    wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
+                    logic.service(EquipmentSystem.class), logic.service(PartySystem.class));
+            ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
+            runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));
+            return runtime;
         } catch (RuntimeException error) {
             closeQuietly(gameplay);
             closeQuietly(locations);

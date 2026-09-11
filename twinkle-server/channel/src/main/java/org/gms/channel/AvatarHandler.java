@@ -4,7 +4,7 @@ import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.AvatarSystem;
+import org.gms.domain.game.logic.AvatarSystem;
 
 import java.time.Clock;
 

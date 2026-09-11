@@ -74,14 +74,11 @@ public final class InternalAdminController {
                 "entities", reloadCoordinator.inFlightEntities());
     }
 
-    /** 触发按实体渐进重载（架构 5.3：安全点直切 + 在途显式中断 + 换代版本门）。 */
+    /** 旧接口仅推进计数，已退役；实际制品发布统一走管理端受审计入口。 */
     @Post("/reload")
     public HttpResponse<?> reload() {
-        EntityReloadService.ReloadResult result = reloadService.reloadAllInFlight();
-        return HttpResponse.ok(Map.of(
-                "safeSwitched", result.safeSwitched(),
-                "interrupted", result.interrupted(),
-                "newVersion", result.newVersion()));
+        return HttpResponse.status(io.micronaut.http.HttpStatus.GONE).body(Map.of(
+                "error", "use_module_reload", "endpoint", "/admin/v1/reload/logic"));
     }
 
     /** 写配置（架构 4.6.5 配置中心：DB 真值 + 版本号广播）。body: {key, value}。 */

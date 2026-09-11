@@ -65,3 +65,7 @@ twinkle-server/persistence/cache/
 bootstrap/data/
 **/data/twinkle.db
 **/data/cache/
+
+# 本地实现与验证产物
+/tmp/
+/twinkle-server/scripts/__pycache__/

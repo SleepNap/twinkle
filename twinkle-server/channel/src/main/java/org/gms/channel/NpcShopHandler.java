@@ -9,7 +9,7 @@ import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ItemSystem;
+import org.gms.domain.game.logic.ItemSystem;
 
 import java.util.List;
 import java.util.Map;

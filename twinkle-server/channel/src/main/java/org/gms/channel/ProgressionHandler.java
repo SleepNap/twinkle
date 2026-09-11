@@ -7,7 +7,7 @@ import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.v83.V83FileTime;
 import org.gms.net.packet.v83.V83SkillPoints;
-import org.gms.replaceable.ProgressionSystem;
+import org.gms.domain.game.logic.ProgressionSystem;
 import org.gms.wz.WzNode;
 import org.gms.wz.WzResources;
 import org.gms.wz.WzResourceRegistry;

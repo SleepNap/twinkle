@@ -16,6 +16,20 @@ class ArchitectureRulesTest {
             .importPackages("org.gms");
 
     @Test
+    void hostMustNeverReferenceReloadableImplementation() {
+        noClasses().that().resideOutsideOfPackage("org.gms.logic..")
+                .should().dependOnClassesThat().resideInAPackage("org.gms.logic..")
+                .check(production);
+        noClasses().that().resideInAPackage("org.gms.logic..")
+                .should().beAnnotatedWith("jakarta.inject.Singleton").check(production);
+        noClasses().that().resideInAPackage("org.gms.logic..")
+                .should().beAnnotatedWith("io.micronaut.http.annotation.Controller").check(production);
+        noClasses().that().resideInAnyPackage("org.gms.logic.login..", "org.gms.logic.admin..",
+                        "org.gms.logic.query..", "org.gms.logic.coordinator..")
+                .should().dependOnClassesThat().resideInAPackage("org.gms.domain.game..").check(production);
+    }
+
+    @Test
     void coreMustNotDependOnFeatureOrAdapterModules() {
         noClasses().that().resideInAPackage("org.gms..")
                 .and().resideOutsideOfPackages("org.gms.bootstrap..")

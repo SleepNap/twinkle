@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS character_records (
     pq_points INTEGER NOT NULL DEFAULT 0,
     data_string VARCHAR(64) NOT NULL DEFAULT '',
     control_settings TEXT,
+    reward_receipts TEXT,
     last_logout_time TIMESTAMP NOT NULL DEFAULT '2015-01-01 05:00:00',
     last_exp_gain_time TIMESTAMP NOT NULL DEFAULT '2015-01-01 05:00:00',
     party_search SMALLINT NOT NULL DEFAULT 1,

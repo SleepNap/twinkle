@@ -30,7 +30,7 @@
 
 跨版本 API 的选择性分叉、历史兼容、退役和自动 OpenAPI 文档规则见 [`API-VERSIONING.md`](API-VERSIONING.md)。
 
-修改哪个模块能热重载、哪个必须重启，直接查 [`HOT-UPDATE.md`](HOT-UPDATE.md)。表中区分当前能力与改造目标。
+修改哪个模块能热重载、哪个必须重启，直接查 [`HOT-UPDATE.md`](HOT-UPDATE.md)。表中按实际模块标明更新方式。制品发布与 Actor 式奖励接口见 [`LOGIC-RELEASE.md`](LOGIC-RELEASE.md)。
 
 后端 Maven 模块收敛、强类型契约、`PlayerCharacter`/`GameAccountRecord` 命名与聚合拆分方案见
 [`in-progress/backend-structure-refactor.md`](in-progress/backend-structure-refactor.md)。

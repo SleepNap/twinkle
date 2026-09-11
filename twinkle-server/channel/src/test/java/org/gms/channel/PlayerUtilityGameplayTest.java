@@ -1,5 +1,7 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultProgressionSystem;
+import org.gms.logic.game.DefaultControlsSystem;
 import org.gms.domain.game.control.ControlSettings;
 import org.gms.domain.game.control.ControlSettings.Binding;
 import org.gms.domain.game.control.ControlSettings.Macro;
@@ -13,8 +15,6 @@ import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
-import org.gms.replaceable.ControlsSystem;
-import org.gms.replaceable.ProgressionSystem;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -117,8 +117,8 @@ public class PlayerUtilityGameplayTest {
     }
 
     private static ControlsHandler controls(PlayerSessionRegistry sessions, DefaultVersionGate versions) {
-        var progression = new ProgressionSystem(versions);
-        return new ControlsHandler(sessions, new ControlsSystem(progression::accepts, GameDataProvider.fixed(Map.of(), Map.of())),
+        var progression = new DefaultProgressionSystem(versions);
+        return new ControlsHandler(sessions, new DefaultControlsSystem(progression::accepts, GameDataProvider.fixed(Map.of(), Map.of())),
                 Clock.systemUTC());
     }
     private static GameplayTestSession joined(PlayerSessionRegistry sessions, long id, MapleMap map) {

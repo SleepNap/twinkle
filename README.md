@@ -34,7 +34,7 @@ Twinkle 使用 Java 21 重写传统冒险岛服务端的运行底座，重点解
 
 ## 架构概览
 
-Twinkle 的进程边界由运行配置决定。`single` / `standalone` 将全部角色装配在一个 JVM 中；`split-channel` 使用一个管理进程协调多个 channel worker，每个 worker 可通过 `TWINKLE_WORKER_CHANNELS=1:8584,8:9000` 托管一个或多个频道。频道 ID 是 `1..256` 内可稀疏的稳定标识，不等于列表下标或端口偏移。所有角色运行同一份 `target/twinkle-server.jar`，多进程来自多次启动，不是分别打包。
+Twinkle 的进程边界由运行配置决定。`single` / `standalone` 将全部角色装配在一个 JVM 中；`split-channel` 使用一个管理进程协调多个 channel worker，每个 worker 可通过 `TWINKLE_WORKER_CHANNELS=1:8584,8:9000` 托管一个或多个频道。频道 ID 是 `1..256` 内可稀疏的稳定标识，不等于列表下标或端口偏移。所有角色启动同一份 `target/twinkle-server.jar`，按角色加载 `target/logic/` 中的独立业务包；多进程来自多次启动。部署需同时带上主 JAR 和 logic 目录。
 
 ```mermaid
 flowchart TB
@@ -73,12 +73,13 @@ flowchart TB
 
 在单进程模式中，上图的管理角色和频道角色位于同一 JVM，进程间调用自动替换为 EventBus、内存索引和方法调用；拆分部署后，同一接口改由 Netty 长连接、网络 RPC 和跨进程状态迁移实现。
 
-服务端按职责拆分为 13 个 Maven 子模块，依赖保持单向无环：
+服务端按职责拆分为 18 个 Maven 子模块，依赖保持单向无环：
 
 | 分层 | 模块 | 职责 |
 | --- | --- | --- |
 | 公共底座 | `core`、`net-packet`、`net-netty`、`persistence`、`plugin-api` | DI、事件、协议、网络、持久化、迁移与插件 SPI |
-| 游戏域 | `domain-game`、`domain-script`、`wz-provider`、`channel` | 游戏状态、逻辑、脚本、WZ 数据与频道运行时 |
+| 游戏域 | `domain-game`、`domain-script`、`wz-provider`、`channel` | 游戏状态、脚本、WZ 数据与频道运行时 |
+| 可替换业务 | `game-logic`、`login-logic`、`admin-logic`、`query-logic`、`coordinator-logic` | 独立 JAR 业务实现，兼容修改在线切换 |
 | 管理侧 | `coordinator`、`login`、`http-api` | 大区协调、登录、运维控制台与版本化 API |
 | 启动入口 | `bootstrap` | 读取 profile，并将所需角色装配进当前 JVM |
 
@@ -97,7 +98,8 @@ flowchart TB
 | 装备穿脱与属性 | 已接入穿戴校验、槽位冲突处理、实例属性汇总、血蓝上限、外观更新和重登重算 |
 | 战斗与角色成长 | 攻击入口已读取装备属性；完整战斗结算、怪物掉落和升级发点等仍待补齐 |
 | 配置/脚本更新、插件与频道间通信 | 已有配置/脚本重载、插件装卸及通信基础；具体更新限制见热更新指南 |
-| 内置 Java 游戏逻辑热更新 | 待完成稳定契约、完整逻辑包、每频道调用切换、失败恢复与资源清理的真实运行验收 |
+| Java 业务热更新 | 五个业务模块已拆分并接入制品预检、稳定代理、安全点切换、失败重试和启动恢复；真实字节码与攻击入口已验证 |
+| Actor 式奖励发放 | 逐人消息、整笔资产提交、持久化幂等、失败玩家独立重试 |
 | Web 控制台、版本化 API、RBAC 与审计 | 已投入正式业务开发 |
 | 多进程/分布式与滚动重启 | 核心链路已实现，继续完善生产化细节 |
 
@@ -179,3 +181,5 @@ Twinkle 在 v83 行为理解和兼容性验证过程中参考了 [BeiDou-Server]
 ## 许可证
 
 Twinkle 基于 [MIT License](LICENSE) 开源。MapleStory、客户端资源、WZ 数据及相关商标的权利归其各自权利人所有，这些内容不包含在本仓库的授权范围内。
+
+业务模块热重载范围见 [模块对照表](docs/HOT-UPDATE.md)，制品发布、失败重试与 Actor 式奖励接口见 [发布说明](docs/LOGIC-RELEASE.md)。

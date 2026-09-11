@@ -5,7 +5,7 @@ import org.gms.domain.game.inventory.InventoryType;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ItemSystem;
+import org.gms.domain.game.logic.ItemSystem;
 
 /** 背包移动与丢弃；收包字段事实参考北斗，数量与实例转移由本项目状态操作实现。 */
 public final class InventoryMoveHandler implements PacketHandler {

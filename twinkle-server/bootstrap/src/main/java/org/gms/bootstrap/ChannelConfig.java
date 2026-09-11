@@ -20,11 +20,11 @@ import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.netty.HeartbeatConfig;
-import org.gms.replaceable.CombatSystem;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.MovementSystem;
-import org.gms.replaceable.QuestSystem;
-import org.gms.replaceable.TradeSystem;
+import org.gms.domain.game.logic.CombatSystem;
+import org.gms.domain.game.logic.ItemSystem;
+import org.gms.domain.game.logic.MovementSystem;
+import org.gms.domain.game.logic.QuestSystem;
+import org.gms.domain.game.logic.TradeSystem;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.service.admin.AdminService;
 import org.gms.service.intercoord.IntercoordService;
@@ -32,6 +32,7 @@ import org.gms.tick.TickScheduler;
 import org.gms.wz.WzReloadCoordinator;
 import org.gms.wz.WzResourceRegistry;
 import org.gms.concurrent.ThreadManager;
+import org.gms.module.ModuleRegistry;
 
 /** Channel worker 装配：共享资源只建一次，频道运行态由 {@link ChannelWorker} 按清单创建。 */
 @Factory
@@ -80,9 +81,10 @@ public class ChannelConfig {
             TickScheduler tickScheduler,
             HeartbeatConfig heartbeatConfig,
             org.gms.channel.NpcShopCatalog shopCatalog,
-            org.gms.replaceable.ProgressionSystem progressionSystem,
+            org.gms.domain.game.logic.ProgressionSystem progressionSystem,
             VersionGate versionGate,
             ThreadManager background,
+            GameLogicRuntime logic,
             @Property(name = "twinkle.net.world.id", defaultValue = "0") int worldId,
             @Property(name = "twinkle.lease.ttlSeconds", defaultValue = "50") long leaseTtlSeconds,
             @Property(name = "twinkle.lease.cooldownSeconds", defaultValue = "15") long leaseCooldownSeconds,
@@ -94,7 +96,7 @@ public class ChannelConfig {
                 reliableEventBus, reliableReceiver, intercoord, buddyListRepository, saveQueue,
                 playerDirectory, tickScheduler, heartbeatConfig,
                 org.gms.net.packet.v83.V83WorldId.validate(worldId), leaseTtlSeconds,
-                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, progressionSystem, versionGate, background);
+                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, progressionSystem, versionGate, background, logic);
         return new ChannelWorker(spec, runtimeFactory, wzResources, scriptManager, restartService,
                 restartCoordinator, intercoord, playerDirectory, tickScheduler, exitOnRestart);
     }
@@ -107,7 +109,7 @@ public class ChannelConfig {
 
     @Bean
     @Singleton
-    public AdminService adminService(ChannelWorker worker) {
-        return new WorkerAdminService(worker);
+    public AdminService adminService(ChannelWorker worker, ModuleRegistry modules) {
+        return new WorkerAdminService(worker, modules);
     }
 }

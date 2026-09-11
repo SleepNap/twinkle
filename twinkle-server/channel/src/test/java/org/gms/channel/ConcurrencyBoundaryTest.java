@@ -1,5 +1,8 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultTradeSystem;
+import org.gms.logic.game.DefaultItemSystem;
+import org.gms.logic.game.DefaultCombatSystem;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.channel.persist.RestartService;
 import org.gms.concurrent.GameExecution;
@@ -24,9 +27,8 @@ import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.net.packet.SessionStage;
 import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
-import org.gms.replaceable.CombatSystem;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.TradeSystem;
+import org.gms.domain.game.logic.CombatSystem;
+import org.gms.domain.game.logic.TradeSystem;
 import org.gms.service.intercoord.ChannelDirectoryService;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.tick.GameTickLoop;
@@ -98,7 +100,7 @@ public class ConcurrencyBoundaryTest {
     @Test public void concurrentAttacksHaveExactlyOneDeathOwner() throws Exception {
         MobData data = new MobData(100100); data.setMaxHp(1);
         MapleMonster monster = new MapleMonster(data);
-        CombatSystem combat = new CombatSystem(new DefaultVersionGate());
+        CombatSystem combat = new DefaultCombatSystem(new DefaultVersionGate());
         CountDownLatch start = new CountDownLatch(1);
         try (var pool = Executors.newFixedThreadPool(2)) {
             var first = pool.submit(() -> { waitFor(start); return combat.physicalAttack(new PlayerCharacter(1), monster, 100); });
@@ -171,7 +173,7 @@ public class ConcurrencyBoundaryTest {
         var versions = new DefaultVersionGate();
         var sessions = new PlayerSessionRegistry();
         var operations = new EntityReloadCoordinator();
-        var system = new TradeSystem(versions, new ItemSystem(versions, GameDataProvider.fixed(Map.of(), Map.of())));
+        var system = new DefaultTradeSystem(versions, new DefaultItemSystem(versions, GameDataProvider.fixed(Map.of(), Map.of())));
         var handler = new PlayerInteractionHandler(system, sessions, operations);
         MapleMap map = new MapleMap();
         var first = new GameplayTestSession(1, map); var second = new GameplayTestSession(2, map);
@@ -195,8 +197,8 @@ public class ConcurrencyBoundaryTest {
         try (var execution = new GameExecution("reload-owner", versions)) {
             var sessions = new PlayerSessionRegistry(execution);
             var operations = new EntityReloadCoordinator();
-            var items = new ItemSystem(versions, GameDataProvider.fixed(Map.of(), Map.of()));
-            var handler = new PlayerInteractionHandler(new TradeSystem(versions, items), sessions, operations);
+            var items = new DefaultItemSystem(versions, GameDataProvider.fixed(Map.of(), Map.of()));
+            var handler = new PlayerInteractionHandler(new DefaultTradeSystem(versions, items), sessions, operations);
             MapleMap map = new MapleMap();
             var first = new GameplayTestSession(1, map); var second = new GameplayTestSession(2, map);
             execution.run(() -> {

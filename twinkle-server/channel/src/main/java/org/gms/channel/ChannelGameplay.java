@@ -5,12 +5,13 @@ import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.domain.script.ScriptManager;
 import org.gms.net.opcodes.RecvOpcode;
 import org.gms.net.packet.HandlerRegistry;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.QuestSystem;
-import org.gms.replaceable.ProgressionSystem;
-import org.gms.replaceable.AvatarSystem;
-import org.gms.replaceable.ControlsSystem;
-import org.gms.replaceable.EquipmentSystem;
+import org.gms.domain.game.logic.ItemSystem;
+import org.gms.domain.game.logic.PartySystem;
+import org.gms.domain.game.logic.QuestSystem;
+import org.gms.domain.game.logic.ProgressionSystem;
+import org.gms.domain.game.logic.AvatarSystem;
+import org.gms.domain.game.logic.ControlsSystem;
+import org.gms.domain.game.logic.EquipmentSystem;
 import org.gms.wz.WzResourceRegistry;
 import java.time.Clock;
 import org.gms.tick.TickHandler;
@@ -27,14 +28,15 @@ public final class ChannelGameplay implements AutoCloseable {
                            ControllerLeaseService leases, int channelId, GameDataProvider data,
                            PlayerSessionRegistry sessions, ItemSystem items, QuestSystem quests,
                            ScriptManager scripts, NpcShopCatalog shopCatalog, TickScheduler scheduler,
-                           WzResourceRegistry resources, ProgressionSystem progression) {
+                           WzResourceRegistry resources, ProgressionSystem progression, AvatarSystem avatarLogic,
+                           ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartySystem partyLogic) {
         this.scheduler = scheduler;
         this.drops = new GroundDropService(items, data, sessions, Clock.systemUTC());
-        this.parties = new PartyHandler(sessions, channelId, Clock.systemUTC(), progression::accepts);
+        this.parties = new PartyHandler(partyLogic, sessions, channelId, Clock.systemUTC(), progression::accepts);
         ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC(), sessions);
-        AvatarHandler avatars = new AvatarHandler(sessions, new AvatarSystem(progression::accepts), data, Clock.systemUTC());
-        ControlsHandler controls = new ControlsHandler(sessions, new ControlsSystem(progression::accepts, data), Clock.systemUTC());
-        EquipmentService equipment = new EquipmentService(new EquipmentSystem(progression::accepts, data), sessions, Clock.systemUTC());
+        AvatarHandler avatars = new AvatarHandler(sessions, avatarLogic, data, Clock.systemUTC());
+        ControlsHandler controls = new ControlsHandler(sessions, controlsLogic, Clock.systemUTC());
+        EquipmentService equipment = new EquipmentService(equipmentLogic, sessions, Clock.systemUTC());
         long sweepTicks = scheduler.ticksFor(1000);
         this.expiration = count -> { if (count % sweepTicks == 0) {
             drops.expire(); parties.refresh(); sessions.all().forEach(skills::expire); sessions.all().forEach(avatars::refresh);

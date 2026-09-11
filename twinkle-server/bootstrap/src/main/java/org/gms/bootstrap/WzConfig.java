@@ -7,15 +7,15 @@ import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.concurrent.ThreadManager;
-import org.gms.hotreload.versioned.VersionGate;
+import org.gms.module.ModuleRegistry;
 import org.gms.i18n.I18nBootstrap;
-import org.gms.replaceable.CombatSystem;
-import org.gms.replaceable.HealthRecoverySystem;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.MovementSystem;
-import org.gms.replaceable.QuestSystem;
-import org.gms.replaceable.ProgressionSystem;
-import org.gms.replaceable.TradeSystem;
+import org.gms.domain.game.logic.*;
+import org.gms.domain.game.logic.HealthRecoverySystem;
+import org.gms.domain.game.logic.ItemSystem;
+import org.gms.domain.game.logic.MovementSystem;
+import org.gms.domain.game.logic.QuestSystem;
+import org.gms.domain.game.logic.ProgressionSystem;
+import org.gms.domain.game.logic.TradeSystem;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.wz.WzResourceLoader;
 import org.gms.wz.WzResourceRegistry;
@@ -46,47 +46,58 @@ public class WzConfig {
         return new WzResourceRegistry(Path.of(wzPath), loaders, threadManager);
     }
 
-    /* ---------- 可替换层逻辑系统（统一经版本门，写前判定，架构 5.3） ---------- */
-
-    @Bean
+    @Bean(preDestroy = "close")
     @Singleton
-    public ItemSystem itemSystem(VersionGate versionGate, GameDataProvider gameData) {
-        return new ItemSystem(versionGate, gameData);
+    public GameLogicRuntime gameLogicRuntime(GameDataProvider data, ModuleRegistry registry) throws Exception {
+        return new GameLogicRuntime(registry, data);
     }
 
     @Bean
     @Singleton
-    public CombatSystem combatSystem(VersionGate versionGate) {
-        return new CombatSystem(versionGate);
-    }
+    public AvatarSystem avatarSystem(GameLogicRuntime logic) { return logic.service(AvatarSystem.class); }
 
     @Bean
     @Singleton
-    public MovementSystem movementSystem(VersionGate versionGate) {
-        return new MovementSystem(versionGate);
-    }
+    public CombatSystem combatSystem(GameLogicRuntime logic) { return logic.service(CombatSystem.class); }
 
     @Bean
     @Singleton
-    public TradeSystem tradeSystem(VersionGate versionGate, ItemSystem itemSystem) {
-        return new TradeSystem(versionGate, itemSystem);
-    }
+    public ControlsSystem controlsSystem(GameLogicRuntime logic) { return logic.service(ControlsSystem.class); }
 
     @Bean
     @Singleton
-    public QuestSystem questSystem(VersionGate versionGate) {
-        return new QuestSystem(versionGate);
-    }
+    public EquipmentSystem equipmentSystem(GameLogicRuntime logic) { return logic.service(EquipmentSystem.class); }
 
     @Bean
     @Singleton
-    public ProgressionSystem progressionSystem(VersionGate versionGate) {
-        return new ProgressionSystem(versionGate);
-    }
+    public HealthRecoverySystem healthRecoverySystem(GameLogicRuntime logic) { return logic.service(HealthRecoverySystem.class); }
 
     @Bean
     @Singleton
-    public HealthRecoverySystem healthRecoverySystem(VersionGate versionGate) {
-        return new HealthRecoverySystem(versionGate);
-    }
+    public ItemSystem itemSystem(GameLogicRuntime logic) { return logic.service(ItemSystem.class); }
+
+    @Bean
+    @Singleton
+    public MovementSystem movementSystem(GameLogicRuntime logic) { return logic.service(MovementSystem.class); }
+
+    @Bean
+    @Singleton
+    public PartySystem partySystem(GameLogicRuntime logic) { return logic.service(PartySystem.class); }
+
+    @Bean
+    @Singleton
+    public ProgressionSystem progressionSystem(GameLogicRuntime logic) { return logic.service(ProgressionSystem.class); }
+
+    @Bean
+    @Singleton
+    public QuestSystem questSystem(GameLogicRuntime logic) { return logic.service(QuestSystem.class); }
+
+    @Bean
+    @Singleton
+    public RewardSystem rewardSystem(GameLogicRuntime logic) { return logic.service(RewardSystem.class); }
+
+    @Bean
+    @Singleton
+    public TradeSystem tradeSystem(GameLogicRuntime logic) { return logic.service(TradeSystem.class); }
+
 }

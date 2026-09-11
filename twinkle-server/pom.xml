@@ -23,6 +23,11 @@
 
         <!-- 游戏域（频道进程） -->
         <module>domain-game</module>
+        <module>game-logic</module>
+        <module>coordinator-logic</module>
+        <module>query-logic</module>
+        <module>admin-logic</module>
+        <module>login-logic</module>
         <module>domain-script</module>
         <module>wz-provider</module>
         <module>channel</module>
@@ -76,6 +81,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency><groupId>org.gms</groupId><artifactId>twinkle-coordinator-logic</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>org.gms</groupId><artifactId>twinkle-query-logic</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>org.gms</groupId><artifactId>twinkle-admin-logic</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>org.gms</groupId><artifactId>twinkle-login-logic</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>org.gms</groupId><artifactId>twinkle-game-logic</artifactId><version>${project.version}</version></dependency>
             <!-- Micronaut 4.10 平台 BOM：统一管理 Micronaut 全家桶依赖版本 -->
             <dependency>
                 <groupId>io.micronaut.platform</groupId>

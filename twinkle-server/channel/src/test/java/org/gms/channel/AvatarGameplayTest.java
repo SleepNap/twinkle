@@ -1,5 +1,8 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultProgressionSystem;
+import org.gms.logic.game.DefaultMovementSystem;
+import org.gms.logic.game.DefaultAvatarSystem;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.item.ItemData;
@@ -9,9 +12,6 @@ import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
-import org.gms.replaceable.AvatarSystem;
-import org.gms.replaceable.MovementSystem;
-import org.gms.replaceable.ProgressionSystem;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -65,7 +65,7 @@ public class AvatarGameplayTest {
         var sessions = new PlayerSessionRegistry(); var map = new MapleMap();
         var player = joined(sessions, 1, map); var peer = joined(sessions, 2, map);
         var elsewhere = joined(sessions, 3, new MapleMap());
-        var versions = new DefaultVersionGate(); var handler = new MovePlayerHandler(new MovementSystem(versions), sessions);
+        var versions = new DefaultVersionGate(); var handler = new MovePlayerHandler(new DefaultMovementSystem(versions), sessions);
         byte[] request = movement(-123, -456);
         for (int length = 0; length < request.length; length++) {
             handler.handle(player, new ByteArrayInPacket(Arrays.copyOf(request, length)));
@@ -89,14 +89,14 @@ public class AvatarGameplayTest {
         var sessions = new PlayerSessionRegistry(); var map = new MapleMap();
         var old = joined(sessions, 1, map); var peer = joined(sessions, 2, map);
         var replacement = joined(sessions, 1, map);
-        var handler = new MovePlayerHandler(new MovementSystem(new DefaultVersionGate()), sessions);
+        var handler = new MovePlayerHandler(new DefaultMovementSystem(new DefaultVersionGate()), sessions);
         handler.handle(old, new ByteArrayInPacket(movement(9, 10)));
         assertThat(old.character.getX()).isZero(); assertThat(replacement.character.getX()).isZero(); assertThat(peer.sent).isEmpty();
     }
 
     private static AvatarHandler avatars(PlayerSessionRegistry sessions, DefaultVersionGate versions) {
-        var progression = new ProgressionSystem(versions);
-        return new AvatarHandler(sessions, new AvatarSystem(progression::accepts),
+        var progression = new DefaultProgressionSystem(versions);
+        return new AvatarHandler(sessions, new DefaultAvatarSystem(progression::accepts),
                 GameDataProvider.fixed(Map.of(3010000, new ItemData(3010000)), Map.of()), Clock.systemUTC());
     }
     private static ByteArrayInPacket integer(int value) {

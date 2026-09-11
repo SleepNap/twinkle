@@ -4,10 +4,9 @@ import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.ItemConstants;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.script.host.Cm;
-import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.QuestSystem;
+import org.gms.domain.game.logic.ItemSystem;
+import org.gms.domain.game.logic.QuestSystem;
 import java.util.Map;
 
 /**

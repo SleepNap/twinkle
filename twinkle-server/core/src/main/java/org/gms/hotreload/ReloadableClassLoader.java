@@ -1,6 +1,5 @@
 package org.gms.hotreload;
 
-
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Objects;
@@ -28,8 +27,6 @@ import org.gms.i18n.I18n;
 @Log4j2
 public class ReloadableClassLoader extends URLClassLoader {
 
-
-
     /**
      * 稳定层包前缀（与 ArchUnit 架构测试共用，见 core 测试 / data 的 architecture 包）。
      *
@@ -41,6 +38,8 @@ public class ReloadableClassLoader extends URLClassLoader {
             "org.gms.persistence.dialect.",   // 方言（基础设施）
             "org.gms.event.",     // 事件总线（基础设施）
             "org.gms.config.",    // 配置门面（基础设施）
+            "org.gms.domain.game.", // 游戏状态与业务调用契约
+            "org.gms.service.", // 跨模块调用契约
             "org.gms.plugin."     // 插件 SDK（可替换层经接口访问的稳定面）
     );
 

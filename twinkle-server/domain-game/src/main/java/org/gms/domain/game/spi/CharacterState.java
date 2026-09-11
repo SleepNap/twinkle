@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 角色状态契约（稳定层 SPI，架构第三节：可替换层经接口访问稳定层）。
  *
- * <p>游戏逻辑系统（org.gms.replaceable..）依赖本接口操作角色状态，**禁止**依赖
+ * <p>游戏逻辑系统（org.gms.domain.game.logic..）依赖本接口操作角色状态，**禁止**依赖
  * {@code org.gms.domain.game.PlayerCharacter} 具体类（红线 11 防 CCE / ArchUnit 规则 3 强制）。
  * 本接口只暴露逻辑系统所需的核心状态子集；其余持久化字段经具体类在稳定层内部访问。
  *

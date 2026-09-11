@@ -128,9 +128,7 @@ export interface ScriptReloadResponse {
 }
 
 export interface LogicReloadResponse {
-  safeSwitched: number
-  interrupted: number
-  newVersion: number
+  updates: { module: string; digest: string; targets: Record<string, string> }[]
 }
 
 export interface WzReloadResponse {
@@ -635,8 +633,8 @@ export const adminApi = {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),
-  reloadLogic: (reason: string) =>
-    request<LogicReloadResponse>("/reload/logic", {
+  reloadLogic: (reason: string, module = "game-logic") =>
+    request<LogicReloadResponse>(`/reload/logic?module=${encodeURIComponent(module)}`, {
       method: "POST",
       headers: { "X-Admin-Reason": reason },
     }),

@@ -2,7 +2,6 @@ package org.gms.channel;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.PlayerCharacter;
-import org.gms.domain.game.inventory.Inventory;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.Item;
 import org.gms.domain.game.trade.Trade;
@@ -19,7 +18,7 @@ import org.gms.net.packet.v83.V83CharacterLook;
 import org.gms.net.packet.v83.V83CharacterPacketWriter;
 import org.gms.net.packet.v83.V83EquippedItem;
 import org.gms.net.packet.v83.V83ItemPacketWriter;
-import org.gms.replaceable.TradeSystem;
+import org.gms.domain.game.logic.TradeSystem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,8 +39,6 @@ import java.util.List;
  */
 @Log4j2
 public final class PlayerInteractionHandler implements PacketHandler {
-
-
 
     /** 交易操作码（收/发共用子动作值）。 */
     private static final int ACTION_CREATE = 0x00;

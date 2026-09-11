@@ -1,12 +1,12 @@
 package org.gms.channel;
 
+import org.gms.logic.game.DefaultProgressionSystem;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.skill.SkillEntry;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
-import org.gms.replaceable.ProgressionSystem;
 import org.gms.wz.WzResourceRegistry;
 import org.gms.wz.resource.SkillResourceLoader;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ public class SkillGameplayTest {
         var peer = new GameplayTestSession(2, map);
         var otherMap = new GameplayTestSession(3, new MapleMap());
         sessions.claim(1, session); sessions.claim(2, peer); sessions.claim(3, otherMap);
-        var handler = new ActiveSkillHandler(resources, new ProgressionSystem(new DefaultVersionGate()),
+        var handler = new ActiveSkillHandler(resources, new DefaultProgressionSystem(new DefaultVersionGate()),
                 Clock.fixed(Instant.ofEpochMilli(1000), ZoneOffset.UTC), sessions);
         session.character.putSkill(new SkillEntry(1001003, 1, 0, -1));
         handler.handle(session, cast(1001003, 20));
@@ -72,7 +72,7 @@ public class SkillGameplayTest {
         assertThat(otherMap.sent).isEmpty();
     }
     @Test public void autoApCannotPartiallyApplyOrOverspend() {
-        var handler = new AutoApHandler(new ProgressionSystem(new DefaultVersionGate()));
+        var handler = new AutoApHandler(new DefaultProgressionSystem(new DefaultVersionGate()));
         var session = new GameplayTestSession(1, new MapleMap()); session.character.setAp(5);
         var request = new ByteArrayOutPacket(); request.writeLong(0); request.writeInt(0x40); request.writeInt(4);
         request.writeInt(0x80); request.writeInt(2);

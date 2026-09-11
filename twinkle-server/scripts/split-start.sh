@@ -10,6 +10,8 @@ JAR="${TWINKLE_JAR:-target/twinkle-server.jar}"
 [ -f "$JAR" ] || { echo "错误：找不到 $JAR，请先构建"; exit 1; }
 
 export TWINKLE_WORKERS="${TWINKLE_WORKERS:-worker-1=1:8584}"
+export TWINKLE_LOGIC_PATH="${TWINKLE_LOGIC_PATH:-$(dirname "$JAR")/logic}"
+
 export TWINKLE_DB_URL="${TWINKLE_DB_URL:-jdbc:postgresql://127.0.0.1:5432/twinkle}"
 export TWINKLE_COORDINATOR_HOST="${TWINKLE_COORDINATOR_HOST:-127.0.0.1}"
 export TWINKLE_COORDINATOR_PORT="${TWINKLE_COORDINATOR_PORT:-8510}"

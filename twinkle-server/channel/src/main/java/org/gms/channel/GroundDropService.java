@@ -10,7 +10,7 @@ import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.v83.V83FileTime;
-import org.gms.replaceable.ItemSystem;
+import org.gms.domain.game.logic.ItemSystem;
 
 import java.time.Clock;
 import java.util.List;

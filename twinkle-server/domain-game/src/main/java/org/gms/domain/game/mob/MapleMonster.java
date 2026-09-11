@@ -1,5 +1,6 @@
 package org.gms.domain.game.mob;
 
+import org.gms.domain.game.spi.MonsterState;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -10,7 +11,7 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-public class MapleMonster {
+public class MapleMonster implements MonsterState {
 
     private volatile MobData data;
     /** 地图内对象 id（v83 oid，刷怪时由地图分配，客户端据此寻址）。 */
@@ -54,7 +55,7 @@ public class MapleMonster {
         return new DamageOutcome(applied, alive, !alive);
     }
 
-    public record DamageOutcome(int damage, boolean alive, boolean killed) { }
+    @Override public int physicalDefense() { return data.getPdd(); }
 
     public boolean isAlive() {
         return alive;

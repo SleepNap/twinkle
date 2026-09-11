@@ -3,6 +3,7 @@ import org.gms.service.intercoord.ChannelDirectoryService;
 
 import jakarta.inject.Singleton;
 import org.gms.service.intercoord.IntercoordService;
+import org.gms.service.intercoord.ChannelSelectionPolicy;
 import org.gms.net.packet.v83.V83ChannelId;
 
 import java.net.Inet4Address;
@@ -34,8 +35,10 @@ public final class ChannelSelectionService {
     }
 
     private final IntercoordService intercoord;
+    private final ChannelSelectionPolicy policy;
 
-    public ChannelSelectionService(IntercoordService intercoord) {
+    public ChannelSelectionService(IntercoordService intercoord, ChannelSelectionPolicy policy) {
+        this.policy = policy;
         this.intercoord = intercoord;
     }
 
@@ -51,7 +54,7 @@ public final class ChannelSelectionService {
     }
 
     public Optional<Endpoint> firstAvailable() {
-        return availableChannels().stream().findFirst();
+        return policy.select(List.copyOf(intercoord.channels().values())).map(ChannelSelectionService::toEndpoint);
     }
 
     /** v83 wire channel 是无符号 1 字节且使用 internalId-1。 */

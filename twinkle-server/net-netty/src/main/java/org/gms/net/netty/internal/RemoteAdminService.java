@@ -5,6 +5,9 @@ import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
+import org.gms.service.admin.LogicReloadReport;
+import org.gms.service.admin.RewardGrant;
+import org.gms.service.admin.RewardResult;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -23,7 +26,18 @@ import java.util.concurrent.TimeUnit;
 @Log4j2
 public final class RemoteAdminService implements AdminService {
 
+    @Override public LogicReloadReport reloadLogic(String module) {
+        InternalProtocol.RpcResponse response = rpc("reloadLogic", module);
+        if (response == null || !response.ok()) throw new IllegalStateException("逻辑重载 RPC 结果未确认");
+        return JsonCodec.decode(response.value(), LogicReloadReport.class.getName());
+    }
 
+    @Override public RewardResult grantReward(RewardGrant grant) {
+        InternalProtocol.RpcResponse response = rpc("grantReward", grant);
+        if (response == null || !response.ok()) return RewardResult.of(grant, RewardResult.Status.PERSISTENCE_PENDING);
+        RewardResult result = JsonCodec.decode(response.value(), RewardResult.class.getName());
+        return result == null ? RewardResult.of(grant, RewardResult.Status.PERSISTENCE_PENDING) : result;
+    }
 
     private final CoordinatorLink link;
     private final int channelId;

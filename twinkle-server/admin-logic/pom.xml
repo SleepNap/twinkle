@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>org.gms</groupId><artifactId>twinkle-server</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>twinkle-admin-logic</artifactId>
+  <description>可替换游戏业务实现；宿主只依赖稳定调用契约</description>
+  <dependencies><dependency><groupId>org.gms</groupId><artifactId>twinkle-http-api</artifactId></dependency></dependencies>
+  <build><plugins><plugin>
+    <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+    <executions><execution><id>logic-artifact</id><phase>process-classes</phase><goals><goal>java</goal></goals>
+      <configuration><mainClass>org.gms.module.ModulePackager</mainClass><arguments>
+        <argument>${project.build.outputDirectory}</argument><argument>${project.parent.basedir}/target/logic/admin-logic.jar</argument>
+        <argument>admin-logic</argument><argument>org.gms.logic.admin.ModuleFactory</argument><argument>org.gms.logic.admin.</argument>
+        <argument>org.gms.httpapi.application.admin.AccountOperations,org.gms.httpapi.admin.AdminAccessPolicy</argument>
+      <argument>org.gms.hotreload.versioned.VersionGate,org.gms.persistence.repo.AccountDeletionRepository,org.gms.persistence.repo.GameAccountRepository,org.gms.persistence.repo.PlayerCharacterRepository,org.gms.service.admin.AdminService</argument></arguments></configuration>
+    </execution></executions>
+  </plugin></plugins></build>
+</project>

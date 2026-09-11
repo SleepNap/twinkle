@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>org.gms</groupId><artifactId>twinkle-server</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>twinkle-game-logic</artifactId>
+  <description>可替换游戏业务实现；宿主只依赖稳定调用契约</description>
+  <dependencies><dependency><groupId>org.gms</groupId><artifactId>twinkle-domain-game</artifactId></dependency></dependencies>
+  <build><plugins><plugin>
+    <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+    <executions><execution><id>logic-artifact</id><phase>process-classes</phase><goals><goal>java</goal></goals>
+      <configuration><mainClass>org.gms.module.ModulePackager</mainClass><arguments>
+        <argument>${project.build.outputDirectory}</argument><argument>${project.parent.basedir}/target/logic/game-logic.jar</argument>
+        <argument>game-logic</argument><argument>org.gms.logic.game.GameModuleFactory</argument><argument>org.gms.logic.game.</argument>
+        <argument>org.gms.domain.game.logic.AvatarSystem,org.gms.domain.game.logic.CombatSystem,org.gms.domain.game.logic.ControlsSystem,org.gms.domain.game.logic.EquipmentSystem,org.gms.domain.game.logic.HealthRecoverySystem,org.gms.domain.game.logic.ItemSystem,org.gms.domain.game.logic.MovementSystem,org.gms.domain.game.logic.PartySystem,org.gms.domain.game.logic.ProgressionSystem,org.gms.domain.game.logic.QuestSystem,org.gms.domain.game.logic.RewardSystem,org.gms.domain.game.logic.TradeSystem</argument>
+      <argument>org.gms.domain.game.wz.GameDataProvider,org.gms.hotreload.versioned.VersionGate</argument></arguments></configuration>
+    </execution></executions>
+  </plugin></plugins></build>
+</project>

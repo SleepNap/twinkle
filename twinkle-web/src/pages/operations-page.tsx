@@ -46,6 +46,7 @@ export function OperationsPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [dialog, setDialog] = useState<"scripts" | "logic" | "wz" | "netty" | "restart" | "shutdown" | null>(null)
+  const [logicModule, setLogicModule] = useState("game-logic")
   const inFlight = useQuery({
     queryKey: adminQueryKeys.inFlight,
     queryFn: ({ signal }) => adminApi.inFlight(signal),
@@ -67,11 +68,12 @@ export function OperationsPage() {
     onError: (error) => toast.error(t("operations.scriptsFailed"), { description: error.message }),
   })
   const logicMutation = useMutation({
-    mutationFn: (reason: string) => adminApi.reloadLogic(reason),
+    mutationFn: (reason: string) => adminApi.reloadLogic(reason, logicModule),
     onSuccess: (result) => {
       toast.success(t("operations.logicSuccess"), {
         description: t("operations.logicSuccessDescription", {
-          version: result.newVersion, safe: result.safeSwitched, interrupted: result.interrupted,
+          module: logicModule,
+          count: result.updates.reduce((sum, update) => sum + Object.keys(update.targets).length, 0),
         }),
       })
       void queryClient.invalidateQueries({ queryKey: adminQueryKeys.inFlight })
@@ -220,7 +222,15 @@ export function OperationsPage() {
             <CardDescription>{t("operations.logicDescription")}</CardDescription>
             <CardAction><Code2 className="size-4 text-muted-foreground" /></CardAction>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <label className="block text-sm">
+              {t("operations.logicModule")}
+              <select className="mt-2 w-full rounded-md border bg-background p-2" value={logicModule}
+                disabled={logicMutation.isPending} onChange={(event) => setLogicModule(event.target.value)}>
+                {["game-logic", "login-logic", "admin-logic", "query-logic", "coordinator-logic"].map((name) =>
+                  <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
             <ConfirmationDialog
               open={dialog === "logic"}
               onOpenChange={(open) => setDialog(open ? "logic" : null)}

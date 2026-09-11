@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLClassLoader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,7 +41,7 @@ class ReloadableClassLoaderTest {
         assertThat(ReloadableClassLoader.isStableClass("org.gms.persistence.dialect.DbDialect")).isTrue();
         assertThat(ReloadableClassLoader.isStableClass("org.gms.event.EventBus")).isTrue();
         assertThat(ReloadableClassLoader.isStableClass("org.gms.config.ConfigFacade")).isTrue();
-        assertThat(ReloadableClassLoader.isStableClass("org.gms.replaceable.SomeSystem")).isFalse();
+        assertThat(ReloadableClassLoader.isStableClass("org.gms.domain.game.logic.SomeSystem")).isTrue();
     }
 
     /**

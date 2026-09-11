@@ -29,7 +29,9 @@ public final class PluginClassLoader extends ReloadableClassLoader {
             }
             if (name.startsWith("org.gms.")) {
                 // 宿主类（含 SDK / 稳定层）：只允许父加载，本 loader 拒绝本地加载 → 永不遮蔽
-                return super.loadClass(name, resolve);
+                Class<?> hostClass = getParent().loadClass(name);
+                if (resolve) resolveClass(hostClass);
+                return hostClass;
             }
             try {
                 return findClass(name); // 插件自有类 / 自带第三方库：本地优先

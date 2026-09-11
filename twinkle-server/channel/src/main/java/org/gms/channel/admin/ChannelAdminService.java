@@ -1,10 +1,13 @@
 package org.gms.channel.admin;
+import org.gms.concurrent.GameExecution;
+import org.gms.service.admin.RewardGrant;
+import org.gms.service.admin.RewardResult;
+import org.gms.channel.RewardDeliveryService;
 
 import lombok.extern.log4j.Log4j2;
 import org.gms.diagnostics.PacketTrace;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
-import org.gms.channel.ChannelMapManager;
 import org.gms.channel.persist.RestartService;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
@@ -34,8 +37,16 @@ import org.gms.wz.WzReloadCoordinator;
  */
 @Log4j2
 public final class ChannelAdminService implements AdminService {
+    private RewardDeliveryService rewards;
 
+    public void bindRewards(RewardDeliveryService rewards) { this.rewards = rewards; }
 
+    @Override
+    public RewardResult grantReward(RewardGrant grant) {
+        if (GameExecution.inGameOperation())
+            throw new IllegalStateException(I18n.message("error.reward.game_wait"));
+        return rewards.grant(grant).join();
+    }
 
     private final PlayerStorage players;
     private final PlayerSessionRegistry sessions;

@@ -9,7 +9,7 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
-import org.gms.replaceable.PartySystem;
+import org.gms.domain.game.logic.PartySystem;
 import org.gms.domain.game.spi.CharacterState;
 
 import java.time.Clock;
@@ -20,7 +20,7 @@ import java.util.function.Predicate;
 /** 同频道临时组队入口。目录为频道属主状态，通过会话注册表投递，禁止保存玩家对象。 */
 public final class PartyHandler implements PacketHandler, AutoCloseable {
     private final PartyState state = new PartyState();
-    private final PartySystem system = new PartySystem();
+    private final PartySystem system;
     private final PlayerSessionRegistry sessions;
     private final int channel;
     private final Clock clock;
@@ -28,7 +28,8 @@ public final class PartyHandler implements PacketHandler, AutoCloseable {
     /** 冻结期间只保留最后一份通知所需的队伍身份，恢复后发送完整状态，避免积压封包。 */
     private final Map<PacketSession, Party> deferred = new HashMap<>();
 
-    public PartyHandler(PlayerSessionRegistry sessions, int channel, Clock clock, Predicate<CharacterState> accepts) {
+    public PartyHandler(PartySystem system, PlayerSessionRegistry sessions, int channel, Clock clock, Predicate<CharacterState> accepts) {
+        this.system = system;
         this.sessions = sessions; this.channel = channel; this.clock = clock; this.accepts = accepts;
     }
     @Override public void handle(PacketSession session, InPacket packet) {

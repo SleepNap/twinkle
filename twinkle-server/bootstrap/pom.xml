@@ -15,6 +15,11 @@
     <description>唯一 main：读 --profile 装配角色模块</description>
 
     <dependencies>
+        <dependency><groupId>org.gms</groupId><artifactId>twinkle-coordinator-logic</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.gms</groupId><artifactId>twinkle-query-logic</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.gms</groupId><artifactId>twinkle-admin-logic</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.gms</groupId><artifactId>twinkle-login-logic</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>org.gms</groupId><artifactId>twinkle-game-logic</artifactId><scope>runtime</scope></dependency>
         <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId></dependency>
         <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-core</artifactId><scope>runtime</scope></dependency>
         <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-slf4j2-impl</artifactId><scope>runtime</scope></dependency>
@@ -114,6 +119,7 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <artifactSet><excludes><exclude>org.gms:twinkle-game-logic</exclude><exclude>org.gms:twinkle-coordinator-logic</exclude><exclude>org.gms:twinkle-query-logic</exclude><exclude>org.gms:twinkle-admin-logic</exclude><exclude>org.gms:twinkle-login-logic</exclude></excludes></artifactSet>
                             <outputFile>${project.parent.basedir}/target/twinkle-server.jar</outputFile>
                             <filters>
                                 <filter>

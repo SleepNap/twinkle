@@ -5,6 +5,7 @@ import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
+import org.gms.service.admin.RewardGrant;
 
 import java.util.Optional;
 
@@ -21,8 +22,6 @@ import java.util.Optional;
 @Log4j2
 public final class AdminRpcDispatcher {
 
-
-
     private final AdminService admin;
 
     public AdminRpcDispatcher(AdminService admin) {
@@ -33,6 +32,8 @@ public final class AdminRpcDispatcher {
     public InternalProtocol.RpcResponse dispatch(String method, String[] args) {
         try {
             return switch (method) {
+                case "grantReward" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
+                        admin.grantReward(JsonCodec.decode(args[0], RewardGrant.class.getName()))));
                 case "onlineSummary" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.onlineSummary()));
                 case "inventorySnapshot" -> InternalProtocol.RpcResponse.ok(
                         JsonCodec.encode(admin.inventorySnapshot(longArg(args, 0))));
@@ -45,6 +46,8 @@ public final class AdminRpcDispatcher {
                         admin.packetTraceSnapshot(longArg(args, 0), longArg(args, 1), intArg(args, 2))));
                 case "stopPacketTrace" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(
                         admin.stopPacketTrace(longArg(args, 0))));
+                case "reloadLogic" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadLogic(
+                        JsonCodec.decode(args[0], String.class.getName()))));
                 case "reloadScripts" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadScripts()));
                 case "reloadWz" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadWz()));
                 case "requestRestart" -> {

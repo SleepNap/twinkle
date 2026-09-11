@@ -9,8 +9,8 @@ import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
-import org.gms.replaceable.ItemSystem;
-import org.gms.replaceable.QuestSystem;
+import org.gms.domain.game.logic.ItemSystem;
+import org.gms.domain.game.logic.QuestSystem;
 
 import java.util.Map;
 
@@ -26,8 +26,6 @@ import java.util.Map;
  */
 @Log4j2
 public final class NpcTalkHandler implements PacketHandler {
-
-
 
     private final ScriptManager scriptManager;
     private final ItemSystem itemSystem;

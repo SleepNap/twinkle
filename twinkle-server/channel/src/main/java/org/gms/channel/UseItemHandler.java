@@ -6,7 +6,7 @@ import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ItemSystem;
+import org.gms.domain.game.logic.ItemSystem;
 
 import java.util.Map;
 

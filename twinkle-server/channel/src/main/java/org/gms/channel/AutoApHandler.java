@@ -3,7 +3,7 @@ package org.gms.channel;
 import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
-import org.gms.replaceable.ProgressionSystem;
+import org.gms.domain.game.logic.ProgressionSystem;
 
 import java.util.HashMap;
 import java.util.Map;
