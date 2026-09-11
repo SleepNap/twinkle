@@ -1,5 +1,4 @@
 package org.gms.wz;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -7,60 +6,71 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** 统一编排 WZ 资源快照与在线运行态投影的热重载。 */
-public final class WzReloadCoordinator {
 
+/** WZ 逐频道发布；部分失败固定候选并重试，禁止在未收敛时继续产生第三代。 */
+public final class WzReloadCoordinator {
     public record ReloadReport(long version, Map<String, Integer> resources,
-                               Map<String, Integer> runtimeObjects) {
+                               Map<String, Integer> runtimeObjects, String digest,
+                               Map<String, Long> versions, Map<String, String> failures) {
         public ReloadReport {
-            resources = Map.copyOf(resources);
-            runtimeObjects = Map.copyOf(runtimeObjects);
+            resources = Map.copyOf(resources); runtimeObjects = Map.copyOf(runtimeObjects);
+            versions = Map.copyOf(versions); failures = Map.copyOf(failures);
         }
     }
-
-    private record Pending(String name, WzReloadParticipant.PreparedChange change) {
-    }
-
     private final WzResourceRegistry registry;
     private final List<WzReloadParticipant> participants;
+    private WzResourceRegistry.PreparedReload candidate;
+    private List<Pending> pending;
+    private boolean committed;
+    private ReloadReport lastCompleted;
+    private final Map<String, Integer> counts = new LinkedHashMap<>();
+    private final Map<String, Long> versions = new LinkedHashMap<>();
+    private final Map<String, String> failures = new LinkedHashMap<>();
+    private record Pending(String name, WzReloadParticipant.PreparedChange change) { }
 
     public WzReloadCoordinator(WzResourceRegistry registry, List<WzReloadParticipant> participants) {
-        this.registry = Objects.requireNonNull(registry, "registry");
-        this.participants = validate(participants);
+        this.registry = Objects.requireNonNull(registry);
+        this.participants = participants.stream().sorted(Comparator.comparing(WzReloadParticipant::name)).toList();
+        if (this.participants.stream().map(WzReloadParticipant::name).distinct().count() != participants.size())
+            throw new IllegalArgumentException("Duplicate WZ reload participant");
+        this.participants.forEach(p -> versions.put(p.name(), registry.version()));
     }
-
-    /**
-     * 先在当前快照之外构建、解析并校验所有变更，再发布资源快照与运行态投影。
-     * 任一 prepare 失败时，当前资源和在线对象均保持原样。
-     */
+    /** 集群先取得各 Worker 的候选摘要，完全相同后才允许逐 Worker 发布。 */
+    public synchronized String prepare() {
+        if (candidate != null) return candidate.digest();
+        candidate = null; pending = null;
+        WzResourceRegistry.PreparedReload next = registry.prepareReload();
+        List<Pending> changes = new ArrayList<>();
+        for (WzReloadParticipant participant : participants)
+            changes.add(new Pending(participant.name(), Objects.requireNonNull(participant.prepare(next))));
+        candidate = next; pending = changes; counts.clear(); failures.clear();
+        return next.digest();
+    }
+    /** 集群摘要不一致时撤销尚未发布的准备，修正源文件后可重新预检。 */
+    public synchronized void discardPrepared() {
+        if (committed) throw new IllegalStateException("Cannot discard a partially published WZ release");
+        candidate = null; pending = null;
+    }
     public synchronized ReloadReport reload() {
-        WzResourceRegistry.PreparedReload preparedResources = registry.prepareReload();
-        List<Pending> pending = new ArrayList<>(participants.size());
-        for (WzReloadParticipant participant : participants) {
-            pending.add(new Pending(participant.name(),
-                    Objects.requireNonNull(participant.prepare(preparedResources),
-                            () -> "WZ reload participant returned null: " + participant.name())));
-        }
-
-        WzResourceRegistry.ReloadReport resources = registry.commit(preparedResources);
-        Map<String, Integer> runtimeObjects = new LinkedHashMap<>();
-        for (Pending item : pending) {
-            runtimeObjects.put(item.name(), item.change().publish());
-        }
-        return new ReloadReport(resources.version(), resources.resources(), runtimeObjects);
+        if (candidate == null) prepare();
+        return reload(candidate.digest());
     }
-
-    private static List<WzReloadParticipant> validate(List<WzReloadParticipant> candidates) {
-        List<WzReloadParticipant> result = new ArrayList<>(
-                Objects.requireNonNull(candidates, "participants"));
-        result.sort(Comparator.comparing(WzReloadParticipant::name));
-        Map<String, WzReloadParticipant> unique = new LinkedHashMap<>();
-        for (WzReloadParticipant participant : result) {
-            WzReloadParticipant previous = unique.putIfAbsent(participant.name(), participant);
-            if (previous != null) {
-                throw new IllegalArgumentException("Duplicate WZ reload participant: " + participant.name());
-            }
+    public synchronized ReloadReport reload(String expectedDigest) {
+        if (candidate == null && lastCompleted != null && lastCompleted.digest().equals(expectedDigest)) return lastCompleted;
+        if (candidate == null || !candidate.digest().equals(expectedDigest))
+            throw new IllegalStateException("WZ candidate differs from prepared release");
+        if (!committed) { registry.commit(candidate); committed = true; }
+        failures.clear();
+        for (Pending item : pending) {
+            if (counts.containsKey(item.name())) continue;
+            try {
+                counts.put(item.name(), item.change().publish());
+                versions.put(item.name(), candidate.version());
+            } catch (RuntimeException error) { failures.put(item.name(), error.toString()); }
         }
-        return List.copyOf(result);
+        ReloadReport result = new ReloadReport(candidate.version(), registry.status().resources(), counts,
+                candidate.digest(), versions, failures);
+        if (failures.isEmpty()) { lastCompleted = result; candidate = null; pending = null; committed = false; }
+        return result;
     }
 }

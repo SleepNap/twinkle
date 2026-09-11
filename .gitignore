@@ -69,3 +69,6 @@ bootstrap/data/
 # 本地实现与验证产物
 /tmp/
 /twinkle-server/scripts/__pycache__/
+
+# WZ 各代磁盘缓存，由运行时生成
+**/.twinkle-snapshots/

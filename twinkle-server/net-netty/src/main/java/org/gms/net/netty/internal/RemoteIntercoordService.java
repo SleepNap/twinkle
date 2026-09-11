@@ -1,13 +1,14 @@
 package org.gms.net.netty.internal;
-
-import lombok.extern.log4j.Log4j2;
-import org.gms.i18n.I18n;
-import org.gms.service.intercoord.IntercoordService;
-
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.log4j.Log4j2;
+import org.gms.concurrent.GameExecution;
+import org.gms.i18n.I18n;
+import org.gms.service.intercoord.IntercoordService;
+
+
 
 /**
  * 网络 IntercoordService 桩（架构 4.5：频道/管理进程侧，方法调用 → RPC 帧 → coordinator 真值）。
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  * {@link InternalConnection} 发 coordinator，等 RPC_RESPONSE 后反序列化返回值。
  * 频道侧调用面零变化（铁律 1：接口不假设进程内）。
  *
- * <p>同步阻塞（调用方是游戏 handler 线程，低频控制面可接受）；断链/超时返回降级默认值
+ * <p>同步阻塞（调用方必须是后台 IO 或管理线程，禁止游戏线程同步等待）；断链/超时返回降级默认值
  * （定位 unknown、注册失败记日志）——频道本地逻辑不依赖 coordinator（架构 4.5 故障矩阵）。
  */
 @Log4j2
@@ -46,6 +47,11 @@ public final class RemoteIntercoordService implements IntercoordService {
     @Override
     public void unregisterPlayer(long playerId) {
         rpcVoid("unregisterPlayer", playerId);
+    }
+
+    @Override public void unregisterOwnedPlayer(long playerId, int channelId) { rpcVoid("unregisterOwnedPlayer", playerId, channelId); }
+    @Override public void updateOwnedPlayerActivity(long playerId, int channelId, PlayerActivity activity) {
+        rpcVoid("updateOwnedPlayerActivity", playerId, channelId, activity);
     }
 
     @Override
@@ -186,7 +192,8 @@ public final class RemoteIntercoordService implements IntercoordService {
     // ---- RPC 基础设施 ----
 
     private void rpcVoid(String method, Object... args) {
-        rpc(method, args);
+        var result = rpc(method, args);
+        if (result == null || !result.ok()) throw new IllegalStateException("Presence RPC failed: " + method);
     }
 
     private int rpcInt(String method, Object... args) {
@@ -199,6 +206,7 @@ public final class RemoteIntercoordService implements IntercoordService {
     }
 
     private InternalProtocol.RpcResponse rpc(String method, Object... args) {
+        if (GameExecution.inGameOperation()) throw new IllegalStateException("Synchronous RPC on game thread");
         InternalConnection conn = link.connection();
         if (conn == null) {
             log.warn(I18n.message("log.intercoord.coordinator_unconnected"), method);

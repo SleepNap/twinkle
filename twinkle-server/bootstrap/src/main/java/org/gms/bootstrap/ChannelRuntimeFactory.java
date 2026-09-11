@@ -1,29 +1,38 @@
 package org.gms.bootstrap;
-
+import java.time.Duration;
 import org.gms.channel.*;
 import org.gms.channel.admin.ChannelEventPublisher;
 import org.gms.channel.persist.CharacterSaveQueue;
-import org.gms.persistence.repo.BuddyListRepository;
-import org.gms.persistence.repo.PlayerCharacterRepository;
+import org.gms.concurrent.GameExecution;
+import org.gms.concurrent.SerialTaskQueue;
+import org.gms.concurrent.ThreadManager;
 import org.gms.domain.game.lease.DefaultControllerLeaseService;
+import org.gms.domain.game.logic.*;
 import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.domain.script.ScriptManager;
 import org.gms.event.EventBus;
 import org.gms.event.ReliableEventBus;
 import org.gms.event.ReliableReceiver;
 import org.gms.hotreload.EntityReloadCoordinator;
+import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.netty.HeartbeatConfig;
 import org.gms.net.packet.HandlerRegistry;
-import org.gms.domain.game.logic.*;
+import org.gms.persistence.repo.BuddyListRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.tick.TickScheduler;
 import org.gms.wz.WzResourceRegistry;
-import org.gms.concurrent.GameExecution;
-import org.gms.hotreload.versioned.VersionGate;
-import org.gms.concurrent.ThreadManager;
+
 
 /** 构造一个频道的全部私有运行态；失败时回滚已经注册的目录和 tick 资源。 */
-public final class ChannelRuntimeFactory {
+public final class ChannelRuntimeFactory implements AutoCloseable {
+    private final SerialTaskQueue socialIo;
+    private final SerialTaskQueue presenceIo;
+    @Override public void close() { socialIo.close(); presenceIo.close(); }
+    public void drainSaves() {
+        try { saveQueue.drain(); } catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+    }
+    public void drainIo() { socialIo.awaitIdle(Duration.ofSeconds(5)); presenceIo.awaitIdle(Duration.ofSeconds(5)); }
 
     private final PlayerCharacterRepository characterRepository;
     private final PlayerCharacterAssembler characterLoader;
@@ -95,6 +104,8 @@ public final class ChannelRuntimeFactory {
         this.progressionSystem = progressionSystem;
         this.versionGate = versionGate;
         this.background = background;
+        this.socialIo = new SerialTaskQueue(background, 4096);
+        this.presenceIo = new SerialTaskQueue(background, 8192);
         this.logic = logic;
     }
 
@@ -160,13 +171,13 @@ public final class ChannelRuntimeFactory {
                     new NpcTalkHandler(scriptManager, itemSystem, questSystem), new NpcTalkMoreHandler(),
                     new UseItemHandler(itemSystem, gameData),
                     new WhisperHandler(channelId, intercoord, eventBus, sessions),
-                    new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue, background),
-                    new BuddyHandler(channelId, intercoord, eventBus, sessions, buddyListRepository),
+                    new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue, background).asyncPresence(presenceIo),
+                    new BuddyHandler(channelId, intercoord, eventBus, sessions, buddyListRepository).async(socialIo),
                     new MoveLifeHandler(leases, sessions), new GeneralChatHandler(sessions)).register(handlers);
 
             messages = new ChannelMessageSubscriber(channelId, intercoord, sessions, eventBus);
             changes = new ChannelChangeReceiver(channelId, reliableReceiver, eventBus);
-            locations = new ChannelLocationBinder(worldId, channelId, intercoord, eventBus);
+            locations = new ChannelLocationBinder(worldId, channelId, intercoord, eventBus).async(presenceIo);
             new ChannelActivityService(worldId, channelId, players, sessions, saveQueue, publisher);
             reassign = new MonsterReassignTickHandler(maps, monsters, tickScheduler.ticksFor(10_000L));
             channelTicks.register(leases);

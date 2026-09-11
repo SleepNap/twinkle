@@ -1,5 +1,7 @@
 package org.gms.channel;
-
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.gms.concurrent.GameExecution;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.hotreload.versioned.DefaultVersionGate;
@@ -8,13 +10,11 @@ import org.gms.wz.resource.MapResourceLoader;
 import org.gms.wz.resource.MobResourceLoader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+
+
 
 /** 显式把业务操作插入 WZ 准备/发布之间，验证频道提交边界。 */
 public class ChannelWzBoundaryTest {
@@ -61,15 +61,39 @@ public class ChannelWzBoundaryTest {
         try (var execution = new GameExecution("wz-failure", new DefaultVersionGate())) {
             var manager = new ChannelMapManager(resources, 1, execution); manager.getMap(100000000);
             Files.writeString(file, mapXml(true)); Files.writeString(mobFile, mobXml(50));
+            Files.delete(missing);
             var prepared = resources.prepareReload(); var change = manager.prepare(prepared);
             manager.getMap(100000001);
-            Files.delete(missing);
             resources.commit(prepared);
             assertThatThrownBy(change::publish).isInstanceOf(IllegalArgumentException.class);
             assertThat(manager.resourceVersion()).isEqualTo(1);
             assertThat(execution.call(resources::version)).isEqualTo(1);
             assertThat(execution.call(() -> resources.mob(100100).getMaxHp())).isEqualTo(100);
             assertThat(execution.call(() -> manager.getMap(100000000).isTown())).isFalse();
+        }
+    }
+
+    @Test public void timedOutQueuedPublicationCannotSwitchLater(@TempDir Path root) throws Exception {
+        Path file = mapFile(root, 100000000);
+        Files.writeString(file, mapXml(false));
+        var resources = new WzResourceRegistry(root, List.of(new MapResourceLoader(), new MobResourceLoader()), Runnable::run);
+        try (var execution = new GameExecution("wz-timeout", new DefaultVersionGate())) {
+            var manager = new ChannelMapManager(resources, 1, execution); manager.getMap(100000000);
+            Files.writeString(file, mapXml(true));
+            var prepared = resources.prepareReload(); var change = manager.prepare(prepared); resources.commit(prepared);
+            var entered = new java.util.concurrent.CountDownLatch(1);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            execution.execute(() -> {
+                entered.countDown();
+                try { release.await(); } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+            });
+            assertThat(entered.await(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            try { assertThatThrownBy(change::publish).isInstanceOf(IllegalStateException.class).hasMessageContaining("timed out"); }
+            finally { release.countDown(); }
+            execution.run(() -> { });
+            assertThat(manager.resourceVersion()).isEqualTo(1);
+            change.publish();
+            assertThat(manager.resourceVersion()).isEqualTo(2);
         }
     }
 

@@ -1,5 +1,7 @@
 package org.gms.net.netty.internal;
-
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.log4j.Log4j2;
 import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
@@ -9,9 +11,7 @@ import org.gms.service.admin.LogicReloadReport;
 import org.gms.service.admin.RewardGrant;
 import org.gms.service.admin.RewardResult;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+
 
 /**
  * 管理进程侧 AdminService 网络桩（架构 4.6.6 第②路：事务性操作经 service 接口 RPC 到频道）。
@@ -118,6 +118,21 @@ public final class RemoteAdminService implements AdminService {
         }
         Integer n = JsonCodec.decode(resp.value(), Integer.class.getName());
         return n == null ? 0 : n;
+    }
+
+    @Override public void discardPreparedWz() {
+        var result = rpc("discardPreparedWz");
+        if (result == null || !result.ok()) throw new IllegalStateException("WZ discard RPC failed");
+    }
+    @Override public String prepareWz() {
+        var result = rpc("prepareWz");
+        if (result == null || !result.ok()) throw new IllegalStateException("WZ prepare RPC failed");
+        return JsonCodec.decode(result.value(), String.class.getName());
+    }
+    @Override public WzReloadResult commitWz(String digest) {
+        var result = rpc("commitWz", digest);
+        if (result == null || !result.ok()) throw new IllegalStateException("WZ commit RPC outcome unknown");
+        return JsonCodec.decode(result.value(), WzReloadResult.class.getName());
     }
 
     @Override

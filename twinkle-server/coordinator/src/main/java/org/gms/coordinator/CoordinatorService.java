@@ -1,9 +1,10 @@
 package org.gms.coordinator;
-
-import org.gms.service.intercoord.IntercoordService;
-
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.gms.service.intercoord.IntercoordService;
+
+
 
 /**
  * 频道间交互三机制服务实现（架构 4.4：单一属主 / 消息总线 / 定位表）。
@@ -32,6 +33,11 @@ public final class CoordinatorService implements IntercoordService {
     @Override
     public void unregisterPlayer(long playerId) {
         locationTable.remove(playerId);
+    }
+
+    @Override public void unregisterOwnedPlayer(long playerId, int channelId) { locationTable.removeOwned(playerId, channelId); }
+    @Override public void updateOwnedPlayerActivity(long playerId, int channelId, PlayerActivity activity) {
+        locationTable.updateOwnedActivity(playerId, channelId, activity);
     }
 
     @Override
@@ -102,7 +108,7 @@ public final class CoordinatorService implements IntercoordService {
 
     @Override
     public Map<Integer, ChannelInfo> channels() {
-        Map<Integer, ChannelInfo> out = new java.util.HashMap<>();
+        Map<Integer, ChannelInfo> out = new HashMap<>();
         channelRegistry.snapshot().forEach((id, info) ->
                 out.put(id, new ChannelInfo(info.channelId(), info.host(), info.port(), info.onlineCount(),
                         info.workerId())));
@@ -127,7 +133,7 @@ public final class CoordinatorService implements IntercoordService {
     @Override
     public Map<String, StoreEntry> storeSnapshot() {
         Map<String, SingleOwnerStore.Entry> raw = singleOwnerStore.snapshot();
-        Map<String, StoreEntry> out = new java.util.HashMap<>();
+        Map<String, StoreEntry> out = new HashMap<>();
         raw.forEach((k, v) -> out.put(k, new StoreEntry(v.value(), v.version())));
         return Map.copyOf(out);
     }

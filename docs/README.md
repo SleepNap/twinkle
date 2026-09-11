@@ -38,3 +38,5 @@
 游戏功能的迁移批次、已实现范围、自动验证记录与下一步路线以
 [`in-progress/gameplay-roadmap.md`](in-progress/gameplay-roadmap.md) 为准。
 截至 2026-09-06 已接入四批迁移，最新一批为装备穿脱与属性。2026-09-07 补充前置要求：先落实热更新编译/调用边界并验证真实逻辑换代闭环，再大规模扩展 Java 玩法；客户端联调与完整场景后续统一验证。
+
+- [四项并发整改](in-progress/concurrency-completion.md)：好友/Presence、插件排空、WZ 一致性和存档队列容量。

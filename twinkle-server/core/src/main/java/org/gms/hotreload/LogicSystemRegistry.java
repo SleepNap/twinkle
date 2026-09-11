@@ -1,11 +1,11 @@
 package org.gms.hotreload;
-
-
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
+
+
 
 /**
  * 游戏逻辑系统注册表（贡献点版本化，仿 {@code HandlerRegistry} 范式，红线 13）。
@@ -68,6 +68,11 @@ public final class LogicSystemRegistry {
      */
     public boolean unregister(String key) {
         return slots.remove(key) != null;
+    }
+
+    /** 按实例归属移除，旧插件句柄不得卸掉后来安装的系统。 */
+    public void unregister(String key, Object expected) {
+        slots.computeIfPresent(key, (id, current) -> current.system() == expected ? null : current);
     }
 
     /**

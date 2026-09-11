@@ -1,8 +1,9 @@
 package org.gms.channel;
-
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import lombok.extern.log4j.Log4j2;
-import org.gms.persistence.entity.BuddyListEntity;
-import org.gms.persistence.repo.BuddyListRepository;
+import org.gms.concurrent.GameExecution;
+import org.gms.concurrent.SerialTaskQueue;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.EventBus;
 import org.gms.i18n.I18n;
@@ -15,10 +16,11 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
+import org.gms.persistence.entity.BuddyListEntity;
+import org.gms.persistence.repo.BuddyListRepository;
 import org.gms.service.intercoord.IntercoordService;
 
-import java.nio.charset.StandardCharsets;
-import java.util.List;
+
 
 /**
  * 好友处理（RecvOpcode.BUDDYLIST_MODIFY 0x82，架构 4.4 三机制：单一属主 + 定位表 + 消息总线）。
@@ -37,6 +39,9 @@ import java.util.List;
 public final class BuddyHandler implements PacketHandler {
 
 
+
+    private SerialTaskQueue io;
+    public BuddyHandler async(SerialTaskQueue io) { this.io = io; return this; }
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -89,45 +94,47 @@ public final class BuddyHandler implements PacketHandler {
             return; // 目标不在线（加好友可离线，M4 简化：仅在线）
         }
         BuddyRequest req = new BuddyRequest(chr.getId(), chr.getName(), buddyId, op);
-        int targetChannel = intercoord.locate(buddyId).orElse(-1);
-        if (targetChannel == channelId) {
-            applyLocal(chr, req, buddyName);
-        } else if (targetChannel > 0) {
-            // 跨频道：经消息总线投递目标频道（总线不存状态，只负责送达）
-            eventBus.send(MessageTargets.channel(targetChannel), req);
-        }
+        PacketSession target = sessions.get(buddyId);
+        if (io == null) { applyLocal(chr, req, buddyName); return; }
+        long version = sessions.execution().version();
+        io.run(() -> persist(req)).whenComplete((ignored, error) ->
+                sessions.execution().continueAt(version, () -> {
+                    if (error != null) {
+                        log.error(I18n.message("log.social.io_failed"), error);
+                        if (sessions.get(req.fromId()) == session) session.send(GameplayPackets.enableActions());
+                        return;
+                    }
+                    // 回执只给发起时的会话，断线重登的新会话不得收到旧请求回包。
+                    if (sessions.get(req.fromId()) == session) session.send(buddyListPacket(req.fromId()));
+                    if (target != null && sessions.get(req.toId()) == target) target.send(buddyListPacket(req.toId()));
+                }));
     }
 
-    /** 本频道内的好友动作（收到总线投递的跨频道请求也走这里）。 */
+    /** 未绑定频道的兼容入口；游戏线程禁止同步写库。 */
     public void applyLocal(PlayerCharacter chr, BuddyRequest req, String buddyName) {
+        if (GameExecution.inGameOperation()) throw new IllegalStateException("Buddy persistence requires IO queue");
+        persist(req);
+        PacketSession from = sessions.get(req.fromId());
+        if (from != null) from.send(buddyListPacket(req.fromId()));
+        PacketSession to = sessions.get(req.toId());
+        if (to != null) to.send(buddyListPacket(req.toId()));
+    }
+
+    private void persist(BuddyRequest req) {
         switch (req.action()) {
             case ADD_REQUEST -> {
-                // 单一属主：buddylist 表持久化（PENDING），双方都写
-                boolean newRow = buddyRepo.insertIfAbsent(row(req.fromId(), req.toId(), BuddyListEntity.PENDING));
+                buddyRepo.insertIfAbsent(row(req.fromId(), req.toId(), BuddyListEntity.PENDING));
                 buddyRepo.insertIfAbsent(row(req.toId(), req.fromId(), BuddyListEntity.PENDING));
-                log.info(I18n.message("log.buddy.request"), req.fromName(), buddyName, newRow);
             }
             case ACCEPT -> {
                 buddyRepo.updateStatus(req.fromId(), req.toId(), BuddyListEntity.ACCEPTED);
                 buddyRepo.updateStatus(req.toId(), req.fromId(), BuddyListEntity.ACCEPTED);
-                log.info(I18n.message("log.buddy.accept"), req.fromName(), buddyName);
             }
             case DELETE -> {
                 buddyRepo.delete(req.fromId(), req.toId());
                 buddyRepo.delete(req.toId(), req.fromId());
-                log.info(I18n.message("log.buddy.delete"), req.fromName(), buddyName);
             }
-            default -> {
-            }
-        }
-        // 回 BUDDYLIST 包（双方在线则都刷）
-        PacketSession from = sessions.get(req.fromId());
-        if (from != null) {
-            from.send(buddyListPacket(req.fromId()));
-        }
-        PacketSession to = sessions.get(req.toId());
-        if (to != null) {
-            to.send(buddyListPacket(req.toId()));
+            default -> { }
         }
     }
 

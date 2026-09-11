@@ -1,10 +1,10 @@
 package org.gms.channel.persist;
-
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
 import org.gms.observability.Metrics;
 import org.gms.observability.Sli;
 import org.gms.tick.TickHandler;
+
 
 /**
  * 定期增量 FLUSH tick handler（L4：周期性把脏角色刷库，红线 17 只刷脏数据）。
@@ -37,7 +37,12 @@ public final class CharacterFlushTickHandler implements TickHandler {
             if (dirty > 0) {
                 log.debug(I18n.message("log.save.flush_dirty"), dirty);
             }
-            metrics.gauge(Sli.WRITE_QUEUE_DEPTH, saveQueue.pendingCount());
+            var status = saveQueue.status();
+            metrics.gauge(Sli.WRITE_QUEUE_DEPTH, status.pending());
+            metrics.gauge("save.capacity", status.capacity());
+            metrics.gauge("save.deferred.characters", status.deferredCharacters());
+            metrics.gauge("save.failed.characters", status.failedCharacters());
+            metrics.gauge("save.rejected.total", status.rejected());
         }
     }
 }

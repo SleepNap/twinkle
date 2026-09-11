@@ -1,11 +1,14 @@
 package org.gms.bootstrap.plugin;
-
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
+import java.nio.file.Path;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.gms.bootstrap.ChannelWorker;
+import org.gms.concurrent.ThreadManager;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
@@ -17,9 +20,7 @@ import org.gms.plugin.runtime.PluginManager;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.TickScheduler;
 
-import java.nio.file.Path;
-import java.util.function.Consumer;
-import java.util.function.Function;
+
 
 /**
  * 插件系统装配（架构 7.1：插件系统 = 热重载系统，可装卸 + classloader 隔离）。
@@ -41,7 +42,7 @@ public class PluginConfig {
         return new LogicSystemRegistry();
     }
 
-    @Bean
+    @Bean(preDestroy = "close")
     @Singleton
     public PluginManager pluginManager(
             @Property(name = "twinkle.plugin.path", defaultValue = "./plugins") String pluginPath,
@@ -52,7 +53,7 @@ public class PluginConfig {
             EventBus eventBus,
             VersionGate versionGate,
             EntityReloadCoordinator entityReloadCoordinator,
-            EntityReloadService entityReloadService) {
+            EntityReloadService entityReloadService, ThreadManager background) {
         Path dir = Path.of(pluginPath);
         java.util.List<HandlerRegistry> packetRegistries = new java.util.ArrayList<>();
         packetRegistries.add(registry);
@@ -75,6 +76,6 @@ public class PluginConfig {
         Function<Class<?>, Object> serviceResolver = type -> null;
         // 注入版本门 + 按实体渐进重载：插件 reload = L3 换代 + 中断在途（架构 5.3）
         return new PluginManager(dir, host, PluginManager.class.getClassLoader(), serviceResolver, router,
-                versionGate, entityReloadService);
+                versionGate, entityReloadService, background);
     }
 }

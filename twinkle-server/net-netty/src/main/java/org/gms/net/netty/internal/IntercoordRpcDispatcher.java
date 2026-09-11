@@ -1,13 +1,13 @@
 package org.gms.net.netty.internal;
-import org.gms.service.intercoord.SharedStateService;
-import org.gms.service.intercoord.ChannelDirectoryService;
-import org.gms.service.intercoord.PlayerPresenceService;
-
+import java.util.Optional;
 import lombok.extern.log4j.Log4j2;
 import org.gms.i18n.I18n;
+import org.gms.service.intercoord.ChannelDirectoryService;
 import org.gms.service.intercoord.IntercoordService;
+import org.gms.service.intercoord.PlayerPresenceService;
+import org.gms.service.intercoord.SharedStateService;
 
-import java.util.Optional;
+
 
 /**
  * IntercoordService RPC 分发器（架构 4.5：coordinator 端处理频道 RPC 帧 → 调进程内真值）。
@@ -54,6 +54,14 @@ public final class IntercoordRpcDispatcher {
             }
             case "unregisterPlayer" -> {
                 intercoord.unregisterPlayer(longArg(args, 0));
+                yield "null";
+            }
+            case "unregisterOwnedPlayer" -> {
+                intercoord.unregisterOwnedPlayer(longArg(args, 0), intArg(args, 1));
+                yield "null";
+            }
+            case "updateOwnedPlayerActivity" -> {
+                intercoord.updateOwnedPlayerActivity(longArg(args, 0), intArg(args, 1), playerActivityArg(args, 2));
                 yield "null";
             }
             case "movePlayer" -> {

@@ -1,9 +1,6 @@
 package org.gms.httpapi.admin.v1.controller;
-
-import org.gms.httpapi.version.ApiRoutes;
-
-import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpRequest;
+import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
@@ -13,20 +10,25 @@ import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.QueryValue;
-import org.gms.persistence.config.DbConfigFacade;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
+import java.util.List;
+import java.util.Map;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.EntityReloadService;
-import org.gms.httpapi.application.admin.AdminApiService;
 import org.gms.httpapi.admin.AdminAuthFilter;
+import org.gms.httpapi.application.admin.AdminApiService;
+import org.gms.httpapi.version.ApiRoutes;
 import org.gms.i18n.I18nService;
 import org.gms.observability.HealthRegistry;
+import org.gms.persistence.config.DbConfigFacade;
 import org.gms.service.admin.AdminService;
 import org.gms.service.channel.ChannelLifecycleService;
 import org.gms.service.network.GameNetworkService;
 import org.gms.service.shutdown.ClusterShutdownService;
 
-import java.util.List;
-import java.util.Map;
+
+
 
 /**
  * Web 控制台运维 API（架构 M5-1：/admin/v1/*，Web 控制台后端）。
@@ -215,6 +217,7 @@ public final class AdminConsoleController {
 
     /** 全量 WZ 热重载；注册资源先全部准备成功，再统一换代。 */
     @Post("/reload/wz")
+    @ExecuteOn(TaskExecutors.BLOCKING)
     public AdminService.WzReloadResult reloadWz() {
         return adminService.reloadWz();
     }

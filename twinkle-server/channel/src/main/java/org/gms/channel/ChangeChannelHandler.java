@@ -1,8 +1,11 @@
 package org.gms.channel;
-import org.gms.service.intercoord.ChannelDirectoryService;
-
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.util.concurrent.CompletableFuture;
 import lombok.extern.log4j.Log4j2;
 import org.gms.channel.persist.CharacterSaveQueue;
+import org.gms.concurrent.SerialTaskQueue;
+import org.gms.concurrent.ThreadManager;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.ReliableEventBus;
 import org.gms.i18n.I18n;
@@ -12,13 +15,11 @@ import org.gms.net.packet.InPacket;
 import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
-import org.gms.service.intercoord.IntercoordService;
 import org.gms.net.packet.v83.V83ChannelId;
-import org.gms.concurrent.ThreadManager;
-import java.util.concurrent.CompletableFuture;
+import org.gms.service.intercoord.ChannelDirectoryService;
+import org.gms.service.intercoord.IntercoordService;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
+
 
 /**
  * 换频道处理（RecvOpcode.CHANGE_CHANNEL 0x27，架构 4.7：一机制两用）。
@@ -35,6 +36,9 @@ import java.net.InetAddress;
 public final class ChangeChannelHandler implements PacketHandler {
 
 
+
+    private SerialTaskQueue presenceIo;
+    public ChangeChannelHandler asyncPresence(SerialTaskQueue io) { this.presenceIo = io; return this; }
 
     private final int channelId;
     private final IntercoordService intercoord;
@@ -169,10 +173,11 @@ public final class ChangeChannelHandler implements PacketHandler {
                             ChangeChannelRequest.Reason.PLAYER_CHANGE);
                     return reliableBus.send("cc:player:" + characterId, MessageTargets.channel(targetId), request)
                             .thenApply(ignored -> destination);
-                }, background).thenApplyAsync(destination -> {
-                    intercoord.beginChannelTransfer(characterId, channelId, targetId);
-                    return destination;
-                }, background);
+                }, background).thenCompose(destination -> {
+                    Runnable transfer = () -> intercoord.beginChannelTransfer(characterId, channelId, targetId);
+                    return (presenceIo == null ? background.runAsync(transfer) : presenceIo.run(transfer))
+                            .thenApply(ignored -> destination);
+                });
         work.whenComplete((destination, error) -> sessions.execution().execute(() -> {
             if (sessions.get(characterId) != session || session.getAttr("stateTransfer") != token) return;
             if (error != null) {

@@ -1,5 +1,7 @@
 package org.gms.net.netty.internal;
-
+import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.gms.coordinator.ChannelRegistry;
 import org.gms.coordinator.CoordinatorService;
 import org.gms.coordinator.LocationTable;
@@ -11,12 +13,10 @@ import org.gms.service.intercoord.IntercoordService;
 import org.gms.service.intercoord.PlayerPresenceService;
 import org.gms.service.intercoord.SharedStateService;
 import org.junit.jupiter.api.Test;
-
-import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+
+
 
 /**
  * coordinator ↔ 频道 内部通信端到端（架构 4.5：REGISTER 上报 + EVENT 路由 + IntercoordService RPC）。
@@ -78,6 +78,16 @@ class CoordinatorChannelIntegrationTest {
                     new SharedStateService.StoreValue("json", 2, "{\"ok\":true}"), -1);
             assertThat(version).isEqualTo(1);
             assertThat(remote.read("test:topology").orElseThrow().value().schemaVersion()).isEqualTo(2);
+
+            // 新频道认领后，旧频道的迟到消息不得删除或覆盖新属主。
+            remote.registerPlayer(1001, 2, 5);
+            remote.unregisterOwnedPlayer(1001, 21);
+            remote.updateOwnedPlayerActivity(1001, 21, PlayerPresenceService.PlayerActivity.MTS);
+            remote.beginChannelTransfer(1001, 21, 5);
+            assertThat(remote.locate(1001)).contains(5);
+            assertThat(remote.presence(1001).orElseThrow().activity()).isEqualTo(PlayerPresenceService.PlayerActivity.IN_CHANNEL);
+            remote.unregisterOwnedPlayer(1001, 5);
+            assertThat(remote.presence(1001)).isEmpty();
 
             // ---- EVENT 路由：频道 A 发悄悄话 → coordinator 路由回本频道 ----
             RemoteEventBus remoteBus = new RemoteEventBus(channelBus, link);

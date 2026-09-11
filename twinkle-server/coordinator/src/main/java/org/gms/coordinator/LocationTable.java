@@ -1,13 +1,13 @@
 package org.gms.coordinator;
-import org.gms.service.intercoord.PlayerPresenceService;
-
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-
 import org.gms.service.intercoord.PlayerPresenceService.PlayerActivity;
 import org.gms.service.intercoord.PlayerPresenceService.PlayerPresence;
+import org.gms.service.intercoord.PlayerPresenceService;
+
+
 
 /**
  * 大区玩家 Presence 表（coordinator 维护 player → world + 连接属主频道 + 活动状态）。
@@ -34,6 +34,14 @@ public final class LocationTable {
         presence.remove(playerId);
     }
 
+    public void removeOwned(long playerId, int channelId) {
+        presence.computeIfPresent(playerId, (id, old) -> old.ownerChannelId() == channelId ? null : old);
+    }
+    public void updateOwnedActivity(long playerId, int channelId, PlayerActivity activity) {
+        presence.computeIfPresent(playerId, (id, old) -> old.ownerChannelId() != channelId ? old :
+                new PlayerPresence(id, old.worldId(), channelId, activity, null));
+    }
+
     /** 玩家换频道更新定位。 */
     public void move(long playerId, int channelId) {
         presence.computeIfPresent(playerId, (id, old) -> new PlayerPresence(id, old.worldId(), channelId,
@@ -42,7 +50,7 @@ public final class LocationTable {
 
     /** 旧频道仍持有连接，目标频道尚未认领。 */
     public void beginChannelTransfer(long playerId, int sourceChannelId, int targetChannelId) {
-        presence.computeIfPresent(playerId, (id, old) -> new PlayerPresence(id, old.worldId(),
+        presence.computeIfPresent(playerId, (id, old) -> old.ownerChannelId() != sourceChannelId ? old : new PlayerPresence(id, old.worldId(),
                 sourceChannelId, PlayerActivity.CHANNEL_TRANSITION, targetChannelId));
     }
 

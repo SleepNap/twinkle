@@ -1,13 +1,13 @@
 package org.gms.net.packet;
-
-import lombok.extern.log4j.Log4j2;
-import org.gms.i18n.I18n;
-import org.gms.net.opcodes.RecvOpcode;
-import org.gms.concurrent.GameExecution;
-
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import lombok.extern.log4j.Log4j2;
+import org.gms.concurrent.GameExecution;
+import org.gms.i18n.I18n;
+import org.gms.net.opcodes.RecvOpcode;
+
+
 
 /**
  * 收包分发注册表（架构 net-packet：可 register/replace，贡献点版本化，红线 13）。
@@ -92,6 +92,14 @@ public final class HandlerRegistry {
             }
             return new Registration(version, handler);
         });
+    }
+
+    /** 只移除本贡献实例，旧插件卸载不能删除已被其他贡献替换的新槽位。 */
+    public void unregister(RecvOpcode opcode, PacketHandler expected) {
+        if (execution != null && !execution.isOwner()) {
+            execution.run(() -> unregister(opcode, expected)); return;
+        }
+        slots.computeIfPresent(opcode.getValue(), (key, current) -> current.handler() == expected ? null : current);
     }
 
     /**

@@ -1,10 +1,10 @@
 package org.gms.plugin.runtime;
-
+import java.util.List;
 import org.gms.plugin.ContributionHandle;
 import org.gms.plugin.Plugin;
 import org.gms.plugin.PluginDescriptor;
 
-import java.util.List;
+
 
 /**
  * 已加载插件（插件运行时状态，pluginId 幂等可查）。
@@ -18,7 +18,8 @@ public record LoadedPlugin(
         PluginDescriptor descriptor,
         PluginClassLoader classLoader,
         Plugin instance,
-        List<ContributionHandle> contributions) {
+        List<ContributionHandle> contributions,
+        DefaultPluginContext context) {
 
     public String pluginId() {
         return descriptor.id();

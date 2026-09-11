@@ -1,21 +1,22 @@
 package org.gms.bootstrap;
-
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Factory;
+import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
-import org.gms.channel.PlayerCharacterAssembler;
 import org.gms.channel.ChannelPlayerDirectory;
+import org.gms.channel.PlayerCharacterAssembler;
 import org.gms.channel.persist.CharacterFlushTickHandler;
 import org.gms.channel.persist.CharacterSaveQueue;
 import org.gms.channel.persist.RestartService;
-import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
 import org.gms.hotreload.EntityReloadService;
 import org.gms.hotreload.RestartCoordinator;
 import org.gms.observability.Metrics;
+import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
 import org.gms.role.ChannelProcessCondition;
 import org.gms.tick.TickScheduler;
+
 
 /**
  * 存档与重启装配（架构 5.4 L4：增量 FLUSH + DRAINING + 上下文恢复）。
@@ -30,12 +31,13 @@ import org.gms.tick.TickScheduler;
 @Requires(condition = ChannelProcessCondition.class)
 public class PersistConfig {
 
-    @Bean
+    @Bean(preDestroy = "close")
     @Singleton
     public CharacterSaveQueue characterSaveQueue(PlayerCharacterSnapshotRepository snapshotRepository,
                                                  PlayerCharacterAssembler loader,
-                                                 ChannelPlayerDirectory playerDirectory) {
-        return new CharacterSaveQueue(snapshotRepository, loader, playerDirectory);
+                                                 ChannelPlayerDirectory playerDirectory,
+                                                 @Property(name = "twinkle.persistence.save-capacity", defaultValue = "128") int capacity) {
+        return new CharacterSaveQueue(snapshotRepository, loader, playerDirectory, capacity);
     }
 
     @Bean

@@ -1,6 +1,7 @@
 package org.gms.plugin;
-
 import java.net.URL;
+import java.util.concurrent.Executor;
+
 
 /**
  * 插件上下文（插件运行时经此访问宿主服务与资源，信任边界 = 全权但经接口，架构 7.2）。
@@ -42,4 +43,10 @@ public interface PluginContext {
      * @return 原句柄（便于链式调用）
      */
     AutoCloseable track(AutoCloseable handle);
+
+    /** 为贡献接口增加在途计数；卸载后拒绝新调用，异步返回值完成后才释放计数。 */
+    <T> T guard(Class<T> contract, T implementation);
+
+    /** 后台任务从提交到结束都属于本插件；禁止绕过此入口创建未登记的后台任务。 */
+    void execute(Executor executor, Runnable task);
 }

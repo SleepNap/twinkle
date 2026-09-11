@@ -94,6 +94,12 @@ export function OperationsPage() {
   const wzMutation = useMutation({
     mutationFn: (reason: string) => adminApi.reloadWz(reason),
     onSuccess: (result) => {
+      if (Object.keys(result.failures ?? {}).length > 0) {
+        toast.error(t("operations.wzFailed"), {
+          description: Object.entries(result.failures).map(([target, failure]) => `${target}: ${failure}`).join("; "),
+        })
+        return
+      }
       const runtimeCount = Object.values(result.runtimeObjects).reduce((sum, count) => sum + count, 0)
       toast.success(t("operations.wzSuccess"), {
         description: t("operations.wzSuccessDescription", {

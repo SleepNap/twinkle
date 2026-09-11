@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目状态
 
-**最新整改（2026-09-09）**：已对照北斗与 datas-server 近期修复，收口队伍/掉落/可见性入口，修复冻结误退队、跨地图实例掉落冲突、换线后旧连接输出、进图失败残留，并增加 WZ 每频道资源视图与提交重检。新增 9 项回归，完整后端 `verify` 486 项通过、5 项可选检查跳过。具体边界见 [修复对照记录](docs/in-progress/reference-fix-audit.md)。内置 Java 整包热更新仍未完成；继续扩展大批玩法前，按 [热更新对照表](docs/HOT-UPDATE.md) 落实稳定调用契约与真实换代闭环，同时继续剩余并发治理。下方早期里程碑不代表全部目标已验收。
+**最新整改（2026-09-09）**：已对照北斗与 datas-server 近期修复，收口队伍/掉落/可见性入口，修复冻结误退队、跨地图实例掉落冲突、换线后旧连接输出、进图失败残留，并增加 WZ 每频道资源视图与提交重检。新增 9 项回归，完整后端 `verify` 486 项通过、5 项可选检查跳过。具体边界见 [修复对照记录](docs/in-progress/reference-fix-audit.md)。2026-09-11 已完成五个业务模块热重载底座，四项并发整改也已完成并通过自动回归；当前记录见 [并发整改](docs/in-progress/concurrency-completion.md)。下方早期里程碑不代表全部目标已验收。
 
 **热更新、扩展性好的冒险岛后台（MapleStory v83 服务端）**。参考项目：北斗（`E:\LocalGit\GitHub\BeiDou-Server`，GPL，只作理解、禁止逐字复制）。
 
-**M0-M6 基础架构里程碑已完成**（2026-08-09），不代表全部游戏玩法完成。当前已收敛为 13 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
+**M0-M6 基础架构里程碑已完成**（2026-08-09），不代表全部游戏玩法完成。当前为 18 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
 
 **游戏封包迁移进度**（2026-09-06）：已接入四批功能，最新一批为装备穿脱与属性。范围包括基础玩法、同屏角色与动作、操作设置与详情、队伍聊天、手动金币掉落，以及装备校验/交换、派生属性、外观和期限处理。第一、二批全量验证通过；第四批编译及 54 项定向检查通过（含 7 条架构规则），新增 16 项装备回归。并发入口第一轮整改已落地，存量代码尚未全部改造，新增 18 项回归；最终后端 `verify` 477 项通过、5 项可选检查跳过。后续优先完成剩余存量并发整改，再继续战斗与死亡结算；客户端联调及完整场景后续统一验证。逐项实现边界、提交记录、验证记录与旧开发库重建要求以 [游戏路线图](docs/in-progress/gameplay-roadmap.md) 为准。
 
@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 构建基线：**JDK 用 GraalVM for JDK 21**，版本须与 pom 的 `graalvm-js.version` 匹配（21.0.N ↔ 23.1.N，当前 23.1.11 ↔ 21.0.11；升 JDK 小版本必须同步改 pom，否则版本检查失败或降级解释执行），见 README「环境要求」。
 
-- **全量构建 + 测试**：`mvn -B verify`（13 个子模块；含 JaCoCo 覆盖率报告 + ArchUnit 架构测试 + LoggingDiscipline 静态扫描）
+- **全量构建 + 测试**：`mvn -B verify`（18 个子模块；含 JaCoCo 覆盖率报告 + ArchUnit 架构测试 + LoggingDiscipline 静态扫描）
 - **单模块单测**：`mvn -pl <模块> -am -Dtest=<测试类> -Dsurefire.failIfNoSpecifiedTests=false test`（`-am` 带上游依赖；`-Dsurefire.failIfNoSpecifiedTests=false` 防上游模块因无匹配测试报错——实测必需）。例：`mvn -pl bootstrap -am -Dtest=BootstrapContextTest -Dsurefire.failIfNoSpecifiedTests=false test`
 - **只编译不测**：`mvn -B -DskipTests compile`
 - **启动（single 档）**：`./scripts/start.sh`（前置：`mvn -B verify` 产物作 `target/twinkle-server.jar`；默认 `--profile=single`）
@@ -107,7 +107,7 @@ Node.js 20+ / npm。开发服务器把 `/admin/v1`、`/api/v1` 代理到 `127.0.
 6. **跨对象操作统一协调**：交易、拾取等涉及多个角色或地图状态时，由一个明确入口负责整体校验与提交，失败不得留下部分修改。确需同时持有多把锁时，定义并遵守全局一致的获取顺序，不允许调用方各自嵌套拿锁；也不得持锁同步等待另一个执行上下文。
 7. **存量整改以完整调用链为单位**：先查清所有读写路径和执行线程，建立统一入口，再消除重复保护。新增或改造并发边界时，补充能覆盖实际竞争的回归验证，重点检查重复扣发、部分提交、快照不一致及锁顺序，不能只凭顺序执行的功能测试认定并发安全。
 
-**当前整改范围**：频道封包、业务 Tick、断线、管理快照及角色交接已统一执行归属，存档不再持角色锁访问数据库，已去掉相应入口的重复外层锁。跨对象原子提交和元数据监视器仍保留；旧社交/Presence 同步 IO、全局插件生命周期、跨频道 WZ 一致性与写队列容量治理仍按路线图跟踪，不把本批整改等同于全部并发问题消失。
+**当前整改范围**：频道封包、业务 Tick、断线、管理快照及角色交接已统一执行归属，存档不再持角色锁访问数据库，已去掉相应入口的重复外层锁。跨对象原子提交和元数据监视器仍保留；四项并发整改已接入，实际验证和边界以 docs/in-progress/concurrency-completion.md 为准，不把本轮整改等同于全部并发问题消失。
 
 ### 数据库命名与迁移规范（硬约束，写迁移/建表必须遵守）
 

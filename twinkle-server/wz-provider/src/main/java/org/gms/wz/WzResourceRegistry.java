@@ -1,10 +1,4 @@
 package org.gms.wz;
-
-import org.gms.domain.game.item.ItemData;
-import org.gms.domain.game.mob.MobData;
-import org.gms.domain.game.wz.GameDataProvider;
-import org.gms.i18n.I18n;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -16,6 +10,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
+import org.gms.domain.game.item.ItemData;
+import org.gms.domain.game.mob.MobData;
+import org.gms.domain.game.wz.GameDataProvider;
+import org.gms.i18n.I18n;
+
+
 
 /**
  * WZ 资源注册中心。
@@ -32,7 +32,7 @@ public final class WzResourceRegistry implements GameDataProvider {
     }
 
     private record Snapshot(long version, Map<WzResourceKey<?>, Object> resources,
-                            Map<String, Integer> counts) {
+                            Map<String, Integer> counts, String digest) {
     }
 
     /** 已完整构建、尚未发布的新快照。 */
@@ -46,6 +46,9 @@ public final class WzResourceRegistry implements GameDataProvider {
             this.baseVersion = baseVersion;
             this.replacement = replacement;
         }
+
+        public String digest() { return replacement.digest(); }
+        public long version() { return replacement.version(); }
 
         @SuppressWarnings("unchecked")
         public <T> T resource(WzResourceKey<T> key) {
@@ -70,6 +73,7 @@ public final class WzResourceRegistry implements GameDataProvider {
         private View() { }
 
         public long version() { return adopted.version(); }
+        public String digest() { return adopted.digest(); }
 
         public <T> T resource(WzResourceKey<T> key) { return read(adopted, key); }
 
@@ -168,11 +172,12 @@ public final class WzResourceRegistry implements GameDataProvider {
     }
 
     private Snapshot buildSnapshot(long version) {
+        WzSourceSnapshot source = WzSourceSnapshot.freeze(wzRoot);
         Map<WzResourceKey<?>, Object> resources = new LinkedHashMap<>();
         Map<String, Integer> counts = new LinkedHashMap<>();
         List<CompletableFuture<LoadedResource>> futures = loaders.stream()
                 .map(loader -> CompletableFuture.supplyAsync(
-                        () -> loadOne(loader, wzRoot), executor))
+                        () -> loadOne(loader, source.root()), executor))
                 .toList();
         try {
             for (CompletableFuture<LoadedResource> future : futures) {
@@ -191,7 +196,7 @@ public final class WzResourceRegistry implements GameDataProvider {
             }
             throw new IllegalStateException(cause);
         }
-        return new Snapshot(version, Map.copyOf(resources), Map.copyOf(counts));
+        return new Snapshot(version, Map.copyOf(resources), Map.copyOf(counts), source.digest());
     }
 
     private static <T> LoadedResource loadOne(WzResourceLoader<T> loader, Path wzRoot) {

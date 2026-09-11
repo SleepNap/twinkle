@@ -1,18 +1,4 @@
 package org.gms.channel.persist;
-
-import org.gms.channel.PlayerCharacterAssembler;
-import org.gms.channel.PlayerStorage;
-import org.gms.persistence.entity.InventoryItemEntity;
-import org.gms.persistence.repo.PlayerCharacterRepository;
-import org.gms.persistence.repo.InventoryItemRepository;
-import org.gms.domain.game.PlayerCharacter;
-import org.gms.domain.game.inventory.InventoryType;
-import org.gms.domain.game.inventory.Item;
-import org.gms.hotreload.versioned.DefaultVersionGate;
-import org.gms.i18n.I18n;
-import org.gms.i18n.ResourceBundleI18nService;
-import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -20,9 +6,23 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
+import org.gms.channel.PlayerCharacterAssembler;
+import org.gms.channel.PlayerStorage;
+import org.gms.domain.game.PlayerCharacter;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.Item;
+import org.gms.hotreload.versioned.DefaultVersionGate;
+import org.gms.i18n.I18n;
+import org.gms.i18n.ResourceBundleI18nService;
+import org.gms.persistence.entity.InventoryItemEntity;
+import org.gms.persistence.repo.InventoryItemRepository;
+import org.gms.persistence.repo.PlayerCharacterRepository;
+import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+
+
 
 /**
  * 存档队列单测（架构 6.2 ② 单写 + 红线 17 增量 FLUSH）。
@@ -321,4 +321,49 @@ class CharacterSaveQueueTest {
             I18n.install(null);
         }
     }
+    @Test
+    void overloadIsBoundedAndDisconnectedCharactersAreRetried() throws Exception {
+        BlockingRepo repo = new BlockingRepo();
+        var loader = new PlayerCharacterAssembler(new DefaultVersionGate());
+        try (var queue = new CharacterSaveQueue(repo, loader, new PlayerStorage(), 1)) {
+            PlayerCharacter first = newChar(41, 100), second = newChar(42, 200);
+            first.markDirty(); second.markDirty();
+            var saved = queue.saveAsync(first);
+            assertThat(repo.entered.await(2, TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThat(queue.saveAsync(first)).isSameAs(saved);
+                assertThat(queue.saveAsync(second)).isCompletedExceptionally();
+                assertThat(queue.pendingCount()).isEqualTo(1);
+                assertThat(queue.status().deferredCharacters()).isEqualTo(1);
+                assertThat(queue.awaitStored(99)).isCompletedExceptionally();
+                assertThat(second.isDirty()).isTrue();
+            } finally { repo.block = false; repo.release.countDown(); }
+            saved.get(2, TimeUnit.SECONDS);
+            queue.drain();
+            assertThat(repo.saved).extracting(org.gms.persistence.entity.PlayerCharacterRecord::getId).containsExactly(41L, 42L);
+            assertThat(queue.failedCharacterIds()).isEmpty();
+            assertThat(second.isDirty()).isFalse();
+            assertThat(queue.awaitStored(99)).isCompleted();
+        }
+    }
+
+    @Test
+    void lateSnapshotCannotOverwriteNewerCommittedData() throws Exception {
+        var repo = new MemoryRepo();
+        var loader = new PlayerCharacterAssembler(new DefaultVersionGate());
+        try (var queue = new CharacterSaveQueue(repo, loader, new PlayerStorage())) {
+            var character = newChar(51, 100); character.markDirty();
+            // 精确模拟“旧快照已生成，但其完成回调比新快照晚到”的调度交错。
+            var capture = CharacterSaveQueue.class.getDeclaredMethod("capture", PlayerCharacter.class);
+            capture.setAccessible(true);
+            Object old = capture.invoke(queue, character);
+            character.setMeso(200); character.markDirty();
+            queue.saveAsync(character).get(2, TimeUnit.SECONDS);
+            var enqueue = CharacterSaveQueue.class.getDeclaredMethod("enqueueSnapshot", old.getClass());
+            enqueue.setAccessible(true);
+            ((java.util.concurrent.CompletableFuture<?>) enqueue.invoke(queue, old)).get(2, TimeUnit.SECONDS);
+            assertThat(repo.saved).extracting(org.gms.persistence.entity.PlayerCharacterRecord::getMeso).containsExactly(200);
+        }
+    }
+
 }

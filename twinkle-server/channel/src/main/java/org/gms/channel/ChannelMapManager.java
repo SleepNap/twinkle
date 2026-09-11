@@ -1,19 +1,24 @@
 package org.gms.channel;
-
-import org.gms.domain.game.map.MapleMap;
-import org.gms.i18n.I18n;
-import org.gms.domain.game.mob.MapleMonster;
-import org.gms.domain.game.mob.MobData;
-import org.gms.wz.WzReloadParticipant;
-import org.gms.wz.WzResourceRegistry;
-import org.gms.wz.WzResources;
-import org.gms.wz.WzMapCatalog;
-import org.gms.concurrent.GameExecution;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import org.gms.concurrent.GameExecution;
+import org.gms.domain.game.map.MapleMap;
+import org.gms.domain.game.mob.MapleMonster;
+import org.gms.domain.game.mob.MobData;
+import org.gms.i18n.I18n;
+import org.gms.wz.WzMapCatalog;
+import org.gms.wz.WzReloadParticipant;
+import org.gms.wz.WzResourceRegistry;
+import org.gms.wz.WzResources;
+
+
 
 /**
  * 频道地图管理器（架构 M2 进图：WZ 地图加载 + 每频道缓存）。
@@ -88,15 +93,35 @@ public final class ChannelMapManager implements WzReloadParticipant {
     }
 
     private int publish(WzResourceRegistry.PreparedReload resources, PreparedStaticData prepared) {
-        if (execution != null && !execution.isOwner()) return execution.call(() -> publish(resources, prepared));
+        if (execution != null && !execution.isOwner()) return atBoundary(() -> publish(resources, prepared));
+        if (resourceView.version() == resources.version() && resourceView.digest().equals(resources.digest())) return 0;
         resourceView.validate(resources);
         int changed = commitReload(prepared);
         resourceView.publish(resources);
         return changed;
     }
 
+    /** 等待中的超时屏障撤销，不能在控制面返回失败后悄悄晚到发布。 */
+    private <T> T atBoundary(Supplier<T> action) {
+        var state = new AtomicInteger();
+        var future = execution.submitBarrier(() -> {
+            if (!state.compareAndSet(0, 1)) throw new IllegalStateException("WZ barrier cancelled");
+            return action.get();
+        });
+        try { return future.get(5, TimeUnit.SECONDS); }
+        catch (TimeoutException error) {
+            state.compareAndSet(0, 2);
+            throw new IllegalStateException("WZ channel barrier timed out", error);
+        } catch (InterruptedException error) {
+            state.compareAndSet(0, 2); Thread.currentThread().interrupt(); throw new IllegalStateException(error);
+        } catch (ExecutionException error) {
+            if (error.getCause() instanceof RuntimeException runtime) throw runtime;
+            throw new IllegalStateException(error.getCause());
+        }
+    }
+
     public PreparedStaticData prepareReload(WzMapCatalog mapsCatalog, Map<Integer, MobData> mobData) {
-        if (execution != null && !execution.isOwner()) return execution.call(() -> prepareReload(mapsCatalog, mobData));
+        if (execution != null && !execution.isOwner()) return atBoundary(() -> prepareReload(mapsCatalog, mobData));
         PreparedStaticData prepared = new PreparedStaticData(mapsCatalog, mobData);
         project(prepared);
         return prepared;

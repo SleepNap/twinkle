@@ -1,5 +1,8 @@
 package org.gms.wz;
-
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.gms.wz.resource.BuffResourceLoader;
 import org.gms.wz.resource.ItemResourceLoader;
 import org.gms.wz.resource.MapResourceLoader;
@@ -9,14 +12,11 @@ import org.gms.wz.resource.QuestResourceLoader;
 import org.gms.wz.resource.SkillResourceLoader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+
+
 
 class WzResourceRegistryTest {
 
@@ -128,9 +128,9 @@ class WzResourceRegistryTest {
 
         assertThat(registry.status().resources().keySet())
                 .containsExactlyInAnyOrder("items", "mobs", "maps", "names", "skills", "buffs", "quests");
-        assertThat(registry.resource(WzResources.SKILLS).root()).isEqualTo(root.resolve("Skill.wz").toAbsolutePath());
-        assertThat(registry.resource(WzResources.BUFFS).root()).isEqualTo(root.resolve("Skill.wz").toAbsolutePath());
-        assertThat(registry.resource(WzResources.QUESTS).root()).isEqualTo(root.resolve("Quest.wz").toAbsolutePath());
+        assertThat(registry.resource(WzResources.SKILLS).root().toString()).startsWith(root.resolve(".twinkle-snapshots").toString()).endsWith("Skill.wz");
+        assertThat(registry.resource(WzResources.BUFFS).root().toString()).startsWith(root.resolve(".twinkle-snapshots").toString()).endsWith("Skill.wz");
+        assertThat(registry.resource(WzResources.QUESTS).root().toString()).startsWith(root.resolve(".twinkle-snapshots").toString()).endsWith("Quest.wz");
     }
 
     @Test

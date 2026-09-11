@@ -1,6 +1,6 @@
 package org.gms.service.intercoord;
-
 import java.util.Optional;
+
 
 /** 玩家在大区内的在线真值与连接属主端口。 */
 public interface PlayerPresenceService {
@@ -11,6 +11,13 @@ public interface PlayerPresenceService {
     }
 
     void unregisterPlayer(long playerId);
+    /** 旧频道的迟到注销/活动通知必须由协调者原子校验属主。 */
+    default void unregisterOwnedPlayer(long playerId, int ownerChannelId) {
+        throw new UnsupportedOperationException("Owned presence mutation is not implemented");
+    }
+    default void updateOwnedPlayerActivity(long playerId, int ownerChannelId, PlayerActivity activity) {
+        throw new UnsupportedOperationException("Owned presence mutation is not implemented");
+    }
     void movePlayer(long playerId, int channelId);
     void beginChannelTransfer(long playerId, int sourceChannelId, int targetChannelId);
     void updatePlayerActivity(long playerId, PlayerActivity activity);

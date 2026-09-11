@@ -1,10 +1,11 @@
 package org.gms.channel;
-
 import lombok.extern.log4j.Log4j2;
+import org.gms.concurrent.SerialTaskQueue;
 import org.gms.event.EventBus;
 import org.gms.i18n.I18n;
 import org.gms.service.admin.OnlinePlayerEvents;
 import org.gms.service.intercoord.IntercoordService;
+
 
 /**
  * 大区 Presence 绑定（架构 4.3.1/4.4：进图注册、真断链注销、活动状态切换）。
@@ -23,6 +24,16 @@ import org.gms.service.intercoord.IntercoordService;
 public final class ChannelLocationBinder implements AutoCloseable {
 
 
+
+    private SerialTaskQueue io;
+    public ChannelLocationBinder async(SerialTaskQueue io) { this.io = io; return this; }
+    private void dispatch(Runnable action) {
+        if (io == null) {
+            if (org.gms.concurrent.GameExecution.inGameOperation()) throw new IllegalStateException("Presence IO queue is not wired");
+            action.run();
+        }
+        else io.run(action).exceptionally(error -> { log.error(I18n.message("log.social.io_failed"), error); return null; });
+    }
 
     private final int channelId;
     private final int worldId;
@@ -53,26 +64,32 @@ public final class ChannelLocationBinder implements AutoCloseable {
         if (event.ownerChannelId() != 0 && event.ownerChannelId() != channelId) {
             return;
         }
-        intercoord.registerPlayer(event.characterId(), worldId, channelId);
-        intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
-        log.debug(I18n.message("log.channel.location.register"), event.characterId(), channelId);
+        dispatch(() -> {
+            intercoord.registerPlayer(event.characterId(), worldId, channelId);
+            intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
+            log.debug(I18n.message("log.channel.location.register"), event.characterId(), channelId);
+        });
     }
 
     private void onOffline(OnlinePlayerEvents.PlayerOffline event) {
         if (event.ownerChannelId() != 0 && event.ownerChannelId() != channelId) {
             return;
         }
-        intercoord.unregisterPlayer(event.characterId());
-        intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
-        log.debug(I18n.message("log.channel.location.unregister"), event.characterId());
+        dispatch(() -> {
+            intercoord.unregisterOwnedPlayer(event.characterId(), channelId);
+            intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
+            log.debug(I18n.message("log.channel.location.unregister"), event.characterId());
+        });
     }
 
     private void onActivityChanged(OnlinePlayerEvents.PlayerActivityChanged event) {
         if (event.worldId() != worldId || event.ownerChannelId() != channelId) {
             return;
         }
-        intercoord.updatePlayerActivity(event.characterId(), event.activity());
-        intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
+        dispatch(() -> {
+            intercoord.updateOwnedPlayerActivity(event.characterId(), channelId, event.activity());
+            intercoord.heartbeatChannel(channelId, intercoord.onlineOnChannel(channelId));
+        });
     }
 
     @Override

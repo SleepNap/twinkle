@@ -135,6 +135,9 @@ export interface WzReloadResponse {
   version: number
   resources: Record<string, number>
   runtimeObjects: Record<string, number>
+  digest: string
+  versions: Record<string, number>
+  failures: Record<string, string>
 }
 
 export interface RestartResponse extends RestartPhaseResponse {

@@ -1,15 +1,15 @@
 package org.gms.bootstrap;
-
+import java.util.Comparator;
+import java.util.List;
 import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
+import org.gms.module.ModuleRegistry;
 import org.gms.service.admin.AdminService;
 import org.gms.service.admin.LogicReloadReport;
-import org.gms.module.ModuleRegistry;
 import org.gms.service.admin.RewardGrant;
 import org.gms.service.admin.RewardResult;
 
-import java.util.Comparator;
-import java.util.List;
+
 
 /** Worker 内 AdminService 聚合门面；资源重载执行一次，玩家操作按频道运行时定位。 */
 public final class WorkerAdminService implements AdminService {
@@ -92,6 +92,9 @@ public final class WorkerAdminService implements AdminService {
     }
 
     @Override public int reloadScripts() { return first().reloadScripts(); }
+    @Override public void discardPreparedWz() { first().discardPreparedWz(); }
+    @Override public String prepareWz() { return first().prepareWz(); }
+    @Override public WzReloadResult commitWz(String digest) { return first().commitWz(digest); }
     @Override public WzReloadResult reloadWz() { return first().reloadWz(); }
     @Override public void requestRestart() { first().requestRestart(); }
     @Override public RestartCoordinator.Phase restartPhase() { return first().restartPhase(); }

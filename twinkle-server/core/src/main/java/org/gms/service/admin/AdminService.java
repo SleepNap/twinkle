@@ -1,10 +1,10 @@
 package org.gms.service.admin;
-
+import java.util.List;
+import java.util.Map;
 import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
 
-import java.util.List;
-import java.util.Map;
+
 
 /**
  * 管理侧访问频道的 service 契约（架构 M3-1 数据三路第②路：事务性操作经 service 接口）。
@@ -64,10 +64,16 @@ public interface AdminService {
 
     /** WZ 全局快照换代结果；runtimeObjects 为运行态参与者到刷新对象数。 */
     public record WzReloadResult(long version, Map<String, Integer> resources,
-                                 Map<String, Integer> runtimeObjects) {
+                                 Map<String, Integer> runtimeObjects, String digest,
+                                 Map<String, Long> versions, Map<String, String> failures) {
+        public WzReloadResult(long version, Map<String, Integer> resources, Map<String, Integer> runtimeObjects) {
+            this(version, resources, runtimeObjects, "", Map.of(), Map.of());
+        }
         public WzReloadResult {
             resources = Map.copyOf(resources);
             runtimeObjects = Map.copyOf(runtimeObjects);
+            versions = versions == null ? Map.of() : Map.copyOf(versions);
+            failures = failures == null ? Map.of() : Map.copyOf(failures);
         }
     }
 
@@ -119,6 +125,9 @@ public interface AdminService {
 
     /** 原子重载全部已注册 WZ 资源，并刷新当前频道已加载地图的静态数据。 */
     WzReloadResult reloadWz();
+    default void discardPreparedWz() { throw new UnsupportedOperationException("WZ discard unavailable"); }
+    default String prepareWz() { throw new UnsupportedOperationException("WZ prepare unavailable"); }
+    default WzReloadResult commitWz(String digest) { throw new UnsupportedOperationException("WZ commit unavailable"); }
 
     /**
      * 请求一次主动重启（L4：DRAINING → 增量 FLUSH → 退出，红线 17）。

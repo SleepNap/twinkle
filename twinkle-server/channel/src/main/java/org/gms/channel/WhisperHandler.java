@@ -1,5 +1,5 @@
 package org.gms.channel;
-
+import java.nio.charset.StandardCharsets;
 import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.EventBus;
@@ -14,6 +14,7 @@ import org.gms.net.packet.PacketHandler;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.service.intercoord.IntercoordService;
+
 
 /**
  * 悄悄话处理（RecvOpcode.WHISPER 0x78，架构 4.4 消息总线：悄悄话=发目标频道）。
@@ -72,23 +73,11 @@ public final class WhisperHandler implements PacketHandler {
             sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
             return;
         }
-        int toChannel = intercoord.locate(toId).orElse(-1);
         WhisperRequest req = new WhisperRequest(chr.getId(), chr.getName(), toId, toName, content);
-
-        if (toChannel == channelId) {
-            // 同频道直发（不经总线）
-            PacketSession target = sessions.get(toId);
-            if (target != null) {
-                target.send(whisperPacket(req));
-            } else {
-                sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
-            }
-        } else if (toChannel > 0) {
-            // 跨频道：经消息总线投递目标频道（总线不存状态，只负责送达）
-            eventBus.send(MessageTargets.channel(toChannel), req);
-        } else {
-            sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
-        }
+        // 当前名字解析覆盖本频道，直接由本频道会话属主验证，避免为本地投递发同步 RPC。
+        PacketSession target = sessions.get(toId);
+        if (target != null) target.send(whisperPacket(req));
+        else sendWhisperResult(session, toName, I18n.message("game.whisper.target_offline"));
     }
 
     /** 构建 v83 WHISPER 回包（0x87）：1 未读 + 发送者名（短字符串） + 频道(1B) + 内容（短字符串）。 */
@@ -126,11 +115,11 @@ public final class WhisperHandler implements PacketHandler {
             return null;
         }
         byte[] bytes = packet.readBytes(len);
-        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     private static void writeShortString(ByteArrayOutPacket p, String value) {
-        byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         p.writeByte(bytes.length);
         p.writeBytes(bytes);
     }

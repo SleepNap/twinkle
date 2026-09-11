@@ -1,5 +1,9 @@
 package org.gms.bootstrap;
-
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.extern.log4j.Log4j2;
 import org.gms.channel.ChannelPlayerDirectory;
 import org.gms.channel.admin.ChannelAdminService;
@@ -14,11 +18,7 @@ import org.gms.wz.WzReloadCoordinator;
 import org.gms.wz.WzReloadParticipant;
 import org.gms.wz.WzResourceRegistry;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+
 
 /**
  * 进程级频道编排器。一个 Worker 共享一份 WZ、脚本、主 Tick 和存档队列，管理多个隔离的
@@ -27,6 +27,7 @@ import java.util.Map;
 @Log4j2
 public final class ChannelWorker implements AutoCloseable {
 
+    private final ChannelRuntimeFactory runtimeFactory;
     private final ChannelWorkerSpec spec;
     private final IntercoordService intercoord;
     private final TickScheduler tickScheduler;
@@ -40,6 +41,7 @@ public final class ChannelWorker implements AutoCloseable {
                          IntercoordService intercoord, ChannelPlayerDirectory playerDirectory,
                          TickScheduler tickScheduler, boolean exitOnRestart) {
         this.spec = spec;
+        this.runtimeFactory = runtimeFactory;
         this.intercoord = intercoord;
         this.playerDirectory = playerDirectory;
         this.tickScheduler = tickScheduler;
@@ -92,6 +94,7 @@ public final class ChannelWorker implements AutoCloseable {
         intercoord.unregisterChannel(channelId);
         runtime.server().stop();
         runtime.drainStateTasks();
+        runtimeFactory.drainIo();
     }
 
     public synchronized void startAll() {
@@ -115,11 +118,14 @@ public final class ChannelWorker implements AutoCloseable {
 
     @Override
     public synchronized void close() {
+        stopAll();
+        runtimeFactory.drainSaves();
         for (ChannelRuntime runtime : runtimes.values()) {
             intercoord.unregisterChannel(runtime.channelId());
             runtime.close();
             playerDirectory.unregister(runtime.channelId(), runtime.players());
         }
+        runtimeFactory.close();
     }
 
     private ChannelRuntime requireRuntime(int channelId) {

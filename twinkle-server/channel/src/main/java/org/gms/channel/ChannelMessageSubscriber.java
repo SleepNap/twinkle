@@ -1,5 +1,4 @@
 package org.gms.channel;
-
 import lombok.extern.log4j.Log4j2;
 import org.gms.event.EventBus;
 import org.gms.i18n.I18n;
@@ -9,6 +8,7 @@ import org.gms.message.WhisperRequest;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.service.intercoord.IntercoordService;
+
 
 /**
  * 频道消息订阅（架构 4.4 消息总线：订阅本频道 target，接收跨频道投递的消息并派发）。
@@ -49,11 +49,7 @@ public final class ChannelMessageSubscriber implements AutoCloseable {
     }
 
     private void deliverWhisper(WhisperRequest req) {
-        // 定位校验：目标必须在本频道（防跨频道消息投到错误频道）
-        if (intercoord.locate(req.toId()).orElse(-1) != channelId) {
-            log.warn(I18n.message("log.whisper.target_not_in_channel"), req.toId(), channelId);
-            return;
-        }
+        // 物理会话注册表是本频道投递的真值，无需同步查询远端 Presence。
         PacketSession target = sessions.get(req.toId());
         if (target != null) {
             target.send(WhisperHandler.whisperPacket(req));

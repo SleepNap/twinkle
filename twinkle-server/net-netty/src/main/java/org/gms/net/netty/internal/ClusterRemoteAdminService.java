@@ -1,15 +1,4 @@
 package org.gms.net.netty.internal;
-import org.gms.service.intercoord.ChannelDirectoryService;
-
-import org.gms.diagnostics.PacketTrace;
-import org.gms.hotreload.RestartCoordinator;
-import org.gms.service.admin.AdminService;
-import org.gms.service.admin.LogicReloadReport;
-import org.gms.module.ModuleRuntime;
-import org.gms.service.admin.RewardGrant;
-import org.gms.service.admin.RewardResult;
-import org.gms.service.intercoord.IntercoordService;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -17,6 +6,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.IntFunction;
+import org.gms.diagnostics.PacketTrace;
+import org.gms.hotreload.RestartCoordinator;
+import org.gms.module.ModuleRuntime;
+import org.gms.service.admin.AdminService;
+import org.gms.service.admin.LogicReloadReport;
+import org.gms.service.admin.RewardGrant;
+import org.gms.service.admin.RewardResult;
+import org.gms.service.intercoord.ChannelDirectoryService;
+import org.gms.service.intercoord.IntercoordService;
+
+
 
 /** 管理进程的集群 AdminService：频道操作按频道路由，资源重载按 worker 去重并发执行。 */
 public final class ClusterRemoteAdminService implements AdminService {
@@ -40,12 +41,15 @@ public final class ClusterRemoteAdminService implements AdminService {
         return remote(channelFor(grant.characterId())).grantReward(grant);
     }
 
-    private final CoordinatorLink link;
+    private final IntFunction<AdminService> adminFactory;
     private final IntercoordService intercoord;
     private final int fallbackChannelId;
 
     public ClusterRemoteAdminService(CoordinatorLink link, IntercoordService intercoord, int fallbackChannelId) {
-        this.link = link;
+        this(channel -> new RemoteAdminService(link, channel), intercoord, fallbackChannelId);
+    }
+    public ClusterRemoteAdminService(IntFunction<AdminService> adminFactory, IntercoordService intercoord, int fallbackChannelId) {
+        this.adminFactory = adminFactory;
         this.intercoord = intercoord;
         this.fallbackChannelId = fallbackChannelId;
     }
@@ -85,17 +89,47 @@ public final class ClusterRemoteAdminService implements AdminService {
                 .mapToInt(Integer::intValue).sum();
     }
 
+    private String pendingWzDigest;
+    private List<Integer> pendingWzWorkers;
+    private final Map<Integer, WzReloadResult> completedWzWorkers = new LinkedHashMap<>();
+
     @Override
-    public WzReloadResult reloadWz() {
-        List<WzReloadResult> reports = parallel(workerRepresentatives(), channelId -> remote(channelId).reloadWz());
-        long version = reports.stream().mapToLong(WzReloadResult::version).max().orElse(0);
-        Map<String, Integer> resources = new LinkedHashMap<>();
-        Map<String, Integer> runtimeObjects = new LinkedHashMap<>();
-        for (WzReloadResult report : reports) {
-            report.resources().forEach(resources::putIfAbsent);
-            report.runtimeObjects().forEach((name, count) -> runtimeObjects.merge(name, count, Integer::sum));
+    public synchronized WzReloadResult reloadWz() {
+        List<Integer> workers = pendingWzWorkers == null ? workerRepresentatives() : pendingWzWorkers;
+        if (pendingWzDigest == null) {
+            List<String> digests = parallel(workers, channelId -> remote(channelId).prepareWz());
+            if (digests.isEmpty() || digests.stream().anyMatch(d -> d == null || d.isBlank())
+                    || digests.stream().distinct().count() != 1) {
+                RuntimeException failure = new IllegalStateException("Workers have different WZ content; release rejected before commit");
+                for (int worker : workers) {
+                    try { remote(worker).discardPreparedWz(); }
+                    catch (RuntimeException error) { failure.addSuppressed(error); }
+                }
+                throw failure;
+            }
+            pendingWzDigest = digests.getFirst();
+            pendingWzWorkers = List.copyOf(workers);
         }
-        return new WzReloadResult(version, resources, runtimeObjects);
+        String digest = pendingWzDigest;
+        Map<String, Integer> resources = new LinkedHashMap<>(), objects = new LinkedHashMap<>();
+        Map<String, Long> versions = new LinkedHashMap<>();
+        Map<String, String> failures = new LinkedHashMap<>();
+        long version = 0;
+        for (int worker : workers) {
+            try {
+                WzReloadResult report = completedWzWorkers.get(worker);
+                if (report == null) report = remote(worker).commitWz(digest);
+                if (!digest.equals(report.digest())) throw new IllegalStateException("WZ response digest mismatch");
+                if (report.failures().isEmpty()) completedWzWorkers.put(worker, report);
+                version = Math.max(version, report.version());
+                report.resources().forEach(resources::putIfAbsent);
+                report.runtimeObjects().forEach((key, value) -> objects.put(worker + "/" + key, value));
+                report.versions().forEach((key, value) -> versions.put(worker + "/" + key, value));
+                report.failures().forEach((key, value) -> failures.put(worker + "/" + key, value));
+            } catch (RuntimeException error) { failures.put("worker:" + worker, "UNKNOWN: " + error); }
+        }
+        if (failures.isEmpty()) { pendingWzDigest = null; pendingWzWorkers = null; completedWzWorkers.clear(); }
+        return new WzReloadResult(version, resources, objects, digest, versions, failures);
     }
 
     @Override
@@ -118,7 +152,7 @@ public final class ClusterRemoteAdminService implements AdminService {
                         .orElse(fallbackChannelId));
     }
 
-    private RemoteAdminService remote(int channelId) { return new RemoteAdminService(link, channelId); }
+    private AdminService remote(int channelId) { return adminFactory.apply(channelId); }
 
     private List<Integer> representativesByChannel() {
         return intercoord.channels().keySet().stream().sorted().toList();

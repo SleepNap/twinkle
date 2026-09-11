@@ -1,14 +1,12 @@
 package org.gms.channel.admin;
-import org.gms.concurrent.GameExecution;
-import org.gms.service.admin.RewardGrant;
-import org.gms.service.admin.RewardResult;
-import org.gms.channel.RewardDeliveryService;
-
+import java.util.Comparator;
 import lombok.extern.log4j.Log4j2;
-import org.gms.diagnostics.PacketTrace;
 import org.gms.channel.PlayerSessionRegistry;
 import org.gms.channel.PlayerStorage;
+import org.gms.channel.RewardDeliveryService;
 import org.gms.channel.persist.RestartService;
+import org.gms.concurrent.GameExecution;
+import org.gms.diagnostics.PacketTrace;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.Equip;
 import org.gms.domain.game.inventory.InventoryType;
@@ -20,7 +18,10 @@ import org.gms.i18n.I18n;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.PacketTracePolicy;
 import org.gms.service.admin.AdminService;
+import org.gms.service.admin.RewardGrant;
+import org.gms.service.admin.RewardResult;
 import org.gms.wz.WzReloadCoordinator;
+
 
 /**
  * 频道侧 {@link AdminService} 实现（架构 M3-1 第②路：管理侧经 service 接口访问频道）。
@@ -110,7 +111,7 @@ public final class ChannelAdminService implements AdminService {
                     items.add(toItemView(inventoryType, item));
                 }
             }
-            items.sort(java.util.Comparator.comparingInt(InventoryItemView::inventoryType)
+            items.sort(Comparator.comparingInt(InventoryItemView::inventoryType)
                     .thenComparingInt(InventoryItemView::position));
             return new CharacterInventory(character.getId(),
                     character.getName() == null ? "" : character.getName(),
@@ -164,7 +165,14 @@ public final class ChannelAdminService implements AdminService {
         WzReloadCoordinator.ReloadReport report = wzReloadCoordinator.reload();
         int runtimeObjects = report.runtimeObjects().values().stream().mapToInt(Integer::intValue).sum();
         log.info(I18n.message("log.admin.reload_wz"), report.version(), runtimeObjects);
-        return new WzReloadResult(report.version(), report.resources(), report.runtimeObjects());
+        return new WzReloadResult(report.version(), report.resources(), report.runtimeObjects(), report.digest(), report.versions(), report.failures());
+    }
+
+    @Override public void discardPreparedWz() { wzReloadCoordinator.discardPrepared(); }
+    @Override public String prepareWz() { return wzReloadCoordinator.prepare(); }
+    @Override public WzReloadResult commitWz(String digest) {
+        var report = wzReloadCoordinator.reload(digest);
+        return new WzReloadResult(report.version(), report.resources(), report.runtimeObjects(), report.digest(), report.versions(), report.failures());
     }
 
     @Override

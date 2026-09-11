@@ -1,5 +1,5 @@
 package org.gms.net.netty.internal;
-
+import java.util.Optional;
 import lombok.extern.log4j.Log4j2;
 import org.gms.diagnostics.PacketTrace;
 import org.gms.hotreload.RestartCoordinator;
@@ -7,7 +7,7 @@ import org.gms.i18n.I18n;
 import org.gms.service.admin.AdminService;
 import org.gms.service.admin.RewardGrant;
 
-import java.util.Optional;
+
 
 /**
  * AdminService RPC 分发器（架构 4.6.6 第②路：管理进程 RPC → 频道进程真值）。
@@ -49,6 +49,9 @@ public final class AdminRpcDispatcher {
                 case "reloadLogic" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadLogic(
                         JsonCodec.decode(args[0], String.class.getName()))));
                 case "reloadScripts" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadScripts()));
+                case "discardPreparedWz" -> { admin.discardPreparedWz(); yield InternalProtocol.RpcResponse.ok("null"); }
+                case "prepareWz" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.prepareWz()));
+                case "commitWz" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.commitWz(JsonCodec.decode(args[0], String.class.getName()))));
                 case "reloadWz" -> InternalProtocol.RpcResponse.ok(JsonCodec.encode(admin.reloadWz()));
                 case "requestRestart" -> {
                     admin.requestRestart();

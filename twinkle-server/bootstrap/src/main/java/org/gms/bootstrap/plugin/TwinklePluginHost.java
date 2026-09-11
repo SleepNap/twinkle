@@ -1,11 +1,13 @@
 package org.gms.bootstrap.plugin;
-
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
-import org.gms.i18n.I18n;
 import org.gms.event.EventBus;
 import org.gms.hotreload.EntityReloadCoordinator;
 import org.gms.hotreload.LogicSystemRegistry;
 import org.gms.hotreload.versioned.VersionGate;
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.RecvOpcode;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.net.packet.PacketHandler;
@@ -14,12 +16,11 @@ import org.gms.plugin.ContributionType;
 import org.gms.plugin.PluginContext;
 import org.gms.plugin.PluginDescriptor;
 import org.gms.plugin.PluginHost;
+import org.gms.plugin.runtime.DefaultPluginContext;
 import org.gms.tick.TickHandler;
 import org.gms.tick.TickScheduler;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+
 
 /**
  * 插件宿主实现（架构 7.2：平台只暴露贡献点，宿主把声明式/命令式贡献点落进各注册表）。
@@ -78,7 +79,7 @@ public final class TwinklePluginHost implements PluginHost {
         // ---- 包处理器贡献点 → HandlerRegistry ----
         for (PluginDescriptor.PacketHandlerContribution c : descriptor.packetHandlers()) {
             try {
-                PacketHandler handler = instantiate(c.className(), PacketHandler.class, loader, descriptor.id());
+                PacketHandler handler = context.guard(PacketHandler.class, instantiate(c.className(), PacketHandler.class, loader, descriptor.id()));
                 RecvOpcode opcode = RecvOpcode.valueOf(c.opcode());
                 int version = maxVersion(c.version());
                 List<HandlerRegistry> registered = new ArrayList<>();
@@ -92,25 +93,27 @@ public final class TwinklePluginHost implements PluginHost {
                         registered.add(packetRegistry);
                     }
                 } catch (RuntimeException e) {
-                    registered.forEach(registry -> registry.unregister(opcode));
+                    registered.forEach(registry -> registry.unregister(opcode, handler));
                     throw e;
                 }
-                handles.add(() -> packetRegistries.forEach(registry -> registry.unregister(opcode)));
+                handles.add(((DefaultPluginContext) context).trackContribution(() -> packetRegistries.forEach(registry -> registry.unregister(opcode, handler))));
                 log.info(I18n.message("log.plugin.contribution_packet"), descriptor.id(), opcode, version);
             } catch (RuntimeException e) {
                 log.error(I18n.message("log.plugin.packet_register_failed"), descriptor.id(), c.opcode(), e);
+                throw new IllegalStateException("Plugin contribution registration failed", e);
             }
         }
 
         // ---- tick 任务贡献点 → TickScheduler ----
         for (PluginDescriptor.TickHandlerContribution c : descriptor.tickHandlers()) {
             try {
-                TickHandler handler = instantiate(c.className(), TickHandler.class, loader, descriptor.id());
+                TickHandler handler = context.guard(TickHandler.class, instantiate(c.className(), TickHandler.class, loader, descriptor.id()));
                 tickScheduler.register(handler);
-                handles.add(() -> tickScheduler.unregister(handler));
+                handles.add(((DefaultPluginContext) context).trackContribution(() -> tickScheduler.unregister(handler)));
                 log.info(I18n.message("log.plugin.contribution_tick"), descriptor.id(), c.className(), c.version());
             } catch (RuntimeException e) {
                 log.error(I18n.message("log.plugin.tick_register_failed"), descriptor.id(), c.className(), e);
+                throw new IllegalStateException("Plugin contribution registration failed", e);
             }
         }
 
@@ -130,23 +133,25 @@ public final class TwinklePluginHost implements PluginHost {
                 log.info(I18n.message("log.plugin.contribution_event"), descriptor.id(), c.className(), c.target(), c.version());
             } catch (ClassNotFoundException | RuntimeException e) {
                 log.error(I18n.message("log.plugin.event_register_failed"), descriptor.id(), c.className(), e);
+                throw new IllegalStateException("Plugin contribution registration failed", e);
             }
         }
 
         // ---- 逻辑系统贡献点 → LogicSystemRegistry ----
         for (PluginDescriptor.LogicSystemContribution c : descriptor.logicSystems()) {
             try {
-                Object system = instantiate(c.className(), Object.class, loader, descriptor.id());
+                Object system = ((DefaultPluginContext) context).guardInterfaces(instantiate(c.className(), Object.class, loader, descriptor.id()));
                 int version = maxVersion(c.version());
                 if (logicSystemRegistry.find(c.key()).isPresent()) {
                     logicSystemRegistry.replace(c.key(), system, version);
                 } else {
                     logicSystemRegistry.register(c.key(), system, version);
                 }
-                handles.add(() -> logicSystemRegistry.unregister(c.key()));
+                handles.add(((DefaultPluginContext) context).trackContribution(() -> logicSystemRegistry.unregister(c.key(), system)));
                 log.info(I18n.message("log.plugin.contribution_logic"), descriptor.id(), c.key(), version);
             } catch (RuntimeException e) {
                 log.error(I18n.message("log.plugin.logic_register_failed"), descriptor.id(), c.key(), e);
+                throw new IllegalStateException("Plugin contribution registration failed", e);
             }
         }
 
