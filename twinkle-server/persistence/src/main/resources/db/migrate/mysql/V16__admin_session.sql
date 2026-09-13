@@ -9,6 +9,6 @@ CREATE TABLE admin_session (
     last_used_at VARCHAR(40),
     revoked_at VARCHAR(40),
     remote_address VARCHAR(128) NOT NULL DEFAULT ''
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE UNIQUE INDEX idx_admin_session_prefix ON admin_session(token_prefix);
 CREATE INDEX idx_admin_session_account ON admin_session(account_id, created_at);

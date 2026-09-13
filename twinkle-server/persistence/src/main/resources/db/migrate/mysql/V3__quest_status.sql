@@ -61,3 +61,9 @@ CREATE TABLE IF NOT EXISTS `inventory_items` (
     `ring_id` INT NOT NULL DEFAULT 0,
     PRIMARY KEY (`inventory_item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 按角色读档、覆盖存档与账号清理；任务进度按记录顺序读取。
+CREATE INDEX idx_quest_status_character ON quest_status(character_id);
+CREATE INDEX idx_quest_progress_character_id ON quest_progress(character_id, id);
+CREATE INDEX idx_inventory_items_character ON inventory_items(character_id);
+CREATE INDEX idx_inventory_items_account ON inventory_items(account_id);

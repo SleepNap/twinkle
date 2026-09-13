@@ -116,8 +116,10 @@ CREATE TABLE IF NOT EXISTS `character_records` (
     `party_search` TINYINT(1) NOT NULL DEFAULT '1',
     `jail_expire` BIGINT(20) NOT NULL DEFAULT '0',
     PRIMARY KEY (`id`),
-    KEY `account_id` (`account_id`),
+    KEY `idx_character_records_account_world_level` (`account_id`, `world`, `level` DESC),
     KEY `party` (`party`),
     KEY `ranking1` (`level`, `exp`),
     KEY `ranking2` (`gm`, `job`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- 登录名称校验、好友按名称定位。
+CREATE INDEX idx_character_records_name ON character_records(name);

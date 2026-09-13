@@ -24,3 +24,6 @@ CREATE TABLE bus_stream_state (
     stream_id TEXT PRIMARY KEY,
     last_delivered_seq INTEGER NOT NULL DEFAULT 0
 );
+
+-- 按消息流查找已发出的最大序号，避免扫描其他消息流。
+CREATE INDEX idx_bus_outbox_queue_stream_seq ON bus_outbox_queue(stream_id, seq);

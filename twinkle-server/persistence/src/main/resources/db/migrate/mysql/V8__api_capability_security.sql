@@ -18,7 +18,7 @@ CREATE TABLE api_key_records (
     rotated_from_prefix VARCHAR(32),
     last_used_at VARCHAR(40),
     permission_version VARCHAR(64) NOT NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE UNIQUE INDEX idx_api_key_records_prefix ON api_key_records(key_prefix);
 CREATE UNIQUE INDEX idx_api_key_records_credential ON api_key_records(credential_id);
 
@@ -35,7 +35,7 @@ CREATE TABLE api_request_audit (
     remote_address VARCHAR(128) NOT NULL DEFAULT '',
     elapsed_ms INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE INDEX idx_api_request_audit_key_time ON api_request_audit(api_key_id, created_at);
 CREATE INDEX idx_api_request_audit_request_id ON api_request_audit(request_id);
 
@@ -61,6 +61,9 @@ CREATE TABLE tool_execution_audit (
     intent_summary VARCHAR(512),
     started_at VARCHAR(40) NOT NULL,
     completed_at VARCHAR(40) NOT NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE UNIQUE INDEX idx_tool_execution_audit_ref ON tool_execution_audit(audit_ref);
 CREATE INDEX idx_tool_execution_audit_request ON tool_execution_audit(subject_id, request_id, tool_id);
+
+-- 账号删除时定位所属 API Key。
+CREATE INDEX idx_api_key_records_owner_account ON api_key_records(owner_account_id);

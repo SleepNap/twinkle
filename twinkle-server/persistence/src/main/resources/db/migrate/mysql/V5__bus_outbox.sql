@@ -20,3 +20,6 @@ CREATE TABLE `bus_stream_state` (
     `last_delivered_seq` BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (`stream_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 按消息流查找已发出的最大序号，避免扫描其他消息流。
+CREATE INDEX idx_bus_outbox_queue_stream_seq ON bus_outbox_queue(stream_id, seq);

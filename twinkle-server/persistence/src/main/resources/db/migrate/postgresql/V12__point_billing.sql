@@ -41,4 +41,6 @@ CREATE TABLE point_transaction (
     detail TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_point_transaction_account ON point_transaction(account_id, created_at);
+-- 账号流水按 id 倒序读取；时间窗口统计同时按账号和原因过滤。
+CREATE INDEX idx_point_transaction_account ON point_transaction(account_id, id);
+CREATE INDEX idx_point_transaction_account_reason_time ON point_transaction(account_id, reason, created_at);

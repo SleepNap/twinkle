@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS character_records (
     party_search INTEGER NOT NULL DEFAULT 1,
     jail_expire INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_character_records_account_id ON character_records(account_id);
+CREATE INDEX IF NOT EXISTS idx_character_records_account_world_level ON character_records(account_id, world, level DESC);
 CREATE INDEX IF NOT EXISTS idx_character_records_world ON character_records(world);
 CREATE INDEX IF NOT EXISTS idx_character_records_ranking_level ON character_records(level, exp);
+-- 登录名称校验、好友按名称定位。
+CREATE INDEX idx_character_records_name ON character_records(name);

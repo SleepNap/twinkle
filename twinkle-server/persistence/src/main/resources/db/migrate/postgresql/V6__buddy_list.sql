@@ -8,3 +8,6 @@ CREATE TABLE buddy_list (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (owner_id, buddy_id)
 );
+
+-- 删除角色时清理其他玩家指向该角色的好友关系；正向查询由主键覆盖。
+CREATE INDEX idx_buddy_list_buddy ON buddy_list(buddy_id);

@@ -15,6 +15,6 @@ CREATE TABLE admin_operation_audit (
     remote_address VARCHAR(128) NOT NULL DEFAULT '',
     elapsed_ms INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE INDEX idx_admin_operation_audit_account ON admin_operation_audit(account_id, created_at);
 CREATE INDEX idx_admin_operation_audit_request ON admin_operation_audit(request_id);

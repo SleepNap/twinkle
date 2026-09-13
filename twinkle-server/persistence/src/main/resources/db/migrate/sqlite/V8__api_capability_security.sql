@@ -64,3 +64,6 @@ CREATE TABLE tool_execution_audit (
 );
 CREATE UNIQUE INDEX idx_tool_execution_audit_ref ON tool_execution_audit(audit_ref);
 CREATE INDEX idx_tool_execution_audit_request ON tool_execution_audit(subject_id, request_id, tool_id);
+
+-- 账号删除时定位所属 API Key。
+CREATE INDEX idx_api_key_records_owner_account ON api_key_records(owner_account_id);

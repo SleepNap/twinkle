@@ -123,11 +123,14 @@ public final class MigrationRunner {
     }
 
     private void ensureVersionTable(Connection conn) throws SQLException {
+        String appliedAtDefinition = "mysql".equals(dialectId)
+                ? "applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+                : "applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)";
         try (Statement st = conn.createStatement()) {
             st.execute("CREATE TABLE IF NOT EXISTS " + VERSION_TABLE + " ("
                     + "version INTEGER PRIMARY KEY, "
                     + "name TEXT NOT NULL, "
-                    + "applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+                    + appliedAtDefinition);
         }
     }
 
