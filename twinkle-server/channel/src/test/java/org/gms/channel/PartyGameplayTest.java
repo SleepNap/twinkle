@@ -6,11 +6,14 @@ import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
+import org.gms.net.packet.OutPacket;
 import org.gms.logic.game.DefaultPartySystem;
 
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -114,6 +117,91 @@ public class PartyGameplayTest {
             guest.character.setMapObject(elsewhere);
             assertThat(handler.membersOnMap(leader.character)).containsExactly(leader.character);
         }
+    }
+
+    @Test public void memberHpUpdatesReachSameMapPartyOnly() {
+        var map = new MapleMap();
+        map.setMapId(100);
+        var leader = new GameplayTestSession(1, map);
+        var guest = new GameplayTestSession(2, map);
+        var sessions = new PlayerSessionRegistry();
+        sessions.claim(1, leader);
+        sessions.claim(2, guest);
+        try (var handler = new PartyHandler(new DefaultPartySystem(), sessions, 1, Clock.systemUTC(), state -> true)) {
+            int partyId = party(handler, leader, guest);
+            assertThat(partyId).isPositive();
+            leader.character.setHp(37);
+            handler.updateHp(leader.character);
+            var expected = new Hp(1, 37, leader.character.effectiveMaxHp());
+            assertThat(hpPackets(leader)).containsExactly(expected);
+            assertThat(hpPackets(guest)).containsExactly(expected);
+
+            var elsewhere = new MapleMap();
+            elsewhere.setMapId(100);
+            guest.character.setMapObject(elsewhere);
+            leader.sent.clear();
+            guest.sent.clear();
+            leader.character.setHp(20);
+            handler.updateHp(leader.character);
+            assertThat(hpPackets(leader)).containsExactly(new Hp(1, 20, leader.character.effectiveMaxHp()));
+            assertThat(hpPackets(guest)).isEmpty();
+        }
+    }
+
+    @Test public void refreshSendsFullHpSnapshotWhenMemberReturnsToMap() {
+        var map = new MapleMap();
+        map.setMapId(100);
+        var leader = new GameplayTestSession(1, map);
+        var guest = new GameplayTestSession(2, map);
+        var sessions = new PlayerSessionRegistry();
+        sessions.claim(1, leader);
+        sessions.claim(2, guest);
+        try (var handler = new PartyHandler(new DefaultPartySystem(), sessions, 1, Clock.systemUTC(), state -> true)) {
+            party(handler, leader, guest);
+            var elsewhere = new MapleMap();
+            elsewhere.setMapId(200);
+            guest.character.setMapObject(elsewhere);
+            guest.character.setMap(200);
+            handler.refresh();
+
+            guest.character.setMapObject(map);
+            guest.character.setMap(100);
+            guest.character.setHp(42);
+            leader.sent.clear();
+            guest.sent.clear();
+            handler.refresh();
+
+            var leaderHp = new Hp(1, leader.character.getHp(), leader.character.effectiveMaxHp());
+            var guestHp = new Hp(2, 42, guest.character.effectiveMaxHp());
+            assertThat(hpPackets(guest)).containsExactly(leaderHp, guestHp);
+            assertThat(hpPackets(leader)).containsExactly(guestHp);
+        }
+    }
+
+    private static int party(PartyHandler handler, GameplayTestSession leader, GameplayTestSession guest) {
+        handler.handle(leader, input(1));
+        int partyId = leader.character.getParty();
+        var invite = new ByteArrayOutPacket();
+        invite.writeByte(4);
+        invite.writeString(guest.character.getName());
+        handler.handle(leader, new ByteArrayInPacket(invite.getBytes()));
+        handler.handle(guest, input(3, partyId));
+        leader.sent.clear();
+        guest.sent.clear();
+        return partyId;
+    }
+
+    private static List<Hp> hpPackets(GameplayTestSession session) {
+        List<Hp> result = new ArrayList<>();
+        for (OutPacket packet : session.sent) {
+            var wire = new ByteArrayInPacket(packet.getBytes());
+            if (wire.readUnsignedShort() != SendOpcode.UPDATE_PARTYMEMBER_HP.getValue()) continue;
+            result.add(new Hp(wire.readInt(), wire.readInt(), wire.readInt()));
+        }
+        return result;
+    }
+
+    private record Hp(int id, int hp, int maxHp) {
     }
 
     private static ByteArrayInPacket input(int action, int... arguments) {

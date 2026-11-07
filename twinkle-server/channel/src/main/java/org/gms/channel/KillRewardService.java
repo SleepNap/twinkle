@@ -35,14 +35,20 @@ public final class KillRewardService {
 
     private final PlayerSessionRegistry sessions;
     private final PartyRoster parties;
+    private final PartyHpNotifier hp;
 
     public KillRewardService(PlayerSessionRegistry sessions) {
-        this(sessions, null);
+        this(sessions, null, null);
     }
 
     public KillRewardService(PlayerSessionRegistry sessions, PartyRoster parties) {
+        this(sessions, parties, null);
+    }
+
+    public KillRewardService(PlayerSessionRegistry sessions, PartyRoster parties, PartyHpNotifier hp) {
         this.sessions = sessions;
         this.parties = parties;
+        this.hp = hp;
     }
 
     /**
@@ -113,6 +119,9 @@ public final class KillRewardService {
             return 0;
         }
         int levels = applyExperience(character, total);
+        if (levels > 0 && hp != null) {
+            hp.updateHp(character);
+        }
         if (sessions != null) {
             PacketSession session = sessions.get(character.getId());
             if (session != null) {

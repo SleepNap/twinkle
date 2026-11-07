@@ -13,9 +13,15 @@ import java.util.Map;
 /** 普通恢复药入口；v83 字段顺序参考北斗协议行为，业务与封包实现独立编写。 */
 public final class UseItemHandler implements PacketHandler {
     private final ItemSystem items;
+    private final PartyHpNotifier parties;
 
     public UseItemHandler(ItemSystem items, GameDataProvider data) {
+        this(items, data, null);
+    }
+
+    public UseItemHandler(ItemSystem items, GameDataProvider data, PartyHpNotifier parties) {
         this.items = items;
+        this.parties = parties;
     }
 
     @Override
@@ -28,6 +34,9 @@ public final class UseItemHandler implements PacketHandler {
             int itemId = packet.readInt();
             var before = GameplayPackets.inventory(character, InventoryType.USE);
             if (!items.consumeRecovery(character, slot, itemId, System.currentTimeMillis())) return;
+            if (parties != null) {
+                parties.updateHp(character);
+            }
             GameplayPackets.inventoryChanges(InventoryType.USE, before,
                     GameplayPackets.inventory(character, InventoryType.USE)).forEach(session::send);
             session.send(GameplayPackets.stats(Map.of(GameplayPackets.HP, character.getHp(),

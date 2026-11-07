@@ -146,7 +146,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             monsters = new MonsterSpawnService(gameData, sessions, leases);
             parties = new PartyHandler(logic.service(PartySystem.class), sessions, channelId,
                     Clock.systemUTC(), progressionSystem::accepts);
-            KillRewardService killRewards = new KillRewardService(sessions, parties);
+            KillRewardService killRewards = new KillRewardService(sessions, parties, parties);
             drops = new GroundDropService(itemSystem, gameData, sessions, Clock.systemUTC());
             MonsterDropService monsterDrops = new MonsterDropService(drops, dropCatalog);
             ChannelEventPublisher publisher = new ChannelEventPublisher(eventBus, channelId);
@@ -180,7 +180,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, monsterDrops, false, true),
                     new PlayerInteractionHandler(tradeSystem, sessions, entityReloadCoordinator),
                     new NpcTalkHandler(scriptManager, itemSystem, questSystem), new NpcTalkMoreHandler(),
-                    new UseItemHandler(itemSystem, gameData),
+                    new UseItemHandler(itemSystem, gameData, parties),
                     new WhisperHandler(channelId, intercoord, eventBus, sessions),
                     new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue, background).asyncPresence(presenceIo),
                     new BuddyHandler(channelId, intercoord, eventBus, sessions, buddyListRepository).async(socialIo),

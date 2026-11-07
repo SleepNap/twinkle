@@ -50,6 +50,15 @@ public final class PartyPackets {
     public static OutPacket leader(long id) {
         var packet = action(27); packet.writeInt((int) id); packet.writeByte(0); return packet;
     }
+
+    /** 队伍窗口中的成员 HP 条：角色 id + 当前 HP + 当前最大 HP（v83 UPDATE_PARTYMEMBER_HP）。 */
+    public static OutPacket memberHp(long characterId, int hp, int maxHp) {
+        var packet = GameplayPackets.packet(SendOpcode.UPDATE_PARTYMEMBER_HP);
+        packet.writeInt((int) characterId);
+        packet.writeInt(hp);
+        packet.writeInt(maxHp);
+        return packet;
+    }
     private static void roster(OutPacket packet, Party party, int channel) {
         List<PartyMember> members = new ArrayList<>(party.members().values());
         while (members.size() < 6) members.add(new PartyMember(0, 0, "", 0, 0, 0));

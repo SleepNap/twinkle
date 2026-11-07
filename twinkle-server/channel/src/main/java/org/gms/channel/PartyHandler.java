@@ -16,12 +16,14 @@ import org.gms.domain.game.spi.CharacterState;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /** 同频道临时组队入口。目录为频道属主状态，通过会话注册表投递，禁止保存玩家对象。 */
-public final class PartyHandler implements PacketHandler, PartyRoster, AutoCloseable {
+public final class PartyHandler implements PacketHandler, PartyRoster, PartyHpNotifier, AutoCloseable {
     private final PartyState state = new PartyState();
     private final PartySystem system;
     private final PlayerSessionRegistry sessions;
@@ -30,6 +32,11 @@ public final class PartyHandler implements PacketHandler, PartyRoster, AutoClose
     private final Predicate<CharacterState> accepts;
     /** 冻结期间只保留最后一份通知所需的队伍身份，恢复后发送完整状态，避免积压封包。 */
     private final Map<PacketSession, Party> deferred = new HashMap<>();
+    /** 上次发给队伍窗口的 HP 快照；地图变化或 HP/最大 HP 变化时刷新。 */
+    private final Map<Long, HpSnapshot> hpStates = new HashMap<>();
+
+    private record HpSnapshot(int hp, int maxHp, int mapId) {
+    }
 
     public PartyHandler(PartySystem system, PlayerSessionRegistry sessions, int channel, Clock clock, Predicate<CharacterState> accepts) {
         this.system = system;
@@ -86,6 +93,7 @@ public final class PartyHandler implements PacketHandler, PartyRoster, AutoClose
         } finally {
             if (!accepted) session.send(PartyPackets.action(11));
             session.send(GameplayPackets.enableActions());
+            if (accepted) refreshPartyHp();
         }
     }
     public void deny(PacketSession session) {
@@ -150,6 +158,82 @@ public final class PartyHandler implements PacketHandler, PartyRoster, AutoClose
         members.add(character);
         return List.copyOf(members);
     }
+    /** HP/最大 HP 变化后调用：把最新值同步给同图队伍成员（含自己）。 */
+    @Override
+    public void updateHp(PlayerCharacter character) {
+        sessions.coordinate(() -> { broadcastHp(character); return null; });
+    }
+
+    private void broadcastHp(PlayerCharacter character) {
+        if (character == null) return;
+        Party party = state.of(character.getId());
+        if (party == null || character.getMapObject() == null) return;
+        hpStates.put(character.getId(), snapshot(character));
+        OutPacket packet = PartyPackets.memberHp(character.getId(), character.getHp(), character.effectiveMaxHp());
+        for (PlayerCharacter member : sameMapMembers(party, character.getMapObject())) {
+            PacketSession session = sessions.get(member.getId());
+            if (session != null) session.send(packet);
+        }
+    }
+
+    /**
+     * Tick 补偿：登录、换图、复活和队伍变动不一定经过伤害/用药入口，这里按地图与 HP 快照补发；
+     * 首次出现或地图变化时向该成员发送全部同图队员 HP，并向其他队员补发该成员 HP。
+     */
+    private void refreshPartyHp() {
+        Set<Long> present = new HashSet<>();
+        for (Party party : state.snapshot().values()) {
+            for (PartyMember member : party.members().values()) {
+                PacketSession session = sessions.get(member.id());
+                if (session == null || session.sessionId() != member.sessionId()) continue;
+                if (session.getAttr("stateTransfer") != null || session.getAttr("mapTransition") != null) continue;
+                PlayerCharacter character = GameplaySession.character(session);
+                if (character == null || character.getMapObject() == null) continue;
+                present.add(character.getId());
+                HpSnapshot current = snapshot(character);
+                HpSnapshot previous = hpStates.put(character.getId(), current);
+                if (previous == null || previous.mapId() != current.mapId()) {
+                    sendHpSnapshot(party, character);
+                } else if (!previous.equals(current)) {
+                    broadcastHp(character);
+                }
+            }
+        }
+        hpStates.keySet().removeIf(id -> !present.contains(id));
+    }
+
+    private void sendHpSnapshot(Party party, PlayerCharacter character) {
+        PacketSession self = sessions.get(character.getId());
+        if (self == null) return;
+        List<PlayerCharacter> members = sameMapMembers(party, character.getMapObject());
+        for (PlayerCharacter member : members) {
+            self.send(PartyPackets.memberHp(member.getId(), member.getHp(), member.effectiveMaxHp()));
+        }
+        OutPacket own = PartyPackets.memberHp(character.getId(), character.getHp(), character.effectiveMaxHp());
+        for (PlayerCharacter member : members) {
+            if (member.getId() == character.getId()) continue;
+            PacketSession session = sessions.get(member.getId());
+            if (session != null) session.send(own);
+        }
+    }
+
+    private List<PlayerCharacter> sameMapMembers(Party party, MapleMap map) {
+        List<PlayerCharacter> members = new ArrayList<>(party.members().size());
+        for (PartyMember member : party.members().values()) {
+            PacketSession session = sessions.get(member.id());
+            if (session == null || session.sessionId() != member.sessionId()) continue;
+            if (session.getAttr("stateTransfer") != null || session.getAttr("mapTransition") != null) continue;
+            PlayerCharacter character = GameplaySession.character(session);
+            if (character != null && character.getMapObject() == map) members.add(character);
+        }
+        return members;
+    }
+
+    private static HpSnapshot snapshot(PlayerCharacter character) {
+        MapleMap map = character.getMapObject();
+        return new HpSnapshot(character.getHp(), character.effectiveMaxHp(), map == null ? 0 : map.getMapId());
+    }
+
     private boolean leave(long actor, long target) {
         Party before = system.leave(state, actor, target);
         if (before == null) return false;
@@ -209,6 +293,7 @@ public final class PartyHandler implements PacketHandler, PartyRoster, AutoClose
                     : PartyPackets.members(current, channel, null));
             updates.remove();
         }
+        refreshPartyHp();
     }
     private static PartyMember member(PacketSession session) {
         PlayerCharacter character = GameplaySession.character(session);
@@ -223,5 +308,6 @@ public final class PartyHandler implements PacketHandler, PartyRoster, AutoClose
         for (Party party : state.snapshot().values()) leave(party.leaderId(), party.leaderId());
         state.clear();
         deferred.clear();
+        hpStates.clear();
     }
 }

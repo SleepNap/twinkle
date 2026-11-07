@@ -12,6 +12,7 @@ import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.OutPacket;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -98,6 +99,20 @@ public class PartyRewardGameplayTest {
 
     @Test public void expGainPacketIncludesV83TrailingBonusFields() {
         assertThat(parseExpGain(GameplayPackets.expGain(123, 7))).containsExactly(123, 7);
+    }
+
+    @Test public void levelUpNotifiesPartyHp() {
+        var sessions = new PlayerSessionRegistry();
+        var map = map(100);
+        var player = joined(sessions, 1, map);
+        player.character.setExp(14);
+        var notified = new ArrayList<PlayerCharacter>();
+        var service = new KillRewardService(sessions, null, notified::add);
+
+        var result = service.onKill(player.character, 1);
+
+        assertThat(result.leveledUp()).isTrue();
+        assertThat(notified).containsExactly(player.character);
     }
 
     private static AttackHandler attack(PlayerSessionRegistry sessions, PartyRoster roster) {

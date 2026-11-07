@@ -31,10 +31,16 @@ public final class TakeDamageHandler implements PacketHandler {
 
     private final PlayerSessionRegistry sessions;
     private final PlayerDeathService deaths;
+    private final PartyHpNotifier parties;
 
     public TakeDamageHandler(PlayerSessionRegistry sessions, PlayerDeathService deaths) {
+        this(sessions, deaths, null);
+    }
+
+    public TakeDamageHandler(PlayerSessionRegistry sessions, PlayerDeathService deaths, PartyHpNotifier parties) {
         this.sessions = sessions;
         this.deaths = deaths;
+        this.parties = parties;
     }
 
     @Override
@@ -69,6 +75,9 @@ public final class TakeDamageHandler implements PacketHandler {
         int hp = character.getHp();
         int newHp = Math.max(0, hp - damage);
         character.setHp(newHp);
+        if (parties != null) {
+            parties.updateHp(character);
+        }
 
         if (damage > 0) {
             // 受伤回显排除本人；本人只收 HP 状态纠正，避免同一伤害被客户端计算两次。
