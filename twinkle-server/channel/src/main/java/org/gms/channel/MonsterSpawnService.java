@@ -189,6 +189,36 @@ public final class MonsterSpawnService {
         return false;
     }
 
+    /**
+     * 怪物死亡入口：按同 mobId 的最近刷怪点安排重生。
+     *
+     * <p>地图同 mobId 有多个刷怪点时按死亡位置就近选择，避免所有点同时补刷；
+     * 没有刷怪点（脚本/召唤怪）不排重生。
+     */
+    public void onKilled(MapleMap map, MapleMonster monster) {
+        if (map == null || monster == null || monster.getData() == null) {
+            return;
+        }
+        int mobId = monster.getData().getMobId();
+        SpawnPoint selected = null;
+        long bestDistance = Long.MAX_VALUE;
+        for (SpawnPoint sp : map.spawnPoints()) {
+            if (sp.getMonsterId() != mobId) {
+                continue;
+            }
+            long dx = (long) sp.getX() - monster.getX();
+            long dy = (long) sp.getY() - monster.getY();
+            long distance = dx * dx + dy * dy;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                selected = sp;
+            }
+        }
+        if (selected != null) {
+            scheduleRespawn(map, selected);
+        }
+    }
+
     /** 怪物死亡后延时重生（战斗 handler 在怪物死亡时调用）。 */
     public void scheduleRespawn(MapleMap map, SpawnPoint sp) {
         respawnScheduled.incrementAndGet();

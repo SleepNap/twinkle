@@ -81,6 +81,11 @@ public final class PlayerPresencePackets {
         return GameplayPackets.packet(SendOpcode.CANCEL_FOREIGN_BUFF).writeInt((int) id).writeLong(0).writeLong(mask);
     }
 
+    /** 他人看到的升级光效（SHOW_FOREIGN_EFFECT，effect=0）。 */
+    public static OutPacket levelUp(long id) {
+        return GameplayPackets.packet(SendOpcode.SHOW_FOREIGN_EFFECT).writeInt((int) id).writeByte(0);
+    }
+
     public static OutPacket skillEffect(long id, int skill, int level, int direction) {
         return GameplayPackets.packet(SendOpcode.SHOW_FOREIGN_EFFECT).writeInt((int) id)
                 .writeByte(1).writeInt(skill).writeByte(0).writeByte(level).writeByte(direction);

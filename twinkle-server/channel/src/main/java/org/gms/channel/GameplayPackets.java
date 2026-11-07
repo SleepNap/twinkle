@@ -12,6 +12,7 @@ import org.gms.net.packet.v83.V83ChannelId;
 import org.gms.net.packet.v83.V83FileTime;
 import org.gms.net.packet.v83.V83ItemPacketWriter;
 import org.gms.net.packet.v83.V83ItemSnapshot;
+import org.gms.net.packet.v83.V83SkillPoints;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +43,49 @@ public final class GameplayPackets {
             if (mask == MESO || mask == EXP) packet.writeInt(value);
             else packet.writeShort(value);
         });
+        return packet;
+    }
+
+    /** 击杀经验提示（SHOW_STATUS_INFO 3）：客户端播放白色经验数字。 */
+    public static OutPacket expGain(int gain) {
+        ByteArrayOutPacket packet = packet(SendOpcode.SHOW_STATUS_INFO);
+        packet.writeByte(3);
+        packet.writeBool(true);
+        packet.writeInt(gain);
+        packet.writeBool(true);
+        packet.writeInt(0);             // bonus event exp
+        packet.writeByte(0);            // third monster kill event
+        packet.writeByte(0);            // RIP
+        packet.writeInt(0);             // wedding bonus
+        packet.writeByte(0);            // quest bonus rate
+        packet.writeByte(0);            // party bonus percent
+        packet.writeInt(0);             // party bonus
+        return packet;
+    }
+
+    /**
+     * 升级后的 STAT_CHANGED：按 v83 掩码升序写 LEVEL/HP/MAXHP/MP/MAXMP/AP/[SP]/EXP。
+     *
+     * <p>SP 使用职业分栏编码； beginner（job=0）不写 SP 段，与升级不发 SP 的规则一致。
+     */
+    public static OutPacket levelUpStats(PlayerCharacter character) {
+        ByteArrayOutPacket packet = packet(SendOpcode.STAT_CHANGED);
+        packet.writeBool(true);
+        int mask = 0x10 | HP | MAX_HP | MP | MAX_MP | AP | EXP;
+        if (character.getJob() != 0) {
+            mask |= SP;
+        }
+        packet.writeInt(mask);
+        packet.writeByte(character.getLevel());
+        packet.writeShort(character.getHp());
+        packet.writeShort(character.effectiveMaxHp());
+        packet.writeShort(character.getMp());
+        packet.writeShort(character.effectiveMaxMp());
+        packet.writeShort(character.getAp());
+        if (character.getJob() != 0) {
+            V83SkillPoints.write(packet, character.getJob(), character.getSp());
+        }
+        packet.writeInt((int) Math.min(Integer.MAX_VALUE, character.getExp()));
         return packet;
     }
 

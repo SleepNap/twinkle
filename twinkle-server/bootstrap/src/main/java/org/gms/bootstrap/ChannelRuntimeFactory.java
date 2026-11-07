@@ -138,6 +138,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             leases = new DefaultControllerLeaseService(leaseTtlSeconds, leaseCooldownSeconds,
                     leaseSweepIntervalMillis, tickScheduler.intervalMillis());
             monsters = new MonsterSpawnService(gameData, sessions, leases);
+            KillRewardService killRewards = new KillRewardService(sessions);
             ChannelEventPublisher publisher = new ChannelEventPublisher(eventBus, channelId);
             DefaultControllerLeaseService runtimeLeases = leases;
             ChannelServer server = new ChannelServer(handlers, session -> {
@@ -164,9 +165,9 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     new PlayerLoggedinHandler(characterRepository, characterLoader, maps, players, sessions,
                             monsters, channelId, publisher, leases, background, saveQueue),
                     new PlayerMapTransitionHandler(), new MovePlayerHandler(movementSystem, sessions),
-                    new AttackHandler(combatSystem, sessions, leases, false, false),
-                    new AttackHandler(combatSystem, sessions, leases, true, false),
-                    new AttackHandler(combatSystem, sessions, leases, false, true),
+                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, false, false),
+                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, true, false),
+                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, false, true),
                     new PlayerInteractionHandler(tradeSystem, sessions, entityReloadCoordinator),
                     new NpcTalkHandler(scriptManager, itemSystem, questSystem), new NpcTalkMoreHandler(),
                     new UseItemHandler(itemSystem, gameData),
