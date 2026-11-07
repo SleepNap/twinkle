@@ -1,5 +1,8 @@
 package org.gms.channel;
 
+import org.gms.domain.game.inventory.Equip;
+import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.item.EquipmentData;
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.mob.MapleMonster;
@@ -110,6 +113,34 @@ public class MonsterDropGameplayTest {
         assertThat(fixture.stranger.character.getMeso()).isEqualTo(9);
     }
 
+    @Test public void equipmentDropCreatesFullInstanceAndCanBePickedUp(@TempDir Path root) throws Exception {
+        var clock = new MutableClock(1_000);
+        var catalog = new MonsterDropCatalog(Files.writeString(root.resolve("equipment.properties"),
+                "100100=1302000:100:1:1\n").toString());
+        var fixture = fixture(clock, catalog);
+        fixture.service.onKill(fixture.killer.character, fixture.monster);
+        var drop = spawns(fixture.killer).getFirst();
+
+        assertThat(drop.meso()).isFalse();
+        assertThat(drop.value()).isEqualTo(1302000);
+        assertThat(fixture.drops.pickup(fixture.stranger.character, drop.oid())).isFalse();
+        assertThat(fixture.drops.pickup(fixture.killer.character, drop.oid())).isTrue();
+        var equip = (Equip) fixture.killer.character.getInventory(InventoryType.EQUIP).getItem((short) 1);
+        assertThat(equip).isNotNull();
+        assertThat(equip.getWAtk()).isEqualTo((short) 30);
+        assertThat(equip.getStrStat()).isEqualTo((short) 7);
+        assertThat(equip.getUpgradeSlots()).isEqualTo((byte) 5);
+    }
+
+    @Test public void equipmentDropRejectsQuantityAboveOne(@TempDir Path root) throws Exception {
+        var clock = new MutableClock(1_000);
+        var catalog = new MonsterDropCatalog(Files.writeString(root.resolve("equipment-stack.properties"),
+                "100100=1302000:100:2:2\n").toString());
+        var fixture = fixture(clock, catalog);
+        fixture.service.onKill(fixture.killer.character, fixture.monster);
+        assertThat(fixture.killer.sent).isEmpty();
+    }
+
     private static Fixture fixture(MutableClock clock, MonsterDropCatalog catalog) {
         var sessions = new PlayerSessionRegistry();
         var map = new MapleMap();
@@ -127,11 +158,21 @@ public class MonsterDropGameplayTest {
         monster.setX(10);
         monster.setY(10);
         map.addMonster(monster);
-        var data = GameDataProvider.fixed(Map.of(2000000, new ItemData(2000000)), Map.of(100100, mob));
+        var data = GameDataProvider.fixed(Map.of(2000000, new ItemData(2000000),
+                1302000, sword()), Map.of(100100, mob));
         var items = new DefaultItemSystem(new DefaultVersionGate(), data);
         var drops = new GroundDropService(items, data, sessions, clock);
         var service = new MonsterDropService(drops, catalog, new Random(1));
         return new Fixture(killer, mate, stranger, monster, drops, service);
+    }
+
+    private static ItemData sword() {
+        var sword = new ItemData(1302000);
+        sword.setSlotMax(1);
+        sword.putStat("watk", 30);
+        sword.putStat("str", 7);
+        sword.setEquipment(new EquipmentData("Wp", false, 0, 0, 0, 0, 0, 0, 2, false, false, 5));
+        return sword;
     }
 
     private static List<Spawn> spawns(GameplayTestSession session) {

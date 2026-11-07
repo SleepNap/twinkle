@@ -176,6 +176,15 @@ public final class DefaultItemSystem implements ItemSystem {
         }
     }
 
+    /** 按装备模板创建完整实例快照；装备掉落与商城/奖励共用同一份能力映射。 */
+    @Override
+    public TradeItemSnapshot newEquipment(ItemData data) {
+        if (data == null || data.getEquipment() == null || data.getEquipment().cash()) {
+            return null;
+        }
+        return DefaultEquipmentSystem.createItem(data);
+    }
+
     /** 读取指定背包槽位的精确交易快照。 */
     public TradeItemSnapshot snapshotTradeItem(CharacterState state, byte inventoryType,
                                                short sourcePosition, int quantity) {

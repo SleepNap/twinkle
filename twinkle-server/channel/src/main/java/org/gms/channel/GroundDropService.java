@@ -141,19 +141,24 @@ public final class GroundDropService implements AutoCloseable {
         });
     }
 
-    /** 怪物物品掉落：按物品模板生成实例，超过单槽上限或不可交易时拒绝。 */
+    /** 怪物物品掉落：普通物品按模板生成堆叠实例，装备按模板生成完整实例；超过上限或不可交易时拒绝。 */
     public boolean dropMonsterItem(MapleMap map, long owner, int party, int itemId, int quantity,
                                    int x, int y, long ownerWindowMillis) {
         return sessions.coordinate(() -> {
             if (quantity <= 0 || ownerWindowMillis < 0 || party < 0) return false;
             var definition = data.item(itemId);
             InventoryType type = ItemConstants.getInventoryType(itemId);
-            // 本批只落普通堆叠物品；装备/现金实例需要完整实例属性，留待后续掉落批次。
             if (definition == null || definition.isTradeBlock() || type == InventoryType.UNDEFINED
-                    || type == InventoryType.EQUIP || type == InventoryType.CASH
-                    || quantity > Math.max(1, definition.getSlotMax())) {
+                    || type == InventoryType.CASH) {
                 return false;
             }
+            if (type == InventoryType.EQUIP) {
+                // 装备一次只能落一件；实例能力由可替换 ItemSystem 按 WZ 模板生成。
+                if (quantity != 1) return false;
+                TradeItemSnapshot item = items.newEquipment(definition);
+                return item != null && addDrop(map, owner, party, x, y, item, 0, ownerWindowMillis);
+            }
+            if (quantity > Math.max(1, definition.getSlotMax())) return false;
             TradeItemSnapshot item = new TradeItemSnapshot(type.getType(), (short) 0, itemId, quantity,
                     0, 0, "", 0, -1, "", null, null);
             return addDrop(map, owner, party, x, y, item, 0, ownerWindowMillis);

@@ -1,5 +1,6 @@
 package org.gms.domain.game.logic;
 
+import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.domain.game.spi.TradeItemSnapshot;
 import java.util.List;
@@ -28,6 +29,15 @@ public interface ItemSystem {
     public int countItem(CharacterState state, int itemId);
 
     public boolean moveItem(CharacterState state, byte type, short source, short target, int quantity);
+
+    /**
+     * 按装备模板创建一个可落物/可交易的完整实例快照；普通物品或实现不支持时返回 {@code null}。
+     *
+     * <p>默认返回 {@code null} 保持旧逻辑 JAR 的二进制兼容；新实现应覆盖。
+     */
+    public default TradeItemSnapshot newEquipment(ItemData data) {
+        return null;
+    }
 
     public TradeItemSnapshot snapshotTradeItem(CharacterState state, byte inventoryType,
                                                short sourcePosition, int quantity);
