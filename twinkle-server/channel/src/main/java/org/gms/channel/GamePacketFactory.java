@@ -128,6 +128,25 @@ public final class GamePacketFactory {
         return p;
     }
 
+    /**
+     * 玩家受击广播（0xC0）：cid + damageFrom + damage + monsterIdFrom + direction + short 0 + damage。
+     *
+     * <p>字段布局核对北斗 PacketCreator.damagePlayer；当前只编码怪物攻击（damageFrom &gt;= 0），
+     * 不含力量反伤、假伤害和环境伤害的扩展段。
+     */
+    public static OutPacket damagePlayer(int damageFrom, int monsterIdFrom, long cid, int damage, int direction) {
+        ByteArrayOutPacket p = new ByteArrayOutPacket();
+        p.writeShort(SendOpcode.DAMAGE_PLAYER.getValue());
+        p.writeInt((int) cid);
+        p.writeByte(damageFrom);
+        p.writeInt(damage);
+        p.writeInt(monsterIdFrom);
+        p.writeByte(direction);
+        p.writeShort(0);
+        p.writeInt(damage);
+        return p;
+    }
+
     /** 攻击广播（0xBA/0xBB/0xBC）：cid + 计数 + 0x5B + skillLevel + [skill] + 姿态字节 + 0x0A + projectile + 每目标 oid+0+伤害行。 */
     public static OutPacket attack(long cid, SendOpcode opcode, int skillId, int skillLevel,
                                    byte numTargets, byte numDamage, int display, int direction, int stance, int speed,

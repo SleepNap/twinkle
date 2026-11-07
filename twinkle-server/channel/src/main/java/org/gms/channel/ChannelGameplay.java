@@ -43,6 +43,8 @@ public final class ChannelGameplay implements AutoCloseable {
             sessions.all().forEach(equipment::refresh);
         } };
         MapTransitionService transitions = new MapTransitionService(maps::getMap, monsters, leases, channelId, sessions);
+        PlayerDeathService deaths = new PlayerDeathService(progression, sessions, Clock.systemUTC());
+        handlers.register(RecvOpcode.TAKE_DAMAGE, new TakeDamageHandler(sessions, deaths));
         NpcShopHandler shops = new NpcShopHandler(shopCatalog, data, items);
         QuestActionHandler questActions = new QuestActionHandler(resources, quests);
         var login = handlers.find(RecvOpcode.PLAYER_LOGGEDIN.getValue()).orElseThrow();

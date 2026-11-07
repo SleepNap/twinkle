@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **M0-M6 基础架构里程碑已完成**（2026-08-09），不代表全部游戏玩法完成。当前为 18 个 Maven 子模块。公共 API 使用 API-key + scope + 审计，入口按 `/api/vN`、`/admin/vN`、`/internal/vN` 分平面和主版本；版本登记、兼容复用、退役及 OpenAPI 规则见 `docs/API-VERSIONING.md`。
 
-**游戏封包迁移进度**（2026-09-06）：已接入四批功能，最新一批为装备穿脱与属性。范围包括基础玩法、同屏角色与动作、操作设置与详情、队伍聊天、手动金币掉落，以及装备校验/交换、派生属性、外观和期限处理。第一、二批全量验证通过；第四批编译及 54 项定向检查通过（含 7 条架构规则），新增 16 项装备回归。并发入口第一轮整改已落地，存量代码尚未全部改造，新增 18 项回归；最终后端 `verify` 477 项通过、5 项可选检查跳过。后续优先完成剩余存量并发整改，再继续战斗与死亡结算；客户端联调及完整场景后续统一验证。逐项实现边界、提交记录、验证记录与旧开发库重建要求以 [游戏路线图](docs/in-progress/gameplay-roadmap.md) 为准。
+**游戏封包迁移进度**（2026-11-07）：已接入五批功能，最新一批为受伤与死亡。范围包括基础玩法、同屏角色与动作、操作设置与详情、队伍聊天、手动金币掉落、装备校验/交换与派生属性，以及怪物攻击 `TAKE_DAMAGE`/`DAMAGE_PLAYER`、HP 归零清 Buff/椅子和 `CHANGE_MAP` 回城复活；攻击包补充目标数/长度/重复 OID 校验及多行伤害拆分。第五批新增 4 项 `CombatGameplayTest`，`channel` 模块 89 项、8 条架构规则通过。全量 `verify` 仍有 bootstrap 装配测试临时 SQLite 偶发问题待修；客户端联调及完整场景后续统一验证。逐项实现边界、提交记录、验证记录与旧开发库重建要求以 [游戏路线图](docs/in-progress/gameplay-roadmap.md) 为准。
 
 **Web 控制台已进入正式业务开发**（2026-08-12）：`twinkle-web/` 已落地 shadcn `radix-nova` 控制台框架、路由、管理 API 层，以及运行概览、频道、在线玩家、账号角色、配置中心、运维操作、API Key、能力目录、审计日志、任务监控和 API 文档入口；配置热改、踢下线、按在线角色临时监听封包、脚本/逻辑重载、重启、API Key 生命周期与 Scope 调整均已接入确认和反馈。封包监听支持收发方向、include/exclude opcode 过滤和实时启停，使用频道会话内 4 MiB 有界环形窗口，不写日志/数据库，凭证类 opcode 强制不采集，独立权限为 `admin.packet:trace`。HTTP 路由由 `micronaut-openapi` 生成机器契约和 Swagger UI，第三方公共契约另按主版本冻结。进程级 `ThreadManager` 统一使用命名虚拟线程执行独立后台任务并提供执行器计数快照；`BackgroundTaskRegistry` 提供有界执行历史、真实异步运行、排队/执行耗时、调度启停、立即运行与失败重试，监控 API 已预留后续持久化和集群聚合字段。完整范围见 `docs/in-progress/console-roadmap.md`。**控制台强鉴权 + RBAC + 不可抵赖审计已落地**：所有 `/admin/vN` 由 `AdminAuthFilter` 统一保护（账号 BCrypt 登录 + DB session token），可配置角色表 + 写操作 reason 审计。
 

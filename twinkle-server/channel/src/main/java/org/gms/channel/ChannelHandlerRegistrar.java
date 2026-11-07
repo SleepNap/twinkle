@@ -114,6 +114,8 @@ public final class ChannelHandlerRegistrar {
         registry.register(RecvOpcode.PLAYER_MAP_TRANSFER, mapTransition);
         registry.register(RecvOpcode.MOVE_PLAYER, movePlayer);
         registry.register(RecvOpcode.CLOSE_RANGE_ATTACK, closeRange);
+        // 触碰怪攻击与近战共用同一伤害段布局；是否处于可触碰状态由后续 Buff 批次校验。
+        registry.register(RecvOpcode.TOUCH_MONSTER_ATTACK, closeRange);
         registry.register(RecvOpcode.RANGED_ATTACK, ranged);
         registry.register(RecvOpcode.MAGIC_ATTACK, magic);
         registry.register(RecvOpcode.PLAYER_INTERACTION, interaction);

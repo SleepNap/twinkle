@@ -14,6 +14,7 @@ import org.gms.net.packet.SessionStage;
 import org.gms.domain.game.logic.CombatSystem;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -93,33 +94,47 @@ public final class AttackHandler implements PacketHandler {
         int numAttacked = (numAttackedAndDamage >>> 4) & 0xF;
         int numDamage = numAttackedAndDamage & 0xF;
         int skill = packet.readInt();
+        // v83 每个 nibble 最多 15；0 目标/0 行没有可结算内容，直接拒绝畸形包。
+        if (skill < 0 || numAttacked < 1 || numDamage < 1 || numAttacked > 15 || numDamage > 15) {
+            return;
+        }
         if (CHARGE_SKILLS.contains(skill)) {
+            if (packet.available() < 4) return;
             packet.readInt();                           // charge
         }
+        if (packet.available() < 11) return;            // 8B 动画 + display/direction/stance
         packet.skip(8);                                 // 动画块
         int display = packet.readByte();
         int direction = packet.readByte();
         int stance = packet.readByte();
         int speed;
         if (ranged) {
+            if (packet.available() < 11) return;        // 4B 固定段 + 7B 箭矢段
             packet.readByte();
             speed = packet.readByte();
             packet.readByte();
             packet.readByte();                          // rangedirection
             packet.skip(7);
             if (skill == 3121004 || skill == 3221001 || skill == 5221004 || skill == 13111002) {
+                if (packet.available() < 4) return;
                 packet.skip(4);                         // 连射/穿刺类额外段
             }
         } else {
+            if (packet.available() < 6) return;         // 1B + speed + 4B 近战/魔法段
             packet.readByte();
             speed = packet.readByte();
             packet.skip(4);
         }
 
-        // 目标伤害区
+        // 目标伤害区：每个目标 4B oid + 14B 命中信息 + 每行 4B 伤害（毒弹另有 4B 尾段）。
         List<Target> targets = new ArrayList<>(numAttacked);
+        Set<Integer> seen = new HashSet<>();
         for (int i = 0; i < numAttacked; i++) {
+            int needed = 18 + 4 * numDamage + (skill == POISON_BOMB ? 4 : 0);
+            if (packet.available() < needed) return;
             int oid = packet.readInt();
+            // 同一 OID 重复出现会让一次攻击对同一怪物重复结算，按畸形包拒绝。
+            if (oid < 0 || !seen.add(oid)) return;
             packet.skip(14);
             int[] damages = new int[numDamage];
             for (int j = 0; j < numDamage; j++) {
@@ -131,7 +146,8 @@ public final class AttackHandler implements PacketHandler {
             targets.add(new Target(oid, damages));
         }
         // POISON_BOMB 收尾：skip(4) + x/y
-        if (skill == POISON_BOMB && packet.available() >= 8) {
+        if (skill == POISON_BOMB) {
+            if (packet.available() < 8) return;
             packet.skip(4);
             packet.readShort();
             packet.readShort();
@@ -159,12 +175,8 @@ public final class AttackHandler implements PacketHandler {
             }
             int wAtk = Math.max(CombatSystem.BARE_HAND_WATK, chr.equipmentStats().weaponAttack());
             var outcome = combatSystem.physicalAttack(chr, monster, wAtk);
-            int dmg = outcome.damage();
-            int[] lines = new int[t.damages.length];
-            for (int j = 0; j < t.damages.length; j++) {
-                lines[j] = dmg;
-            }
-            damages[i] = lines;
+            // 服务端只扣一次实际伤害；广播行数按客户端声明的命中次数拆分，避免多行合计翻倍。
+            damages[i] = splitDamage(outcome.damage(), t.damages.length);
             if (outcome.killed()) {
                 anyDead = true;
                 deadOids.add(monster.getObjectId());
@@ -181,11 +193,15 @@ public final class AttackHandler implements PacketHandler {
                 targetOids, damages, 0);
         sessions.broadcastToMap(map, atk, chr.getId());
 
-        // 怪物受击广播（含攻击者自己，看到伤害数字）
+        // 怪物受击广播（含攻击者自己，看到伤害数字）；多行合计与一次实际扣血一致。
         for (int i = 0; i < targetOids.length; i++) {
             MapleMonster monster = map.getMonster(targetOids[i]);
-            if (monster != null && damages[i].length > 0 && damages[i][0] > 0) {
-                sessions.broadcastToMap(map, GamePacketFactory.damageMonster(targetOids[i], damages[i][0]));
+            int total = 0;
+            for (int line : damages[i]) {
+                total += line;
+            }
+            if (monster != null && total > 0) {
+                sessions.broadcastToMap(map, GamePacketFactory.damageMonster(targetOids[i], total));
             }
         }
 
@@ -200,6 +216,20 @@ public final class AttackHandler implements PacketHandler {
                 map.removeMonster(oid);
             }
         }
+    }
+
+    /** 把一次实际伤害拆成客户端声明的命中行数；余数给前几行，保证合计不变。 */
+    private static int[] splitDamage(int total, int lines) {
+        int[] result = new int[lines];
+        if (lines <= 0 || total <= 0) {
+            return result;
+        }
+        int base = total / lines;
+        int remainder = total % lines;
+        for (int i = 0; i < lines; i++) {
+            result[i] = base + (i < remainder ? 1 : 0);
+        }
+        return result;
     }
 
     /** 技能等级（简化：技能表未落地，非 0 技能暂按 0 级处理，攻击广播不发 skill 段）。 */
