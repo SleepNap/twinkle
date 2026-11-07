@@ -6,7 +6,6 @@ import org.gms.domain.script.ScriptManager;
 import org.gms.net.opcodes.RecvOpcode;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.domain.game.logic.ItemSystem;
-import org.gms.domain.game.logic.PartySystem;
 import org.gms.domain.game.logic.QuestSystem;
 import org.gms.domain.game.logic.ProgressionSystem;
 import org.gms.domain.game.logic.AvatarSystem;
@@ -29,11 +28,11 @@ public final class ChannelGameplay implements AutoCloseable {
                            PlayerSessionRegistry sessions, ItemSystem items, QuestSystem quests,
                            ScriptManager scripts, NpcShopCatalog shopCatalog, TickScheduler scheduler,
                            WzResourceRegistry resources, ProgressionSystem progression, AvatarSystem avatarLogic,
-                           ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartySystem partyLogic,
+                           ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartyHandler parties,
                            GroundDropService drops) {
         this.scheduler = scheduler;
         this.drops = drops;
-        this.parties = new PartyHandler(partyLogic, sessions, channelId, Clock.systemUTC(), progression::accepts);
+        this.parties = parties;
         ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC(), sessions);
         AvatarHandler avatars = new AvatarHandler(sessions, avatarLogic, data, Clock.systemUTC());
         ControlsHandler controls = new ControlsHandler(sessions, controlsLogic, Clock.systemUTC());

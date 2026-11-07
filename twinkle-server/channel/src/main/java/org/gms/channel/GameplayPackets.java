@@ -46,8 +46,17 @@ public final class GameplayPackets {
         return packet;
     }
 
-    /** 击杀经验提示（SHOW_STATUS_INFO 3）：客户端播放白色经验数字。 */
+    /**
+     * 击杀经验提示（SHOW_STATUS_INFO 3）：客户端播放白色经验数字。
+     *
+     * <p>v83 在队伍加成后还带装备、网吧和彩虹周加成三个 int，统一置 0；不写会让客户端
+     * 越过包尾读取。{@code partyBonus} 是队伍加成经验，单独显示。
+     */
     public static OutPacket expGain(int gain) {
+        return expGain(gain, 0);
+    }
+
+    public static OutPacket expGain(int gain, int partyBonus) {
         ByteArrayOutPacket packet = packet(SendOpcode.SHOW_STATUS_INFO);
         packet.writeByte(3);
         packet.writeBool(true);
@@ -58,8 +67,11 @@ public final class GameplayPackets {
         packet.writeByte(0);            // RIP
         packet.writeInt(0);             // wedding bonus
         packet.writeByte(0);            // quest bonus rate
-        packet.writeByte(0);            // party bonus percent
-        packet.writeInt(0);             // party bonus
+        packet.writeByte(0);            // party bonus type
+        packet.writeInt(partyBonus);    // party bonus
+        packet.writeInt(0);             // equip bonus
+        packet.writeInt(0);             // internet cafe bonus
+        packet.writeInt(0);             // rainbow week bonus
         return packet;
     }
 

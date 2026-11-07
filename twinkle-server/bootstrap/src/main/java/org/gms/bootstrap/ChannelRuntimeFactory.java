@@ -130,6 +130,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         ChannelLocationBinder locations = null;
         MonsterReassignTickHandler reassign = null;
         ChannelGameplay gameplay = null;
+        PartyHandler parties = null;
         GroundDropService drops = null;
         try {
             logic.bind(execution, () -> {
@@ -143,7 +144,9 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             leases = new DefaultControllerLeaseService(leaseTtlSeconds, leaseCooldownSeconds,
                     leaseSweepIntervalMillis, tickScheduler.intervalMillis());
             monsters = new MonsterSpawnService(gameData, sessions, leases);
-            KillRewardService killRewards = new KillRewardService(sessions);
+            parties = new PartyHandler(logic.service(PartySystem.class), sessions, channelId,
+                    Clock.systemUTC(), progressionSystem::accepts);
+            KillRewardService killRewards = new KillRewardService(sessions, parties);
             drops = new GroundDropService(itemSystem, gameData, sessions, Clock.systemUTC());
             MonsterDropService monsterDrops = new MonsterDropService(drops, dropCatalog);
             ChannelEventPublisher publisher = new ChannelEventPublisher(eventBus, channelId);
@@ -193,13 +196,14 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             gameplay = new ChannelGameplay(handlers, maps, monsters, leases, channelId, gameData,
                     sessions, itemSystem, questSystem, scriptManager, shopCatalog, channelTicks,
                     wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
-                    logic.service(EquipmentSystem.class), logic.service(PartySystem.class), drops);
+                    logic.service(EquipmentSystem.class), parties, drops);
             ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
             runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));
             return runtime;
         } catch (RuntimeException error) {
             closeQuietly(gameplay);
+            closeQuietly(parties);
             closeQuietly(drops);
             closeQuietly(locations);
             closeQuietly(changes);

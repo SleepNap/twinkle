@@ -77,14 +77,49 @@ public class MonsterDropGameplayTest {
         assertThat(fixture.stranger.sent).isEmpty();
     }
 
+    @Test public void partyMembersCanPickUpDuringOwnerWindow(@TempDir Path root) throws Exception {
+        var clock = new MutableClock(1_000);
+        var catalog = new MonsterDropCatalog(Files.writeString(root.resolve("party.properties"),
+                "100100=meso:7:7\n").toString());
+        var fixture = fixture(clock, catalog);
+        fixture.killer.character.setParty(5);
+        fixture.mate.character.setParty(5);
+        fixture.stranger.character.setParty(6);
+        fixture.service.onKill(fixture.killer.character, fixture.monster);
+        var drop = spawns(fixture.killer).getFirst();
+
+        assertThat(drop.owner()).isEqualTo(5);
+        assertThat(fixture.drops.pickup(fixture.stranger.character, drop.oid())).isFalse();
+        assertThat(fixture.drops.pickup(fixture.mate.character, drop.oid())).isTrue();
+        assertThat(fixture.mate.character.getMeso()).isEqualTo(7);
+    }
+
+    @Test public void partyOwnerWindowExpiresToOtherPlayers(@TempDir Path root) throws Exception {
+        var clock = new MutableClock(1_000);
+        var catalog = new MonsterDropCatalog(Files.writeString(root.resolve("party-expiry.properties"),
+                "100100=meso:9:9\n").toString());
+        var fixture = fixture(clock, catalog);
+        fixture.killer.character.setParty(5);
+        fixture.mate.character.setParty(5);
+        fixture.service.onKill(fixture.killer.character, fixture.monster);
+        var drop = spawns(fixture.killer).getFirst();
+
+        assertThat(fixture.drops.pickup(fixture.stranger.character, drop.oid())).isFalse();
+        clock.advance(MonsterDropService.OWNER_WINDOW_MILLIS + 1);
+        assertThat(fixture.drops.pickup(fixture.stranger.character, drop.oid())).isTrue();
+        assertThat(fixture.stranger.character.getMeso()).isEqualTo(9);
+    }
+
     private static Fixture fixture(MutableClock clock, MonsterDropCatalog catalog) {
         var sessions = new PlayerSessionRegistry();
         var map = new MapleMap();
         map.setMapId(100);
         var killer = new GameplayTestSession(1, map);
-        var stranger = new GameplayTestSession(2, map);
+        var mate = new GameplayTestSession(2, map);
+        var stranger = new GameplayTestSession(3, map);
         sessions.claim(1, killer);
-        sessions.claim(2, stranger);
+        sessions.claim(2, mate);
+        sessions.claim(3, stranger);
         var mob = new MobData(100100);
         mob.setMaxHp(100);
         var monster = new MapleMonster(mob);
@@ -96,7 +131,7 @@ public class MonsterDropGameplayTest {
         var items = new DefaultItemSystem(new DefaultVersionGate(), data);
         var drops = new GroundDropService(items, data, sessions, clock);
         var service = new MonsterDropService(drops, catalog, new Random(1));
-        return new Fixture(killer, stranger, monster, drops, service);
+        return new Fixture(killer, mate, stranger, monster, drops, service);
     }
 
     private static List<Spawn> spawns(GameplayTestSession session) {
@@ -110,15 +145,20 @@ public class MonsterDropGameplayTest {
             int oid = wire.readInt();
             boolean meso = wire.readByte() == 1;
             int value = wire.readInt();
-            result.add(new Spawn(oid, meso, value));
+            wire.readInt();
+            wire.readByte();
+            wire.readShort();
+            wire.readShort();
+            int owner = wire.readInt();
+            result.add(new Spawn(oid, meso, value, owner));
         }
         return result;
     }
 
-    private record Spawn(int oid, boolean meso, int value) {
+    private record Spawn(int oid, boolean meso, int value, int owner) {
     }
 
-    private record Fixture(GameplayTestSession killer, GameplayTestSession stranger,
+    private record Fixture(GameplayTestSession killer, GameplayTestSession mate, GameplayTestSession stranger,
                            MapleMonster monster, GroundDropService drops, MonsterDropService service) {
     }
 

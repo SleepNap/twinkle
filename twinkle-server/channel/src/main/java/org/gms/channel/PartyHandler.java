@@ -1,6 +1,7 @@
 package org.gms.channel;
 
 import org.gms.domain.game.PlayerCharacter;
+import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.party.PartyMember;
 import org.gms.domain.game.party.PartyState;
 import org.gms.domain.game.party.PartyState.Party;
@@ -13,12 +14,14 @@ import org.gms.domain.game.logic.PartySystem;
 import org.gms.domain.game.spi.CharacterState;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
 /** 同频道临时组队入口。目录为频道属主状态，通过会话注册表投递，禁止保存玩家对象。 */
-public final class PartyHandler implements PacketHandler, AutoCloseable {
+public final class PartyHandler implements PacketHandler, PartyRoster, AutoCloseable {
     private final PartyState state = new PartyState();
     private final PartySystem system;
     private final PlayerSessionRegistry sessions;
@@ -120,6 +123,32 @@ public final class PartyHandler implements PacketHandler, AutoCloseable {
                 peer.send(PlayerUtilityPackets.partyChat(character.getName(), text));
             }
         }
+    }
+    /**
+     * 击杀经验分摊用：返回同图在线队员（含击杀者）。存档冻结或换图中的队员不参与本次分摊，
+     * 避免在存档快照之外修改其状态。
+     */
+    @Override
+    public List<PlayerCharacter> membersOnMap(PlayerCharacter character) {
+        return sessions.coordinate(() -> membersOnMapOwned(character));
+    }
+
+    private List<PlayerCharacter> membersOnMapOwned(PlayerCharacter character) {
+        if (character == null) return List.of();
+        MapleMap map = character.getMapObject();
+        Party party = state.of(character.getId());
+        if (party == null || map == null) return List.of(character);
+        List<PlayerCharacter> members = new ArrayList<>(Math.min(6, party.members().size()));
+        for (PartyMember member : party.members().values()) {
+            if (member.id() == character.getId()) continue;
+            PacketSession session = sessions.get(member.id());
+            if (session == null || session.sessionId() != member.sessionId()) continue;
+            if (session.getAttr("stateTransfer") != null || session.getAttr("mapTransition") != null) continue;
+            PlayerCharacter other = GameplaySession.character(session);
+            if (other != null && other.getMapObject() == map) members.add(other);
+        }
+        members.add(character);
+        return List.copyOf(members);
     }
     private boolean leave(long actor, long target) {
         Party before = system.leave(state, actor, target);

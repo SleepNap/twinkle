@@ -1,12 +1,21 @@
 package org.gms.channel;
 
 import org.gms.domain.game.PlayerCharacter;
+import org.gms.domain.game.map.MapleMap;
 import org.gms.net.packet.PacketSession;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * 击杀经验结算与升级：只处理单人击杀收益，不做队伍分摊、掉落或金币。
+ * 击杀经验结算与升级：单人击杀取得全部经验，队伍击杀按等级分摊并追加队伍加成。
+ *
+ * <p>分摊规则：同图在线队员参与，每名队员获得 {@code 怪物经验 × 自身等级 / 队伍总等级}
+ * （向下取整），再按队员人数追加 {@code 5% × 人数} 的队伍加成。参考实现同样使用
+ * {@code 0.05 × 人数}，本批与之一致；等级区间过滤、越级提示和 MVP 加成尚未接入。
  *
  * <p>经验阈值见 {@link V83ExpTable}；升级后 AP +5、非新手 SP +3，HP/MP 增量按职业
  * 大类的简化曲线计算。HP/MP 曲线是当前批次的可玩占位，后续接入技能/职业成长时再精确化。
@@ -14,7 +23,10 @@ import java.util.Map;
  */
 public final class KillRewardService {
 
-    /** 一次击杀的结算结果；{@code gainedExp} 是怪物原始经验。 */
+    /** 队伍经验加成：每名队员 5%（含击杀者，与参考实现一致）。 */
+    private static final int PARTY_BONUS_PERCENT_PER_MEMBER = 5;
+
+    /** 一次击杀的结算结果；{@code gainedExp} 是击杀者实际获得的经验（含队伍加成）。 */
     public record Result(int gainedExp, int levelsGained) {
         public boolean leveledUp() {
             return levelsGained > 0;
@@ -22,23 +34,89 @@ public final class KillRewardService {
     }
 
     private final PlayerSessionRegistry sessions;
+    private final PartyRoster parties;
 
     public KillRewardService(PlayerSessionRegistry sessions) {
+        this(sessions, null);
+    }
+
+    public KillRewardService(PlayerSessionRegistry sessions, PartyRoster parties) {
         this.sessions = sessions;
+        this.parties = parties;
     }
 
     /**
-     * 给击杀者结算经验；未升级时只发 EXP 状态，升级时发完整升级状态并广播光效。
+     * 给击杀者（及其同图队员）结算经验；未升级时只发 EXP 状态，升级时发完整升级状态并广播光效。
      */
-    public Result onKill(PlayerCharacter character, int exp) {
-        if (character == null || exp <= 0) {
+    public Result onKill(PlayerCharacter killer, int exp) {
+        if (killer == null || exp <= 0) {
             return new Result(0, 0);
         }
-        int levels = applyExperience(character, exp);
+        List<PlayerCharacter> recipients = recipients(killer);
+        if (recipients.size() <= 1) {
+            return new Result(exp, award(killer, exp, 0));
+        }
+        int totalLevel = 0;
+        for (PlayerCharacter member : recipients) {
+            totalLevel += Math.max(1, member.getLevel());
+        }
+        int bonusPercent = PARTY_BONUS_PERCENT_PER_MEMBER * recipients.size();
+        int killerGain = 0;
+        int killerLevels = 0;
+        for (PlayerCharacter member : recipients) {
+            int share = (int) ((long) exp * Math.max(1, member.getLevel()) / totalLevel);
+            int bonus = (int) ((long) share * bonusPercent / 100);
+            int levels = award(member, share, bonus);
+            if (member.getId() == killer.getId()) {
+                killerGain = share + bonus;
+                killerLevels = levels;
+            }
+        }
+        return new Result(killerGain, killerLevels);
+    }
+
+    /**
+     * 同图队员快照：队伍目录在频道执行队列内读取，再按地图实例、在线会话和冻结状态复核。
+     * 未组队或目录不可用时退化为单人结算。
+     */
+    private List<PlayerCharacter> recipients(PlayerCharacter killer) {
+        if (parties == null || killer.getParty() == 0) {
+            return List.of(killer);
+        }
+        List<PlayerCharacter> roster = parties.membersOnMap(killer);
+        if (roster == null || roster.isEmpty()) {
+            return List.of(killer);
+        }
+        MapleMap map = killer.getMapObject();
+        List<PlayerCharacter> result = new ArrayList<>(Math.min(6, roster.size() + 1));
+        Set<Long> seen = new HashSet<>();
+        for (PlayerCharacter member : roster) {
+            if (member == null || member.getMapObject() != map || !seen.add(member.getId())) continue;
+            if (!online(member)) continue;
+            result.add(member);
+        }
+        if (result.stream().noneMatch(member -> member.getId() == killer.getId())) {
+            result.add(killer);
+        }
+        return List.copyOf(result);
+    }
+
+    private boolean online(PlayerCharacter member) {
+        if (sessions == null) return true;
+        PacketSession session = sessions.get(member.getId());
+        return session != null && GameplaySession.character(session) == member;
+    }
+
+    private int award(PlayerCharacter character, int gain, int partyBonus) {
+        int total = gain + partyBonus;
+        if (total <= 0) {
+            return 0;
+        }
+        int levels = applyExperience(character, total);
         if (sessions != null) {
             PacketSession session = sessions.get(character.getId());
             if (session != null) {
-                session.send(GameplayPackets.expGain(exp));
+                session.send(GameplayPackets.expGain(gain, partyBonus));
                 if (levels > 0) {
                     session.send(GameplayPackets.levelUpStats(character));
                     if (character.getMapObject() != null) {
@@ -51,7 +129,7 @@ public final class KillRewardService {
                 }
             }
         }
-        return new Result(exp, levels);
+        return levels;
     }
 
     private int applyExperience(PlayerCharacter character, int gain) {

@@ -89,6 +89,33 @@ public class PartyGameplayTest {
             assertThat(disband.readByte()).isZero();
         }
     }
+    @Test public void membersOnMapFiltersByMapInstanceAndKeepsKiller() {
+        var map = new MapleMap();
+        map.setMapId(100);
+        var leader = new GameplayTestSession(1, map);
+        var guest = new GameplayTestSession(2, map);
+        var sessions = new PlayerSessionRegistry();
+        sessions.claim(1, leader);
+        sessions.claim(2, guest);
+        try (var handler = new PartyHandler(new DefaultPartySystem(), sessions, 1, Clock.systemUTC(), state -> true)) {
+            handler.handle(leader, input(1));
+            int partyId = leader.character.getParty();
+            var invite = new ByteArrayOutPacket();
+            invite.writeByte(4);
+            invite.writeString("Player2");
+            handler.handle(leader, new ByteArrayInPacket(invite.getBytes()));
+            handler.handle(guest, input(3, partyId));
+
+            assertThat(handler.membersOnMap(leader.character))
+                    .containsExactlyInAnyOrder(leader.character, guest.character);
+
+            var elsewhere = new MapleMap();
+            elsewhere.setMapId(100);
+            guest.character.setMapObject(elsewhere);
+            assertThat(handler.membersOnMap(leader.character)).containsExactly(leader.character);
+        }
+    }
+
     private static ByteArrayInPacket input(int action, int... arguments) {
         var packet = new ByteArrayOutPacket(); packet.writeByte(action);
         for (int value : arguments) packet.writeInt(value);

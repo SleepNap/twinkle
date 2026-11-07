@@ -7,9 +7,9 @@ import org.gms.domain.game.mob.MapleMonster;
 import java.util.Random;
 
 /**
- * 击杀掉落：按 {@link MonsterDropCatalog} 生成金币/物品落物，归属给击杀者。
+ * 击杀掉落：按 {@link MonsterDropCatalog} 生成金币/物品落物，归属给击杀者及其队伍。
  *
- * <p>归属窗口内只有击杀者可拾取；窗口结束后同图玩家均可拾取。这里只决定“掉什么”，
+ * <p>归属窗口内击杀者和同队队员均可拾取；窗口结束后同图玩家均可拾取。这里只决定“掉什么”，
  * 真正的落物创建、拾取和过期仍由 {@link GroundDropService} 统一串行处理。
  */
 public final class MonsterDropService {
@@ -43,15 +43,16 @@ public final class MonsterDropService {
         if (table == null) {
             return;
         }
+        int party = killer.getParty();
         if (table.meso() != null) {
             int amount = randomBetween(table.meso().min(), table.meso().max());
-            drops.dropMonsterMesos(map, killer.getId(), amount, monster.getX(), monster.getY(),
+            drops.dropMonsterMesos(map, killer.getId(), party, amount, monster.getX(), monster.getY(),
                     OWNER_WINDOW_MILLIS);
         }
         for (MonsterDropCatalog.ItemDrop item : table.items()) {
             if (random.nextInt(100) < item.chance()) {
                 int quantity = randomBetween(item.min(), item.max());
-                drops.dropMonsterItem(map, killer.getId(), item.itemId(), quantity,
+                drops.dropMonsterItem(map, killer.getId(), party, item.itemId(), quantity,
                         monster.getX(), monster.getY(), OWNER_WINDOW_MILLIS);
             }
         }

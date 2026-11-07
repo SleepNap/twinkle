@@ -45,6 +45,9 @@ public class KillRewardGameplayTest {
         assertThat(wire.readByte()).isZero();
         assertThat(wire.readByte()).isZero();
         assertThat(wire.readInt()).isZero();
+        assertThat(wire.readInt()).isZero();
+        assertThat(wire.readInt()).isZero();
+        assertThat(wire.readInt()).isZero();
         assertThat(wire.available()).isZero();
 
         var exp = packet(player, SendOpcode.STAT_CHANGED);
