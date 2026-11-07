@@ -29,9 +29,10 @@ public final class ChannelGameplay implements AutoCloseable {
                            PlayerSessionRegistry sessions, ItemSystem items, QuestSystem quests,
                            ScriptManager scripts, NpcShopCatalog shopCatalog, TickScheduler scheduler,
                            WzResourceRegistry resources, ProgressionSystem progression, AvatarSystem avatarLogic,
-                           ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartySystem partyLogic) {
+                           ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartySystem partyLogic,
+                           GroundDropService drops) {
         this.scheduler = scheduler;
-        this.drops = new GroundDropService(items, data, sessions, Clock.systemUTC());
+        this.drops = drops;
         this.parties = new PartyHandler(partyLogic, sessions, channelId, Clock.systemUTC(), progression::accepts);
         ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC(), sessions);
         AvatarHandler avatars = new AvatarHandler(sessions, avatarLogic, data, Clock.systemUTC());

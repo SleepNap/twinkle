@@ -56,6 +56,7 @@ public final class AttackHandler implements PacketHandler {
     private final org.gms.domain.game.lease.ControllerLeaseService leaseService;
     private final MonsterSpawnService monsters;
     private final KillRewardService rewards;
+    private final MonsterDropService drops;
     /** 攻击类型（决定 stance 后固定段布局）。 */
     private final boolean ranged;
     private final boolean magic;
@@ -72,11 +73,19 @@ public final class AttackHandler implements PacketHandler {
     public AttackHandler(CombatSystem combatSystem, PlayerSessionRegistry sessions,
                          org.gms.domain.game.lease.ControllerLeaseService leaseService,
                          MonsterSpawnService monsters, KillRewardService rewards, boolean ranged, boolean magic) {
+        this(combatSystem, sessions, leaseService, monsters, rewards, null, ranged, magic);
+    }
+
+    public AttackHandler(CombatSystem combatSystem, PlayerSessionRegistry sessions,
+                         org.gms.domain.game.lease.ControllerLeaseService leaseService,
+                         MonsterSpawnService monsters, KillRewardService rewards, MonsterDropService drops,
+                         boolean ranged, boolean magic) {
         this.combatSystem = combatSystem;
         this.sessions = sessions;
         this.leaseService = leaseService;
         this.monsters = monsters;
         this.rewards = rewards;
+        this.drops = drops;
         this.ranged = ranged;
         this.magic = magic;
     }
@@ -224,6 +233,9 @@ public final class AttackHandler implements PacketHandler {
                 if (dead != null && dead.getData() != null) {
                     if (rewards != null) {
                         rewards.onKill(chr, dead.getData().getExp());
+                    }
+                    if (drops != null) {
+                        drops.onKill(chr, dead);
                     }
                     if (monsters != null) {
                         monsters.onKilled(map, dead);

@@ -81,6 +81,7 @@ public class ChannelConfig {
             TickScheduler tickScheduler,
             HeartbeatConfig heartbeatConfig,
             org.gms.channel.NpcShopCatalog shopCatalog,
+            org.gms.channel.MonsterDropCatalog dropCatalog,
             org.gms.domain.game.logic.ProgressionSystem progressionSystem,
             VersionGate versionGate,
             ThreadManager background,
@@ -96,7 +97,8 @@ public class ChannelConfig {
                 reliableEventBus, reliableReceiver, intercoord, buddyListRepository, saveQueue,
                 playerDirectory, tickScheduler, heartbeatConfig,
                 org.gms.net.packet.v83.V83WorldId.validate(worldId), leaseTtlSeconds,
-                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, progressionSystem, versionGate, background, logic);
+                leaseCooldownSeconds, leaseSweepIntervalMillis, shopCatalog, dropCatalog, progressionSystem,
+                versionGate, background, logic);
         return new ChannelWorker(spec, runtimeFactory, wzResources, scriptManager, restartService,
                 restartCoordinator, intercoord, playerDirectory, tickScheduler, exitOnRestart);
     }

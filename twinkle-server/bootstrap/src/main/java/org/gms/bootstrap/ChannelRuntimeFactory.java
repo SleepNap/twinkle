@@ -1,4 +1,5 @@
 package org.gms.bootstrap;
+import java.time.Clock;
 import java.time.Duration;
 import org.gms.channel.*;
 import org.gms.channel.admin.ChannelEventPublisher;
@@ -59,6 +60,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
     private final long leaseCooldownSeconds;
     private final long leaseSweepIntervalMillis;
     private final NpcShopCatalog shopCatalog;
+    private final MonsterDropCatalog dropCatalog;
     private final ProgressionSystem progressionSystem;
     private final VersionGate versionGate;
     private final ThreadManager background;
@@ -75,6 +77,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                                  ChannelPlayerDirectory playerDirectory, TickScheduler tickScheduler,
                                  HeartbeatConfig heartbeatConfig, int worldId, long leaseTtlSeconds,
                                  long leaseCooldownSeconds, long leaseSweepIntervalMillis, NpcShopCatalog shopCatalog,
+                                 MonsterDropCatalog dropCatalog,
                                  ProgressionSystem progressionSystem, VersionGate versionGate, ThreadManager background, GameLogicRuntime logic) {
         this.characterRepository = characterRepository;
         this.characterLoader = characterLoader;
@@ -101,6 +104,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         this.leaseCooldownSeconds = leaseCooldownSeconds;
         this.leaseSweepIntervalMillis = leaseSweepIntervalMillis;
         this.shopCatalog = shopCatalog;
+        this.dropCatalog = dropCatalog;
         this.progressionSystem = progressionSystem;
         this.versionGate = versionGate;
         this.background = background;
@@ -126,6 +130,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         ChannelLocationBinder locations = null;
         MonsterReassignTickHandler reassign = null;
         ChannelGameplay gameplay = null;
+        GroundDropService drops = null;
         try {
             logic.bind(execution, () -> {
                 for (var player : players.all()) {
@@ -139,6 +144,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     leaseSweepIntervalMillis, tickScheduler.intervalMillis());
             monsters = new MonsterSpawnService(gameData, sessions, leases);
             KillRewardService killRewards = new KillRewardService(sessions);
+            drops = new GroundDropService(itemSystem, gameData, sessions, Clock.systemUTC());
+            MonsterDropService monsterDrops = new MonsterDropService(drops, dropCatalog);
             ChannelEventPublisher publisher = new ChannelEventPublisher(eventBus, channelId);
             DefaultControllerLeaseService runtimeLeases = leases;
             ChannelServer server = new ChannelServer(handlers, session -> {
@@ -165,9 +172,9 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     new PlayerLoggedinHandler(characterRepository, characterLoader, maps, players, sessions,
                             monsters, channelId, publisher, leases, background, saveQueue),
                     new PlayerMapTransitionHandler(), new MovePlayerHandler(movementSystem, sessions),
-                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, false, false),
-                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, true, false),
-                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, false, true),
+                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, monsterDrops, false, false),
+                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, monsterDrops, true, false),
+                    new AttackHandler(combatSystem, sessions, leases, monsters, killRewards, monsterDrops, false, true),
                     new PlayerInteractionHandler(tradeSystem, sessions, entityReloadCoordinator),
                     new NpcTalkHandler(scriptManager, itemSystem, questSystem), new NpcTalkMoreHandler(),
                     new UseItemHandler(itemSystem, gameData),
@@ -186,13 +193,14 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             gameplay = new ChannelGameplay(handlers, maps, monsters, leases, channelId, gameData,
                     sessions, itemSystem, questSystem, scriptManager, shopCatalog, channelTicks,
                     wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
-                    logic.service(EquipmentSystem.class), logic.service(PartySystem.class));
+                    logic.service(EquipmentSystem.class), logic.service(PartySystem.class), drops);
             ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
             runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));
             return runtime;
         } catch (RuntimeException error) {
             closeQuietly(gameplay);
+            closeQuietly(drops);
             closeQuietly(locations);
             closeQuietly(changes);
             closeQuietly(messages);

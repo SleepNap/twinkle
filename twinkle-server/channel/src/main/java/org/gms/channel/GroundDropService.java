@@ -2,6 +2,7 @@ package org.gms.channel;
 
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.inventory.ItemConstants;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.spi.TradeItemSnapshot;
 import org.gms.domain.game.wz.GameDataProvider;
@@ -20,7 +21,7 @@ import java.util.IdentityHashMap;
 
 /** 频道独占的掉落目录。扣款、发布、拾取和过期统一串行，地图实例之间互不影响。 */
 public final class GroundDropService implements AutoCloseable {
-    public record Drop(int objectId, MapleMap map, long owner, int x, int y,
+    public record Drop(int objectId, MapleMap map, long owner, long ownerUntil, int x, int y,
                        TradeItemSnapshot item, int mesos, long expiresAt) {
         public Drop {
             if (item == null ? mesos <= 0 : mesos != 0) throw new IllegalArgumentException("Invalid drop contents");
@@ -53,7 +54,7 @@ public final class GroundDropService implements AutoCloseable {
         Map<Integer, Drop> visible = drops.computeIfAbsent(map, ignored -> new HashMap<>());
         if (visible.size() >= 1000) return false;
         int objectId = map.nextObjectId();
-        Drop drop = new Drop(objectId, map, character.getId(), character.getX(), character.getY(),
+        Drop drop = new Drop(objectId, map, character.getId(), 0, character.getX(), character.getY(),
                 item, 0, clock.millis() + 120_000);
         if (!items.takeTradeItems(character, List.of(item))) return false;
         visible.put(objectId, drop);
@@ -71,8 +72,11 @@ public final class GroundDropService implements AutoCloseable {
         Drop drop = visible == null ? null : visible.get(objectId);
         if (drop == null || drop.map() != character.getMapObject()
                 || !GameplaySession.near(character, drop.x(), drop.y(), 200)) return false;
-        if (visible.get(objectId) != drop || drop.expiresAt() <= clock.millis()
-                || drop.item() != null && drop.item().expiration() > 0 && drop.item().expiration() <= clock.millis()) return false;
+        long now = clock.millis();
+        // 怪物掉落先归击杀者；窗口结束后同图玩家均可拾取。手动丢弃 ownerUntil=0，不受限制。
+        if (drop.owner() != 0 && drop.ownerUntil() > now && drop.owner() != character.getId()) return false;
+        if (visible.get(objectId) != drop || drop.expiresAt() <= now
+                || drop.item() != null && drop.item().expiration() > 0 && drop.item().expiration() <= now) return false;
         if (drop.mesos() > 0) {
             if (!items.changeMeso(character, drop.mesos())) return false;
             visible.remove(objectId, drop);
@@ -115,10 +119,50 @@ public final class GroundDropService implements AutoCloseable {
         MapleMap map = character.getMapObject();
         Map<Integer, Drop> visible = drops.computeIfAbsent(map, ignored -> new HashMap<>());
         if (visible.size() >= 1000) return false;
-        Drop drop = new Drop(map.nextObjectId(), map, character.getId(), character.getX(), character.getY(),
+        Drop drop = new Drop(map.nextObjectId(), map, character.getId(), 0, character.getX(), character.getY(),
                 null, amount, clock.millis() + 120_000);
         if (!items.changeMeso(character, -amount)) return false;
         visible.put(drop.objectId(), drop); sendBalance(character); broadcast(map, spawn(drop));
+        return true;
+    }
+
+    /** 怪物金币掉落：服务端生成，不扣任何玩家余额；归属窗口由调用方给定。 */
+    public boolean dropMonsterMesos(MapleMap map, long owner, int amount, int x, int y, long ownerWindowMillis) {
+        return sessions.coordinate(() -> {
+            if (amount <= 0 || amount > 1_000_000 || ownerWindowMillis < 0) return false;
+            return addDrop(map, owner, x, y, null, amount, ownerWindowMillis);
+        });
+    }
+
+    /** 怪物物品掉落：按物品模板生成实例，超过单槽上限或不可交易时拒绝。 */
+    public boolean dropMonsterItem(MapleMap map, long owner, int itemId, int quantity,
+                                   int x, int y, long ownerWindowMillis) {
+        return sessions.coordinate(() -> {
+            if (quantity <= 0 || ownerWindowMillis < 0) return false;
+            var definition = data.item(itemId);
+            InventoryType type = ItemConstants.getInventoryType(itemId);
+            // 本批只落普通堆叠物品；装备/现金实例需要完整实例属性，留待后续掉落批次。
+            if (definition == null || definition.isTradeBlock() || type == InventoryType.UNDEFINED
+                    || type == InventoryType.EQUIP || type == InventoryType.CASH
+                    || quantity > Math.max(1, definition.getSlotMax())) {
+                return false;
+            }
+            TradeItemSnapshot item = new TradeItemSnapshot(type.getType(), (short) 0, itemId, quantity,
+                    0, 0, "", 0, -1, "", null, null);
+            return addDrop(map, owner, x, y, item, 0, ownerWindowMillis);
+        });
+    }
+
+    private boolean addDrop(MapleMap map, long owner, int x, int y, TradeItemSnapshot item, int mesos,
+                            long ownerWindowMillis) {
+        if (map == null || (item == null ? mesos <= 0 : mesos != 0)) return false;
+        Map<Integer, Drop> visible = drops.computeIfAbsent(map, ignored -> new HashMap<>());
+        if (visible.size() >= 1000) return false;
+        long now = clock.millis();
+        long ownerUntil = ownerWindowMillis <= 0 ? 0 : now + ownerWindowMillis;
+        Drop drop = new Drop(map.nextObjectId(), map, owner, ownerUntil, x, y, item, mesos, now + 120_000);
+        visible.put(drop.objectId(), drop);
+        broadcast(map, spawn(drop));
         return true;
     }
 
