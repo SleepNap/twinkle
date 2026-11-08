@@ -34,6 +34,10 @@ public final class PlayerDeathService {
     /** Map.wz fieldLimit 的 NO_EXP_DECREASE 位（v83 0x80000）。 */
     private static final int FIELD_LIMIT_NO_EXP_DECREASE = 0x80_000;
 
+    /** 武陵道场地图区间：道场内不消耗安全护符（v83 行为）。 */
+    private static final int DOJO_MIN_MAP_ID = 925_020_000;
+    private static final int DOJO_MAX_MAP_ID = 925_033_804;
+
     private final ProgressionSystem progression;
     private final PlayerSessionRegistry sessions;
     private final Clock clock;
@@ -78,6 +82,7 @@ public final class PlayerDeathService {
 
     /** v83 死亡经验损失；只更新 EXP，不播放白色经验提示，与服务端状态纠正一致。 */
     private void applyDeathPenalty(PacketSession session, PlayerCharacter character) {
+        session.setAttr("safetyCharmUsed", null);
         if (character.getJob() == 0) return;
         if (consumeSafetyCharm(session, character)) return;
         boolean town = character.getMapObject() != null && character.getMapObject().isTown();
@@ -94,13 +99,23 @@ public final class PlayerDeathService {
                 (int) Math.min(Integer.MAX_VALUE, character.getExp()))));
     }
 
-    /** 优先消耗一个安全护符并推送现金栏变更；没有护符或扣除失败时返回 false。 */
+    /**
+     * 优先消耗一个安全护符并推送现金栏变更；没有护符、道场地图或扣除失败时返回 false。
+     *
+     * <p>消耗成功后在会话上标记本次死亡用过护符，复活时按 30% 恢复 HP/MP。
+     */
     private boolean consumeSafetyCharm(PacketSession session, PlayerCharacter character) {
         if (character.getItemCount(SAFETY_CHARM_ITEM_ID) <= 0) return false;
+        if (character.getMapObject() != null && isDojo(character.getMapObject().getMapId())) return false;
         var before = GameplayPackets.inventory(character, InventoryType.CASH);
         if (!character.removeItem(SAFETY_CHARM_ITEM_ID, 1)) return false;
         GameplayPackets.inventoryChanges(InventoryType.CASH, before,
                 GameplayPackets.inventory(character, InventoryType.CASH)).forEach(session::send);
+        session.setAttr("safetyCharmUsed", true);
         return true;
+    }
+
+    private static boolean isDojo(int mapId) {
+        return mapId >= DOJO_MIN_MAP_ID && mapId <= DOJO_MAX_MAP_ID;
     }
 }

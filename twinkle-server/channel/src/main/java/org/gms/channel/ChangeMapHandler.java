@@ -23,9 +23,15 @@ public final class ChangeMapHandler implements PacketHandler {
             else {
                 int mapId = packet.readInt();
                 String portalName = packet.readString();
+                // v83 后续两个字节：未用标志 + 复活轮标志；老客户端没带时按普通复活处理。
+                boolean wheel = false;
+                if (packet.available() >= 2) {
+                    packet.skip(1);
+                    wheel = packet.readByte() > 0;
+                }
                 var character = GameplaySession.character(session);
                 accepted = character != null && character.getHp() <= 0
-                        ? transitions.revive(session) : transitions.usePortal(session, portalName, mapId);
+                        ? transitions.revive(session, wheel) : transitions.usePortal(session, portalName, mapId);
             }
         }
         if (!accepted) session.send(GameplayPackets.enableActions());

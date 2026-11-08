@@ -101,6 +101,30 @@ public class MapleMap implements MapGeometry {
         return List.copyOf(portals.values());
     }
 
+    /**
+     * 距离指定坐标最近的玩家出生点（无目标地图的门）。
+     *
+     * <p>复活轮原地复活按 v83 行为回到最近出生点；没有候选点时返回 {@code null}，
+     * 调用方保留死亡坐标。
+     */
+    public Portal closestSpawnPortal(int x, int y) {
+        Portal closest = null;
+        long shortest = Long.MAX_VALUE;
+        for (Portal portal : portals.values()) {
+            if (portal.isScript()
+                    || portal.getType() != PortalType.MAP_PORTAL && portal.getType() != PortalType.DOOR
+                    || portal.getTargetMapId() > 0 && portal.getTargetMapId() != 999_999_999) continue;
+            long dx = (long) portal.getX() - x;
+            long dy = (long) portal.getY() - y;
+            long distance = dx * dx + dy * dy;
+            if (distance < shortest) {
+                shortest = distance;
+                closest = portal;
+            }
+        }
+        return closest;
+    }
+
     // ---------- 刷怪点 ----------
 
     public void addSpawnPoint(SpawnPoint spawnPoint) {

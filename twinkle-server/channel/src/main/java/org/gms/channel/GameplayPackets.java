@@ -163,6 +163,14 @@ public final class GameplayPackets {
         return packet;
     }
 
+    /** 复活轮剩余数量：SHOW_ITEM_GAIN_INCHAT 子类型 0x15，后跟剩余个数。 */
+    public static OutPacket wheelsLeft(int left) {
+        ByteArrayOutPacket packet = packet(SendOpcode.SHOW_ITEM_GAIN_INCHAT);
+        packet.writeByte(0x15);
+        packet.writeByte(Math.clamp(left, 0, 255));
+        return packet;
+    }
+
     /** 空库存操作：砸卷被拒绝时解除客户端在请求期间加的背包锁。 */
     public static OutPacket emptyInventoryOperation() {
         ByteArrayOutPacket packet = packet(SendOpcode.INVENTORY_OPERATION);
