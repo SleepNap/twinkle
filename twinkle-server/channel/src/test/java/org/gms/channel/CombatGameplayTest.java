@@ -5,9 +5,11 @@ import org.gms.domain.game.map.Portal;
 import org.gms.domain.game.map.PortalType;
 import org.gms.domain.game.mob.MapleMonster;
 import org.gms.domain.game.mob.MobData;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.domain.game.skill.ActiveBuff;
 import org.gms.hotreload.versioned.DefaultVersionGate;
 import org.gms.logic.game.DefaultCombatSystem;
+import org.gms.logic.game.DefaultItemSystem;
 import org.gms.logic.game.DefaultProgressionSystem;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
@@ -224,6 +226,38 @@ public class CombatGameplayTest {
     @Test public void beginnerKeepsExpOnDeath() {
         var sessions = new PlayerSessionRegistry();
         var player = joined(sessions, 1, map(100));
+        player.character.setLevel(10);
+        player.character.setExp(500);
+
+        death(sessions).onDeath(player, player.character);
+
+        assertThat(player.character.getExp()).isEqualTo(500);
+        assertThat(player.sent).isEmpty();
+    }
+
+    @Test public void safetyCharmPreventsExpLossAndIsConsumed() {
+        var sessions = new PlayerSessionRegistry();
+        var player = joined(sessions, 1, map(100));
+        player.character.setJob(100);
+        player.character.setLevel(10);
+        player.character.setExp(500);
+        var items = new DefaultItemSystem(new DefaultVersionGate(), GameDataProvider.fixed(Map.of(), Map.of()));
+        assertThat(items.giveItem(player.character, 5_130_000, 1)).isTrue();
+
+        death(sessions).onDeath(player, player.character);
+
+        assertThat(player.character.getExp()).isEqualTo(500);
+        assertThat(player.character.getItemCount(5_130_000)).isZero();
+        var update = new ByteArrayInPacket(player.sent.getFirst().getBytes());
+        assertThat(update.readUnsignedShort()).isEqualTo(SendOpcode.INVENTORY_OPERATION.getValue());
+    }
+
+    @Test public void fieldLimitNoExpDecreasePreventsPenalty() {
+        var sessions = new PlayerSessionRegistry();
+        var map = map(100);
+        map.setFieldLimit(0x80_000);
+        var player = joined(sessions, 1, map);
+        player.character.setJob(100);
         player.character.setLevel(10);
         player.character.setExp(500);
 
