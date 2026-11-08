@@ -1,6 +1,7 @@
 package org.gms.wz;
 
 import org.gms.domain.game.item.ItemData;
+import org.gms.domain.game.item.ScrollData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +34,7 @@ class ItemLoaderTest {
     void loadsConsumeItems() {
         Map<Integer, ItemData> items = new ItemLoader(WZ_ROOT).loadAll();
 
-        assertThat(items).hasSize(2);
+        assertThat(items).hasSize(4);
         ItemData hp50 = items.get(2_000_000);       // 十进制 id（v83 物品 id 十进制）
         assertThat(hp50).isNotNull();
         assertThat(hp50.getPrice()).isEqualTo(25);
@@ -45,5 +46,28 @@ class ItemLoaderTest {
         assertThat(hp150.getReqLevel()).isEqualTo(5);
         assertThat(hp150.getStat("hp")).isEqualTo(150);
         assertThat(hp150.getStat("mp")).isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("解析卷轴：成功率/诅咒率、incXXX 增量与 req 限定装备")
+    void loadsScrollData() {
+        Map<Integer, ItemData> items = new ItemLoader(WZ_ROOT).loadAll();
+
+        ScrollData helmet = items.get(2_040_000).getScroll();
+        assertThat(helmet).isNotNull();
+        assertThat(helmet.success()).isEqualTo(60);
+        assertThat(helmet.cursed()).isEqualTo(50);
+        assertThat(helmet.requiredItems()).isEmpty();
+        assertThat(helmet.stats()).containsEntry("wdef", 2).containsEntry("str", 1);
+
+        ScrollData restricted = items.get(2_040_023).getScroll();
+        assertThat(restricted.success()).isEqualTo(100);
+        assertThat(restricted.cursed()).isZero();
+        assertThat(restricted.requiredItems()).containsExactly(1_002_867);
+        assertThat(restricted.allows(1_002_867)).isTrue();
+        assertThat(restricted.allows(1_302_000)).isFalse();
+        assertThat(restricted.stats()).containsEntry("int", 1);
+
+        assertThat(items.get(2_000_000).getScroll()).isNull();
     }
 }

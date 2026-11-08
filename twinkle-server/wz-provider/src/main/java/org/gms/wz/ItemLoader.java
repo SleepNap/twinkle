@@ -2,12 +2,14 @@ package org.gms.wz;
 
 import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.item.EquipmentData;
+import org.gms.domain.game.item.ScrollData;
 import org.gms.i18n.I18n;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -28,6 +30,14 @@ public final class ItemLoader {
     private static final Set<String> EQUIP_STATS = Set.of(
             "str", "dex", "int", "luk", "hp", "mp",
             "watk", "matk", "wdef", "mdef", "acc", "avoid", "jump", "speed", "hands");
+
+    /** WZ 的 incXXX 键 → 统一能力键；装备模板与卷轴增量共用同一映射。 */
+    private static final Map<String, String> STAT_NAMES = Map.ofEntries(
+            Map.entry("incSTR", "str"), Map.entry("incDEX", "dex"), Map.entry("incINT", "int"),
+            Map.entry("incLUK", "luk"), Map.entry("incMHP", "hp"), Map.entry("incMMP", "mp"),
+            Map.entry("incPAD", "watk"), Map.entry("incMAD", "matk"), Map.entry("incPDD", "wdef"),
+            Map.entry("incMDD", "mdef"), Map.entry("incACC", "acc"), Map.entry("incEVA", "avoid"),
+            Map.entry("incCraft", "hands"), Map.entry("incSpeed", "speed"), Map.entry("incJump", "jump"));
 
     private static final String[] CATEGORIES = {"Consume", "Etc", "Install", "Cash", "Special", "Equip"};
 
@@ -83,13 +93,7 @@ public final class ItemLoader {
                 info.getInt("reqPOP").orElse(0), info.getInt("gender").orElse(id / 1000 % 10),
                 info.getInt("equipTradeBlock").orElse(0) != 0,
                 info.getInt("onlyEquip").orElse(0) != 0, info.getInt("tuc").orElse(0)));
-        Map<String, String> names = Map.ofEntries(
-                Map.entry("incSTR", "str"), Map.entry("incDEX", "dex"), Map.entry("incINT", "int"),
-                Map.entry("incLUK", "luk"), Map.entry("incMHP", "hp"), Map.entry("incMMP", "mp"),
-                Map.entry("incPAD", "watk"), Map.entry("incMAD", "matk"), Map.entry("incPDD", "wdef"),
-                Map.entry("incMDD", "mdef"), Map.entry("incACC", "acc"), Map.entry("incEVA", "avoid"),
-                Map.entry("incCraft", "hands"), Map.entry("incSpeed", "speed"), Map.entry("incJump", "jump"));
-        names.forEach((wz, stat) -> info.getInt(wz).ifPresent(value -> data.putStat(stat, value)));
+        STAT_NAMES.forEach((wz, stat) -> info.getInt(wz).ifPresent(value -> data.putStat(stat, value)));
         items.put(id, data);
     }
 
@@ -111,6 +115,8 @@ public final class ItemLoader {
                     }
                 });
             });
+            node.child("info").ifPresent(info -> info.getInt("success")
+                    .ifPresent(success -> data.setScroll(scroll(node, info, success))));
             node.child("spec").ifPresent(spec -> spec.values().forEach((k, v) -> {
                 if (isNumeric(v)) {
                     data.putStat(k, Integer.parseInt(v));
@@ -118,6 +124,19 @@ public final class ItemLoader {
             }));
             items.put(data.getItemId(), data);
         });
+    }
+
+    /** 卷轴：info/success、info/cursed、info/incXXX 增量与同级 req 的限定装备列表。 */
+    private static ScrollData scroll(WzNode node, WzNode info, int success) {
+        Map<String, Integer> stats = new HashMap<>();
+        STAT_NAMES.forEach((wz, stat) -> info.getInt(wz).ifPresent(value -> stats.put(stat, value)));
+        Set<Integer> required = new HashSet<>();
+        node.child("req").ifPresent(req -> req.values().forEach((key, value) -> {
+            if (isNumeric(value)) {
+                required.add(Integer.parseInt(value));
+            }
+        }));
+        return new ScrollData(success, info.getInt("cursed").orElse(0), required, stats);
     }
 
     private static boolean isNumeric(String s) {

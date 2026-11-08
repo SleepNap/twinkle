@@ -2,6 +2,8 @@ package org.gms.channel;
 
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
+import org.gms.domain.game.logic.EquipmentSystem.ScrollOutcome;
+import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 import org.gms.net.packet.SessionStage;
 import org.gms.net.packet.v83.V83ItemSnapshot;
@@ -10,6 +12,7 @@ import org.gms.domain.game.logic.EquipmentSystem;
 import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** 每频道的换装封包编排；派生属性不落库，存档保留基础属性与完整装备实例。 */
 public final class EquipmentService {
@@ -37,6 +40,43 @@ public final class EquipmentService {
         session.send(GameplayPackets.equipmentMoves(change.moves(), bound));
         changedHealth(session, character, hp, mp);
         sessions.broadcastToMap(character.getMapObject(), PlayerPresencePackets.changedLook(character), character.getId());
+        return true;
+    }
+
+    /**
+     * 升级卷轴：先按完整实例计算前后差异，再推送使用栏/装备栏变更与全图效果。
+     *
+     * <p>成功/失败/诅咒都由 {@link EquipmentSystem#scroll} 在角色锁内完成；这里只负责
+     * 协议编排、重算派生属性和外观广播，不重复校验业务条件。
+     */
+    public boolean scroll(PacketSession session, short scrollSlot, short equipSlot, boolean whiteScroll) {
+        PlayerCharacter character = GameplaySession.character(session);
+        if (character == null) return false;
+        if (sessions.get(character.getId()) != session || !GameplaySession.canAct(session, character)) return false;
+        int hp = character.getHp(), mp = character.getMp();
+        var useBefore = GameplayPackets.inventory(character, InventoryType.USE);
+        var equipBefore = GameplayPackets.inventory(character, InventoryType.EQUIP);
+        EquipmentSystem.ScrollResult result = equipment.scroll(character, scrollSlot, equipSlot,
+                whiteScroll, clock.millis(), ThreadLocalRandom.current());
+        if (result == null) {
+            session.send(GameplayPackets.emptyInventoryOperation());
+            return false;
+        }
+        GameplayPackets.inventoryChanges(InventoryType.USE, useBefore,
+                GameplayPackets.inventory(character, InventoryType.USE)).forEach(session::send);
+        GameplayPackets.inventoryChanges(InventoryType.EQUIP, equipBefore,
+                GameplayPackets.inventory(character, InventoryType.EQUIP)).forEach(session::send);
+        OutPacket effect = GameplayPackets.scrollEffect((int) character.getId(),
+                result.outcome() == ScrollOutcome.SUCCESS, result.outcome() == ScrollOutcome.CURSE,
+                result.whiteScroll());
+        sessions.broadcastToMap(character.getMapObject(), effect);
+        equipment.refresh(character, clock.millis());
+        scheduleRefresh(session, character);
+        changedHealth(session, character, hp, mp);
+        if (result.outcome() == ScrollOutcome.CURSE) {
+            sessions.broadcastToMap(character.getMapObject(),
+                    PlayerPresencePackets.changedLook(character), character.getId());
+        }
         return true;
     }
 

@@ -4,6 +4,7 @@ import org.gms.domain.game.logic.*;
 
 import org.gms.domain.game.item.EquipmentData;
 import org.gms.domain.game.item.ItemData;
+import org.gms.domain.game.item.ScrollData;
 import org.gms.domain.game.spi.CharacterState;
 import org.gms.domain.game.spi.EquipmentState;
 import org.gms.domain.game.spi.EquipmentState.SlotMove;
@@ -18,10 +19,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
 
 /** 装备穿脱与汇总由本项目独立实现；仅核对 WZ 字段、v83 负槽位和互斥部位的含义。 */
 public final class DefaultEquipmentSystem implements EquipmentSystem {
+
+    /** v83 白色卷轴：失败时保留升级次数，按客户端勾选消耗。 */
+    private static final int WHITE_SCROLL_ITEM_ID = 2_340_000;
 
     private final Predicate<CharacterState> accepts;
     private final GameDataProvider data;
@@ -72,6 +77,59 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
             if (data.version() != dataVersion || !accepts.test(state) || !state.applyEquipmentMoves(before, moves, bound)) return null;
             refresh(state, now);
             return new Change(moves, bound);
+        }
+    }
+
+    /**
+     * v83 升级卷轴：成功加属性并提升一级，失败消耗一次升级机会，诅咒直接销毁装备。
+     *
+     * <p>只接普通 {@code 2040xxx-2048xxx} 卷轴；{@code 2049xxx}（混沌/纯白/饰品特殊卷轴）
+     * 与匠人之魂留在后续批次。卷轴在判定前先按实例扣掉，白色卷轴按客户端勾选一并消耗。
+     */
+    public ScrollResult scroll(EquipmentState state, short scrollSlot, short equipSlot,
+                               boolean whiteScroll, long now, RandomGenerator random) {
+        synchronized (state) {
+            if (!accepts.test(state) || state.getHp() <= 0 || scrollSlot <= 0 || equipSlot >= 0) return null;
+            TradeItemSnapshot scroll = state.snapshotTradeItem((byte) 2, scrollSlot, 1);
+            if (scroll == null || expired(scroll, now) || !isStandardScroll(scroll.itemId())) return null;
+            ItemData scrollDefinition = data.item(scroll.itemId());
+            if (scrollDefinition == null || scrollDefinition.getScroll() == null) return null;
+            ScrollData scrollData = scrollDefinition.getScroll();
+            Map<Short, TradeItemSnapshot> before = state.equipmentItems();
+            TradeItemSnapshot item = before.get(equipSlot);
+            if (!usable(item, now)) return null;
+            ItemData definition = data.item(item.itemId());
+            if (definition == null || definition.getEquipment() == null || definition.getEquipment().cash()
+                    || !scrollData.allows(item.itemId())
+                    || !sameScrollCategory(scroll.itemId(), item.itemId())) return null;
+            EquipSnapshot stats = item.equip();
+            if (stats.upgradeSlots() <= 0) return null;
+
+            boolean usedWhiteScroll = whiteScroll && state.getItemCount(WHITE_SCROLL_ITEM_ID) > 0;
+            if (!state.removeTradeItems(List.of(scroll))) return null;
+            if (usedWhiteScroll && !state.removeItem(WHITE_SCROLL_ITEM_ID, 1)) {
+                refund(state, scroll, false);
+                return null;
+            }
+            boolean success = random.nextInt(100) < scrollData.success();
+            boolean cursed = !success && random.nextInt(100) < scrollData.cursed();
+            if (cursed) {
+                if (!state.removeEquipment(before, Set.of(equipSlot))) {
+                    refund(state, scroll, usedWhiteScroll);
+                    return null;
+                }
+                return new ScrollResult(ScrollOutcome.CURSE, usedWhiteScroll);
+            }
+            EquipSnapshot updated = success ? improved(stats, scrollData.stats())
+                    : spentSlot(stats, usedWhiteScroll);
+            TradeItemSnapshot replacement = new TradeItemSnapshot(item.inventoryType(), item.sourcePosition(),
+                    item.itemId(), item.quantity(), item.cashId(), item.petId(), item.owner(), item.flag(),
+                    item.expiration(), item.giftFrom(), updated, null);
+            if (!state.updateEquipmentItem(before, equipSlot, replacement)) {
+                refund(state, scroll, usedWhiteScroll);
+                return null;
+            }
+            return new ScrollResult(success ? ScrollOutcome.SUCCESS : ScrollOutcome.FAIL, usedWhiteScroll);
         }
     }
 
@@ -157,6 +215,65 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
             if (weapon != null && twoHanded(weapon.itemId())) return -11;
         }
         return 0;
+    }
+
+    /** 只接普通升级卷轴；2049xxx 的特殊卷轴与匠人之魂未接入。 */
+    private static boolean isStandardScroll(int itemId) {
+        return itemId / 10000 == 204 && itemId / 1000 != 2049;
+    }
+
+    /** 卷轴 204XYZ 的类别位与装备 id 的第三段对应（头盔 0、上衣 4、武器 30 等）。 */
+    private static boolean sameScrollCategory(int scrollId, int equipmentId) {
+        return (scrollId / 100) % 100 == (equipmentId / 10000) % 100;
+    }
+
+    private static boolean expired(TradeItemSnapshot item, long now) {
+        return item.expiration() >= 0 && item.expiration() <= now;
+    }
+
+    private static EquipSnapshot improved(EquipSnapshot stats, Map<String, Integer> increments) {
+        return new EquipSnapshot(
+                (byte) Math.max(0, stats.upgradeSlots() - 1),
+                (short) Math.clamp(stats.level() + 1, 0, 255),
+                add(stats.strStat(), increments.get("str")),
+                add(stats.dexStat(), increments.get("dex")),
+                add(stats.intStat(), increments.get("int")),
+                add(stats.lukStat(), increments.get("luk")),
+                add(stats.hp(), increments.get("hp")),
+                add(stats.mp(), increments.get("mp")),
+                add(stats.wAtk(), increments.get("watk")),
+                add(stats.mAtk(), increments.get("matk")),
+                add(stats.wDef(), increments.get("wdef")),
+                add(stats.mDef(), increments.get("mdef")),
+                add(stats.acc(), increments.get("acc")),
+                add(stats.avoid(), increments.get("avoid")),
+                add(stats.hands(), increments.get("hands")),
+                add(stats.speed(), increments.get("speed")),
+                add(stats.jump(), increments.get("jump")),
+                stats.vicious(), stats.itemLevel(), stats.itemExp(), stats.ringId());
+    }
+
+    /** 失败时消耗一次升级机会；白色卷轴生效则保留次数，其它属性不变。 */
+    private static EquipSnapshot spentSlot(EquipSnapshot stats, boolean protectedByWhiteScroll) {
+        byte slots = protectedByWhiteScroll ? stats.upgradeSlots() : (byte) Math.max(0, stats.upgradeSlots() - 1);
+        return new EquipSnapshot(slots, stats.level(),
+                stats.strStat(), stats.dexStat(), stats.intStat(), stats.lukStat(), stats.hp(), stats.mp(),
+                stats.wAtk(), stats.mAtk(), stats.wDef(), stats.mDef(), stats.acc(), stats.avoid(),
+                stats.hands(), stats.speed(), stats.jump(),
+                stats.vicious(), stats.itemLevel(), stats.itemExp(), stats.ringId());
+    }
+
+    private static short add(short value, Integer increment) {
+        long total = value + (long) (increment == null ? 0 : increment);
+        return (short) Math.clamp(total, Short.MIN_VALUE, Short.MAX_VALUE);
+    }
+
+    /** 提交失败时把已扣卷轴放回；正常路径不会走到，用于保证一次砸卷要么全成要么全退。 */
+    private void refund(EquipmentState state, TradeItemSnapshot scroll, boolean whiteScroll) {
+        ItemData definition = data.item(scroll.itemId());
+        int slotMax = definition != null && definition.getSlotMax() > 0 ? definition.getSlotMax() : 100;
+        state.addTradeItems(List.of(scroll), Map.of(scroll.itemId(), slotMax));
+        if (whiteScroll) state.addItem(WHITE_SCROLL_ITEM_ID, 1, 100);
     }
 
     private static boolean twoHanded(int id) { return id / 10000 >= 140 && id / 10000 <= 149; }

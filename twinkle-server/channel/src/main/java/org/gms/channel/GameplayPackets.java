@@ -152,6 +152,25 @@ public final class GameplayPackets {
         return packet;
     }
 
+    /** v83 卷轴效果广播：角色 id + 成功/诅咒/匠人之魂/白色卷轴四个布尔。 */
+    public static OutPacket scrollEffect(int characterId, boolean success, boolean cursed, boolean whiteScroll) {
+        ByteArrayOutPacket packet = packet(SendOpcode.SHOW_SCROLL_EFFECT);
+        packet.writeInt(characterId);
+        packet.writeBool(success);
+        packet.writeBool(cursed);
+        packet.writeBool(false);        // 匠人之魂未接入，固定 false
+        packet.writeBool(whiteScroll);
+        return packet;
+    }
+
+    /** 空库存操作：砸卷被拒绝时解除客户端在请求期间加的背包锁。 */
+    public static OutPacket emptyInventoryOperation() {
+        ByteArrayOutPacket packet = packet(SendOpcode.INVENTORY_OPERATION);
+        packet.writeBool(true);
+        packet.writeByte(0);
+        return packet;
+    }
+
     /** 按完整实例投影计算增删，避免仅以 itemId 比较丢失装备、宠物及期限属性。 */
     public static List<OutPacket> inventoryChanges(InventoryType type,
                                                   Map<Short, V83ItemSnapshot> before,

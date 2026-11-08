@@ -29,6 +29,9 @@ public class ItemData implements java.io.Serializable {
     /** 仅真实装备定义设置；普通 Item.wz 道具不具有穿戴条件。 */
     private EquipmentData equipment;
 
+    /** 卷轴数据；普通物品与装备模板为 {@code null}。 */
+    private ScrollData scroll;
+
     @Getter(AccessLevel.NONE)
     private final Map<String, Integer> stats = new HashMap<>();
 

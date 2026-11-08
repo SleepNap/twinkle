@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<imgdir name="0204.img">
+  <imgdir name="02040000">
+    <imgdir name="info">
+      <int name="price" value="1"/>
+      <int name="success" value="60"/>
+      <int name="cursed" value="50"/>
+      <int name="incPDD" value="2"/>
+      <int name="incSTR" value="1"/>
+    </imgdir>
+  </imgdir>
+  <imgdir name="02040023">
+    <imgdir name="info">
+      <int name="price" value="1"/>
+      <int name="success" value="100"/>
+      <int name="incINT" value="1"/>
+    </imgdir>
+    <imgdir name="req">
+      <int name="0" value="1002867"/>
+    </imgdir>
+  </imgdir>
+</imgdir>

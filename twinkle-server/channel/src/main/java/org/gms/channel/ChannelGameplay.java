@@ -84,6 +84,7 @@ public final class ChannelGameplay implements AutoCloseable {
             drops.enter(session);
         }, 2);
         handlers.register(RecvOpcode.ITEM_MOVE, new InventoryMoveHandler(items, drops, equipment, sessions));
+        handlers.register(RecvOpcode.USE_UPGRADE_SCROLL, new ScrollHandler(equipment, sessions));
         handlers.register(RecvOpcode.ITEM_PICKUP, new ItemPickupHandler(drops));
         handlers.register(RecvOpcode.NPC_SHOP, shops);
         handlers.replace(RecvOpcode.NPC_TALK, new NpcTalkHandler(scripts, items, quests, transitions, shops), 2);

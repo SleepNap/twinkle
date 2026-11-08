@@ -160,6 +160,39 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
         return true;
     }
 
+    /** 卷轴强化：只替换已穿戴实例的装备属性，保留原对象、期限、归属和现金 id。 */
+    @Override public synchronized boolean updateEquipmentItem(Map<Short, TradeItemSnapshot> expected,
+                                                              short slot, TradeItemSnapshot replacement) {
+        if (slot >= 0 || replacement == null || replacement.equip() == null) return false;
+        if (!equipmentItems().equals(expected)) return false;
+        if (!(getInventory(InventoryType.EQUIP).getItem(slot) instanceof Equip equip)
+                || replacement.itemId() != equip.getId()) return false;
+        TradeItemSnapshot.EquipSnapshot value = replacement.equip();
+        equip.setUpgradeSlots(value.upgradeSlots());
+        equip.setLevel(value.level());
+        equip.setStrStat(value.strStat());
+        equip.setDexStat(value.dexStat());
+        equip.setIntStat(value.intStat());
+        equip.setLukStat(value.lukStat());
+        equip.setHp(value.hp());
+        equip.setMp(value.mp());
+        equip.setWAtk(value.wAtk());
+        equip.setMAtk(value.mAtk());
+        equip.setWDef(value.wDef());
+        equip.setMDef(value.mDef());
+        equip.setAcc(value.acc());
+        equip.setAvoid(value.avoid());
+        equip.setHands(value.hands());
+        equip.setSpeed(value.speed());
+        equip.setJump(value.jump());
+        equip.setVicious(value.vicious());
+        equip.setItemLevel(value.itemLevel());
+        equip.setItemExp(value.itemExp());
+        equip.setRingId(value.ringId());
+        markDirty();
+        return true;
+    }
+
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
     private volatile ControlSettings controls = ControlSettings.defaults();
