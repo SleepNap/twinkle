@@ -7,6 +7,8 @@ import org.gms.coordinator.CoordinatorService;
 import org.gms.coordinator.LocationTable;
 import org.gms.coordinator.SingleOwnerStore;
 import org.gms.event.InProcessEventBus;
+import org.gms.message.BuddyPresenceNotice;
+import org.gms.message.BuddyRequest;
 import org.gms.message.MessageTargets;
 import org.gms.message.WhisperRequest;
 import org.gms.service.intercoord.IntercoordService;
@@ -40,9 +42,13 @@ class CoordinatorChannelIntegrationTest {
         // ---- 频道端（同一 worker 托管稀疏 channel=5、21） ----
         AtomicReference<InternalConnection> connRef = new AtomicReference<>();
         AtomicReference<WhisperRequest> delivered = new AtomicReference<>();
+        AtomicReference<BuddyPresenceNotice> buddyPresence = new AtomicReference<>();
+        AtomicReference<BuddyRequest> buddyRequest = new AtomicReference<>();
         InProcessEventBus channelBus = new InProcessEventBus();
-        // 模拟频道进程订阅本频道 target（ChannelMessageSubscriber 行为）
+        // 模拟频道进程订阅本频道 target（ChannelMessageSubscriber / BuddyHandler 行为）
         channelBus.subscribe(MessageTargets.channel(21), WhisperRequest.class, delivered::set);
+        channelBus.subscribe(MessageTargets.channel(21), BuddyPresenceNotice.class, buddyPresence::set);
+        channelBus.subscribe(MessageTargets.channel(21), BuddyRequest.class, buddyRequest::set);
 
         CoordinatorLink link = new CoordinatorLink(new InetSocketAddress("127.0.0.1", server.boundPort()), 50);
         link.addConnectListener(conn -> {
@@ -96,6 +102,18 @@ class CoordinatorChannelIntegrationTest {
             await(() -> delivered.get() != null);
             assertThat(delivered.get().fromId()).isEqualTo(1001);
             assertThat(delivered.get().content()).isEqualTo("你好");
+
+            // ---- EVENT 路由：跨频道好友刷新与申请也必须完整序列化送达 ----
+            remoteBus.send(MessageTargets.channel(21), new BuddyPresenceNotice(2001, 2002, 5));
+            remoteBus.send(MessageTargets.channel(21), new BuddyRequest(2001, "Alice", 2002, "Friends"));
+
+            await(() -> buddyPresence.get() != null && buddyRequest.get() != null);
+            assertThat(buddyPresence.get().ownerId()).isEqualTo(2001);
+            assertThat(buddyPresence.get().peerId()).isEqualTo(2002);
+            assertThat(buddyPresence.get().peerChannel()).isEqualTo(5);
+            assertThat(buddyRequest.get().fromName()).isEqualTo("Alice");
+            assertThat(buddyRequest.get().toId()).isEqualTo(2002);
+            assertThat(buddyRequest.get().group()).isEqualTo("Friends");
 
             // ---- 管理进程 channels() 快照（RPC 广播给 coordinator） ----
             assertThat(remote.channels().get(5).channelId()).isEqualTo(5);

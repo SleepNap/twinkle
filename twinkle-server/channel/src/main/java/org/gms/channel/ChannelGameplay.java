@@ -22,6 +22,7 @@ public final class ChannelGameplay implements AutoCloseable {
     private final PartyHandler parties;
     private final TickScheduler scheduler;
     private final TickHandler expiration;
+    private final BuddyHandler buddy;
 
     public ChannelGameplay(HandlerRegistry handlers, ChannelMapManager maps, MonsterSpawnService monsters,
                            ControllerLeaseService leases, int channelId, GameDataProvider data,
@@ -33,6 +34,7 @@ public final class ChannelGameplay implements AutoCloseable {
         this.scheduler = scheduler;
         this.drops = drops;
         this.parties = parties;
+        this.buddy = buddy;
         ActiveSkillHandler skills = new ActiveSkillHandler(resources, progression, Clock.systemUTC(), sessions);
         AvatarHandler avatars = new AvatarHandler(sessions, avatarLogic, data, Clock.systemUTC());
         ControlsHandler controls = new ControlsHandler(sessions, controlsLogic, Clock.systemUTC());
@@ -96,5 +98,6 @@ public final class ChannelGameplay implements AutoCloseable {
         scheduler.unregister(expiration);
         drops.close();
         parties.close();
+        if (buddy != null) buddy.close();
     }
 }

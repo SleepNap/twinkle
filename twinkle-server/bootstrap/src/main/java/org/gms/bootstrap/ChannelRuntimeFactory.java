@@ -132,6 +132,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         ChannelGameplay gameplay = null;
         PartyHandler parties = null;
         GroundDropService drops = null;
+        // 装配中途失败时 channelGameplay 尚未建立，用它兜底取消失败频道的消息订阅。
+        BuddyHandler[] buddyRef = new BuddyHandler[1];
         try {
             logic.bind(execution, () -> {
                 for (var player : players.all()) {
@@ -152,6 +154,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             ChannelEventPublisher publisher = new ChannelEventPublisher(eventBus, channelId);
             BuddyHandler buddy = new BuddyHandler(channelId, intercoord, eventBus, sessions,
                     buddyListRepository, characterRepository).async(socialIo);
+            buddyRef[0] = buddy;
             DefaultControllerLeaseService runtimeLeases = leases;
             ChannelServer server = new ChannelServer(handlers, session -> {
                 org.gms.domain.game.PlayerCharacter character = session.getAttr("character");
@@ -206,6 +209,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             return runtime;
         } catch (RuntimeException error) {
             closeQuietly(gameplay);
+            closeQuietly(buddyRef[0]);
             closeQuietly(parties);
             closeQuietly(drops);
             closeQuietly(locations);

@@ -5,6 +5,9 @@ import org.gms.concurrent.SerialTaskQueue;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.event.EventBus;
 import org.gms.i18n.I18n;
+import org.gms.message.BuddyPresenceNotice;
+import org.gms.message.BuddyRequest;
+import org.gms.message.MessageTargets;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayOutPacket;
 import org.gms.net.packet.InPacket;
@@ -17,6 +20,7 @@ import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.persistence.repo.BuddyListRepository;
 import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.service.intercoord.IntercoordService;
+import org.gms.service.intercoord.PlayerPresenceService.PlayerPresence;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,9 +38,14 @@ import java.util.function.Supplier;
  *
  * <p>发包使用 `BUDDYLIST` 的整表刷新（mode 7）：已接受好友带在线频道，离线为 -1。
  * 加好友时另发 mode 9 请求包给在线目标。分组暂不持久化，统一使用默认分组。
+ *
+ * <p>跨频道：好友的在线频道取自大区 Presence（{@link IntercoordService#presence}），
+ * 不再只看本频道会话表。本频道无法直接给异频道玩家回包时，经消息总线把
+ * {@link BuddyPresenceNotice}/{@link BuddyRequest} 投递到对方属主频道，由对方频道重建整表
+ * 或下发申请包；本频道目标仍直接回包，不经总线。
  */
 @Log4j2
-public final class BuddyHandler implements PacketHandler {
+public final class BuddyHandler implements PacketHandler, AutoCloseable {
     private static final String DEFAULT_GROUP = "Default Group";
     private static final int NAME_LENGTH = 13;
     private static final int NAME_LIMIT = 13;
@@ -46,11 +55,15 @@ public final class BuddyHandler implements PacketHandler {
 
     private record Target(long id, String name) { }
 
-    private record AddResult(long targetId, List<BuddyEntry> entries) { }
+    private record AddResult(long targetId, List<BuddyEntry> entries, int targetChannel) { }
 
-    private record Notice(long ownerId, List<BuddyEntry> entries) { }
+    /**
+     * 一次好友列表刷新。{@code entries} 非空表示目标在本频道，直接回包；为空表示目标在其它
+     * 频道，按 {@code channel} 投递通知，由对方频道重建整表。
+     */
+    private record Refresh(long ownerId, int channel, long peerId, int peerChannel, List<BuddyEntry> entries) { }
 
-    private record InitResult(List<BuddyEntry> ownEntries, List<Notice> notices) { }
+    private record InitResult(List<BuddyEntry> ownEntries, List<Refresh> refreshes) { }
 
     private SerialTaskQueue io;
     private final int channelId;
@@ -59,6 +72,8 @@ public final class BuddyHandler implements PacketHandler {
     private final PlayerSessionRegistry sessions;
     private final BuddyListRepository buddyRepo;
     private final PlayerCharacterRepository characters;
+    private final AutoCloseable presenceSubscription;
+    private final AutoCloseable requestSubscription;
 
     public BuddyHandler(int channelId, IntercoordService intercoord, EventBus eventBus,
                         PlayerSessionRegistry sessions, BuddyListRepository buddyRepo) {
@@ -74,6 +89,10 @@ public final class BuddyHandler implements PacketHandler {
         this.sessions = sessions;
         this.buddyRepo = buddyRepo;
         this.characters = characters;
+        this.presenceSubscription = eventBus == null ? null
+                : eventBus.subscribe(MessageTargets.channel(channelId), BuddyPresenceNotice.class, this::onPresenceNotice);
+        this.requestSubscription = eventBus == null ? null
+                : eventBus.subscribe(MessageTargets.channel(channelId), BuddyRequest.class, this::onAddRequest);
     }
 
     public BuddyHandler async(SerialTaskQueue io) {
@@ -107,7 +126,7 @@ public final class BuddyHandler implements PacketHandler {
     }
 
     /**
-     * 登录完成后推送整表，并刷新在线好友的好友列表（同频道上下线通知）。
+     * 登录完成后推送整表，并刷新在线好友的好友列表（含跨频道好友）。
      *
      * <p>没有 IO 队列时直接读库（仅测试/兼容入口）。
      */
@@ -115,37 +134,18 @@ public final class BuddyHandler implements PacketHandler {
         PlayerCharacter character = session.getAttr("character");
         if (character == null) return;
         long playerId = character.getId();
-        offload(() -> new InitResult(list(playerId), notices(playerId)), result -> {
+        offload(() -> new InitResult(list(playerId), refreshes(playerId, channelId)), result -> {
             if (sessions.get(playerId) == session) session.send(buddyListPacket(result.ownEntries()));
-            sendNotices(result.notices());
+            dispatch(result.refreshes());
         });
     }
 
-    /** 断线/离开频道后刷新在线好友的整表，让好友看到离线状态。 */
+    /** 断线/离开频道后刷新在线好友的整表，让好友看到离线状态（含跨频道好友）。 */
     public void offline(PacketSession session) {
         PlayerCharacter character = session.getAttr("character");
         if (character == null) return;
         long playerId = character.getId();
-        offload(() -> notices(playerId), this::sendNotices);
-    }
-
-    private void sendNotices(List<Notice> notices) {
-        for (Notice notice : notices) {
-            PacketSession target = sessions.get(notice.ownerId());
-            if (target != null) target.send(buddyListPacket(notice.entries()));
-        }
-    }
-
-    /** 把 {@code onlineId} 作为好友的在线玩家列表刷新；只通知当前频道在线的好友。 */
-    private List<Notice> notices(long onlineId) {
-        List<Notice> notices = new ArrayList<>();
-        for (BuddyListEntity row : buddyRepo.findByBuddy(onlineId)) {
-            if (!BuddyListEntity.ACCEPTED.equals(row.getStatus())) continue;
-            long ownerId = row.getOwnerId();
-            if (sessions.get(ownerId) == null) continue;
-            notices.add(new Notice(ownerId, list(ownerId)));
-        }
-        return notices;
+        offload(() -> refreshes(playerId, -1), this::dispatch);
     }
 
     private void add(PacketSession session, PlayerCharacter character, String name, String group) {
@@ -157,21 +157,24 @@ public final class BuddyHandler implements PacketHandler {
         int capacity = character.getBuddyCapacity();
         offload(() -> {
             Target target = findCharacter(name);
-            if (target == null) return new AddResult(0, list(ownerId));
+            if (target == null) return new AddResult(0, list(ownerId), -1);
             boolean existing = buddyRepo.exists(ownerId, target.id());
             if (!existing && acceptedCount(ownerId) >= capacity) {
-                return new AddResult(0, list(ownerId));
+                return new AddResult(0, list(ownerId), -1);
             }
             buddyRepo.insertIfAbsent(row(ownerId, target.id(), BuddyListEntity.PENDING));
             buddyRepo.insertIfAbsent(row(target.id(), ownerId, BuddyListEntity.PENDING));
-            return new AddResult(target.id(), list(ownerId));
+            return new AddResult(target.id(), list(ownerId), channelOf(target.id()));
         }, result -> {
-            if (sessions.get(ownerId) != session) return;
-            session.send(buddyListPacket(result.entries()));
+            if (sessions.get(ownerId) == session) {
+                session.send(buddyListPacket(result.entries()));
+            }
             if (result.targetId() == 0) return;
             PacketSession target = sessions.get(result.targetId());
             if (target != null) {
                 target.send(requestBuddylistAdd(ownerId, ownerName, result.targetId(), useGroup));
+            } else {
+                sendRequest(result.targetChannel(), new BuddyRequest(ownerId, ownerName, result.targetId(), useGroup));
             }
         });
     }
@@ -182,12 +185,9 @@ public final class BuddyHandler implements PacketHandler {
         offload(() -> {
             buddyRepo.updateStatus(ownerId, buddyId, BuddyListEntity.ACCEPTED);
             buddyRepo.updateStatus(buddyId, ownerId, BuddyListEntity.ACCEPTED);
-            return new Lists(list(ownerId), list(buddyId), buddyId);
-        }, result -> {
-            if (sessions.get(ownerId) == session) session.send(buddyListPacket(result.ownerEntries()));
-            PacketSession target = sessions.get(result.buddyId());
-            if (target != null) target.send(buddyListPacket(result.buddyEntries()));
-        });
+            return List.of(refreshOf(ownerId, buddyId, channelOf(buddyId)),
+                    refreshOf(buddyId, ownerId, channelId));
+        }, this::dispatch);
     }
 
     private void delete(PacketSession session, PlayerCharacter character, int buddyId) {
@@ -196,15 +196,86 @@ public final class BuddyHandler implements PacketHandler {
         offload(() -> {
             buddyRepo.delete(ownerId, buddyId);
             buddyRepo.delete(buddyId, ownerId);
-            return new Lists(list(ownerId), list(buddyId), buddyId);
-        }, result -> {
-            if (sessions.get(ownerId) == session) session.send(buddyListPacket(result.ownerEntries()));
-            PacketSession target = sessions.get(result.buddyId());
-            if (target != null) target.send(buddyListPacket(result.buddyEntries()));
+            // 双向关系已删除，双方重建整表后该条目自然消失，peerChannel 不再有意义。
+            return List.of(refreshOf(ownerId, buddyId, -1), refreshOf(buddyId, ownerId, -1));
+        }, this::dispatch);
+    }
+
+    /** 异频道加好友申请：交给目标属主频道向本地会话发 mode 9。 */
+    private void onAddRequest(BuddyRequest request) {
+        deliver(() -> {
+            PacketSession target = sessions.get(request.toId());
+            if (target != null) {
+                target.send(requestBuddylistAdd(request.fromId(), request.fromName(),
+                        request.toId(), request.group()));
+            }
         });
     }
 
-    private record Lists(List<BuddyEntry> ownerEntries, List<BuddyEntry> buddyEntries, long buddyId) { }
+    /** 异频道上下线/关系变化：重建本频道该玩家的整表并回包。 */
+    private void onPresenceNotice(BuddyPresenceNotice notice) {
+        offload(() -> sessions.get(notice.ownerId()) == null
+                        ? null
+                        : list(notice.ownerId(), notice.peerId(), notice.peerChannel()),
+                entries -> {
+                    if (entries == null) return;
+                    PacketSession target = sessions.get(notice.ownerId());
+                    if (target != null) target.send(buddyListPacket(entries));
+                });
+    }
+
+    /** 把刷新请求落到本频道回包，或经消息总线投递到好友属主频道。 */
+    private void dispatch(List<Refresh> refreshes) {
+        for (Refresh refresh : refreshes) dispatch(refresh);
+    }
+
+    private void dispatch(Refresh refresh) {
+        if (refresh.entries() != null) {
+            PacketSession target = sessions.get(refresh.ownerId());
+            if (target != null) target.send(buddyListPacket(refresh.entries()));
+            return;
+        }
+        if (eventBus == null || refresh.channel() <= 0 || refresh.channel() == channelId) return;
+        eventBus.send(MessageTargets.channel(refresh.channel()),
+                new BuddyPresenceNotice(refresh.ownerId(), refresh.peerId(), refresh.peerChannel()));
+    }
+
+    private void sendRequest(int channel, BuddyRequest request) {
+        if (eventBus == null || channel <= 0 || channel == channelId) return;
+        eventBus.send(MessageTargets.channel(channel), request);
+    }
+
+    /**
+     * 构造一次刷新：目标在本频道时直接生成整表，否则只带路由信息。
+     *
+     * <p>必须在后台 IO 线程调用（会查 Presence）；本频道目标仍以物理会话表为准。
+     */
+    private Refresh refreshOf(long ownerId, long peerId, int peerChannel) {
+        if (sessions.get(ownerId) != null) {
+            return new Refresh(ownerId, channelId, peerId, peerChannel,
+                    list(ownerId, peerId, peerChannel));
+        }
+        return new Refresh(ownerId, channelOf(ownerId), peerId, peerChannel, null);
+    }
+
+    /** 所有把 {@code changedId} 当好友的在线玩家（含异频道）的刷新请求。 */
+    private List<Refresh> refreshes(long changedId, int changedChannel) {
+        List<Refresh> refreshes = new ArrayList<>();
+        for (BuddyListEntity row : buddyRepo.findByBuddy(changedId)) {
+            if (!BuddyListEntity.ACCEPTED.equals(row.getStatus())) continue;
+            refreshes.add(refreshOf(row.getOwnerId(), changedId, changedChannel));
+        }
+        return refreshes;
+    }
+
+    private void deliver(Runnable action) {
+        if (sessions.execution() == null) {
+            action.run();
+            return;
+        }
+        if (sessions.execution().isClosed()) return;
+        sessions.execution().execute(action);
+    }
 
     private int acceptedCount(long ownerId) {
         int count = 0;
@@ -214,17 +285,43 @@ public final class BuddyHandler implements PacketHandler {
         return count;
     }
 
-    /** 读已接受好友并补全名字与在线频道；缺失角色记录时跳过。 */
     private List<BuddyEntry> list(long ownerId) {
+        return list(ownerId, 0, -1);
+    }
+
+    /**
+     * 读已接受好友并补全名字与在线频道；缺失角色记录时跳过。
+     *
+     * <p>{@code peerId}/{@code peerChannel} 用于覆盖刚刚发生变化的条目：变化者的 Presence
+     * 可能尚未登记或已注销，直接用调用方掌握的状态，避免整表读到旧值。
+     */
+    private List<BuddyEntry> list(long ownerId, long peerId, int peerChannel) {
         List<BuddyEntry> entries = new ArrayList<>();
         for (BuddyListEntity row : buddyRepo.findByOwner(ownerId)) {
             if (!BuddyListEntity.ACCEPTED.equals(row.getStatus())) continue;
             String name = nameOf(row.getBuddyId());
             if (name == null) continue;
-            int channel = sessions.get(row.getBuddyId()) != null ? channelId : -1;
+            int channel = row.getBuddyId() == peerId ? peerChannel : channelOf(row.getBuddyId());
             entries.add(new BuddyEntry(row.getBuddyId(), name, channel, DEFAULT_GROUP));
         }
         return entries;
+    }
+
+    /**
+     * 好友当前在线频道：本频道会话优先，其次查大区 Presence；查不到按离线处理。
+     *
+     * <p>Presence 查询失败不阻断整表刷新——协调者失联时展示为离线，下一次刷新会纠正。
+     */
+    private int channelOf(long characterId) {
+        if (sessions.get(characterId) != null) return channelId;
+        if (intercoord == null) return -1;
+        try {
+            Optional<PlayerPresence> presence = intercoord.presence(characterId);
+            return presence == null ? -1 : presence.map(PlayerPresence::ownerChannelId).orElse(-1);
+        } catch (RuntimeException error) {
+            log.debug(I18n.message("log.buddy.presence_failed"), characterId, error);
+            return -1;
+        }
     }
 
     private String nameOf(long characterId) {
@@ -273,6 +370,21 @@ public final class BuddyHandler implements PacketHandler {
             }
             completion.accept(result);
         }));
+    }
+
+    @Override
+    public void close() {
+        closeQuietly(presenceSubscription);
+        closeQuietly(requestSubscription);
+    }
+
+    private static void closeQuietly(AutoCloseable subscription) {
+        if (subscription == null) return;
+        try {
+            subscription.close();
+        } catch (Exception error) {
+            log.warn(I18n.message("log.buddy.unsubscribe_failed"), error);
+        }
     }
 
     /** v83 好友整表刷新：mode 7、条目 id/13 字节名字/状态/频道/13 字节分组/mapid。 */
