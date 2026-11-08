@@ -9,13 +9,17 @@ import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
 
 import java.time.Clock;
+import java.util.Map;
 
 /**
- * 玩家死亡后的统一清理：取消仍在生效的 Buff、收起椅子，并把变更同步给同图玩家。
+ * 玩家死亡后的统一清理：取消仍在生效的 Buff、收起椅子，并按 v83 规则结算死亡经验损失。
  *
  * <p>死亡状态本身由 HP 归零表达，不额外维护 dead 标志；{@link GameplaySession#canAct}
  * 以 HP &gt; 0 为行动门槛。复活统一走 {@link MapTransitionService#revive}，由
  * {@link ChangeMapHandler} 在 HP &lt;= 0 时触发。
+ *
+ * <p>经验损失：新手不扣；城镇扣当前等级需求的 1%，野外 LUK &lt; 50 扣 10%、LUK ≥ 50
+ * 扣 5%，最多扣到 0。安全护符与地图禁止扣经验字段尚未接入，留待后续批次。
  *
  * <p>本类只处理稳定层状态与协议投影，不持有跨操作状态；每个频道装配一份。
  */
@@ -57,9 +61,25 @@ public final class PlayerDeathService {
             }
         }
         character.setStance(0);
+        applyDeathPenalty(session, character);
         if (character.getMapObject() != null) {
             log.info(I18n.message("log.combat.player_dead"),
                     character.getName(), character.getMapObject().getMapId());
         }
+    }
+
+    /** v83 死亡经验损失；只更新 EXP，不播放白色经验提示，与服务端状态纠正一致。 */
+    private void applyDeathPenalty(PacketSession session, PlayerCharacter character) {
+        if (character.getJob() == 0) return;
+        int required = V83ExpTable.requiredForLevel(character.getLevel());
+        if (required <= 0) return;
+        boolean town = character.getMapObject() != null && character.getMapObject().isTown();
+        long penalty = town ? required / 100L
+                : character.totalLuk() < 50 ? required / 10L : required / 20L;
+        long loss = Math.min(character.getExp(), penalty);
+        if (loss <= 0) return;
+        character.setExp(character.getExp() - loss);
+        session.send(GameplayPackets.stats(Map.of(GameplayPackets.EXP,
+                (int) Math.min(Integer.MAX_VALUE, character.getExp()))));
     }
 }

@@ -172,9 +172,73 @@ public class CombatGameplayTest {
         assertThat(wire.available()).isZero();
     }
 
+    @Test public void deathPenaltyAppliesTenPercentOfLevelRequirementInField() {
+        var sessions = new PlayerSessionRegistry();
+        var player = joined(sessions, 1, map(100));
+        player.character.setJob(100);
+        player.character.setLevel(10);
+        player.character.setExp(500);
+
+        death(sessions).onDeath(player, player.character);
+
+        int loss = V83ExpTable.requiredForLevel(10) / 10;
+        assertThat(loss).isPositive();
+        assertThat(player.character.getExp()).isEqualTo(500 - loss);
+        var stat = new ByteArrayInPacket(player.sent.getLast().getBytes());
+        assertThat(stat.readUnsignedShort()).isEqualTo(SendOpcode.STAT_CHANGED.getValue());
+        assertThat(stat.readByte()).isOne();
+        assertThat(stat.readInt()).isEqualTo(GameplayPackets.EXP);
+        assertThat(stat.readInt()).isEqualTo(500 - loss);
+        assertThat(stat.available()).isZero();
+    }
+
+    @Test public void deathPenaltyUsesOnePercentInTown() {
+        var sessions = new PlayerSessionRegistry();
+        var map = map(100);
+        map.setTown(true);
+        var player = joined(sessions, 1, map);
+        player.character.setJob(100);
+        player.character.setLevel(10);
+        player.character.setExp(500);
+
+        death(sessions).onDeath(player, player.character);
+
+        int loss = V83ExpTable.requiredForLevel(10) / 100;
+        assertThat(player.character.getExp()).isEqualTo(500 - loss);
+    }
+
+    @Test public void deathPenaltyDropsToFivePercentWithHighLuk() {
+        var sessions = new PlayerSessionRegistry();
+        var player = joined(sessions, 1, map(100));
+        player.character.setJob(100);
+        player.character.setLevel(10);
+        player.character.setExp(500);
+        player.character.setLukStat((short) 50);
+
+        death(sessions).onDeath(player, player.character);
+
+        int loss = V83ExpTable.requiredForLevel(10) / 20;
+        assertThat(player.character.getExp()).isEqualTo(500 - loss);
+    }
+
+    @Test public void beginnerKeepsExpOnDeath() {
+        var sessions = new PlayerSessionRegistry();
+        var player = joined(sessions, 1, map(100));
+        player.character.setLevel(10);
+        player.character.setExp(500);
+
+        death(sessions).onDeath(player, player.character);
+
+        assertThat(player.character.getExp()).isEqualTo(500);
+        assertThat(player.sent).isEmpty();
+    }
+
+    private static PlayerDeathService death(PlayerSessionRegistry sessions) {
+        return new PlayerDeathService(new DefaultProgressionSystem(new DefaultVersionGate()), sessions, Clock.systemUTC());
+    }
+
     private static TakeDamageHandler handler(PlayerSessionRegistry sessions) {
-        return new TakeDamageHandler(sessions, new PlayerDeathService(
-                new DefaultProgressionSystem(new DefaultVersionGate()), sessions, Clock.systemUTC()));
+        return new TakeDamageHandler(sessions, death(sessions));
     }
 
     private static GameplayTestSession joined(PlayerSessionRegistry sessions, long id, MapleMap map) {
