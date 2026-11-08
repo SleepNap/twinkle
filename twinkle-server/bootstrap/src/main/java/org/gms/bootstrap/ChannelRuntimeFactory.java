@@ -171,6 +171,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                 NpcTalkHandler.closeConversation(session);
             }, heartbeatConfig);
 
+            BuddyHandler buddy = new BuddyHandler(channelId, intercoord, eventBus, sessions,
+                    buddyListRepository, characterRepository).async(socialIo);
             new ChannelHandlerRegistrar(
                     new PlayerLoggedinHandler(characterRepository, characterLoader, maps, players, sessions,
                             monsters, channelId, publisher, leases, background, saveQueue),
@@ -183,7 +185,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     new UseItemHandler(itemSystem, gameData, parties),
                     new WhisperHandler(channelId, intercoord, eventBus, sessions),
                     new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue, background).asyncPresence(presenceIo),
-                    new BuddyHandler(channelId, intercoord, eventBus, sessions, buddyListRepository).async(socialIo),
+                    buddy,
                     new MoveLifeHandler(leases, sessions), new GeneralChatHandler(sessions)).register(handlers);
 
             messages = new ChannelMessageSubscriber(channelId, intercoord, sessions, eventBus);
@@ -196,7 +198,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             gameplay = new ChannelGameplay(handlers, maps, monsters, leases, channelId, gameData,
                     sessions, itemSystem, questSystem, scriptManager, shopCatalog, channelTicks,
                     wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
-                    logic.service(EquipmentSystem.class), parties, drops);
+                    logic.service(EquipmentSystem.class), parties, drops, buddy);
             ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
             runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));

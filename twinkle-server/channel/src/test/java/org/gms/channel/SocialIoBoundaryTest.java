@@ -1,6 +1,5 @@
 package org.gms.channel;
 import java.lang.reflect.Proxy;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -61,8 +60,8 @@ public class SocialIoBoundaryTest {
             var second = new GameplayTestSession(2, new MapleMap());
             var handler = new BuddyHandler(1, intercoord, new InProcessEventBus(), sessions, repository).async(io);
             execution.run(() -> { sessions.claim(1, first); sessions.claim(2, second); });
-            var packet = new ByteArrayOutPacket(); packet.writeInt(0); packet.writeByte(0);
-            byte[] name = "Player2".getBytes(StandardCharsets.UTF_8); packet.writeByte(name.length); packet.writeBytes(name);
+            var packet = new ByteArrayOutPacket();
+            packet.writeByte(1).writeString("Player2").writeString("Default Group");
             execution.run(() -> handler.handle(first, new ByteArrayInPacket(packet.getBytes())));
             assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
             try {

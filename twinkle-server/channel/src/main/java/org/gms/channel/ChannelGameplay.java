@@ -29,7 +29,7 @@ public final class ChannelGameplay implements AutoCloseable {
                            ScriptManager scripts, NpcShopCatalog shopCatalog, TickScheduler scheduler,
                            WzResourceRegistry resources, ProgressionSystem progression, AvatarSystem avatarLogic,
                            ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartyHandler parties,
-                           GroundDropService drops) {
+                           GroundDropService drops, BuddyHandler buddy) {
         this.scheduler = scheduler;
         this.drops = drops;
         this.parties = parties;
@@ -55,6 +55,7 @@ public final class ChannelGameplay implements AutoCloseable {
                 if (character != null && character.getParty() != 0) { character.setParty(0); character.markDirty(); }
                 controls.initialize(session);
                 equipment.initialize(session);
+                if (buddy != null) buddy.initialize(session);
             });
             login.handle(session, packet);
         }, 2);
