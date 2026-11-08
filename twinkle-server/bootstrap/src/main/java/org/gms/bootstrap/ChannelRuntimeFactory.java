@@ -150,6 +150,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             drops = new GroundDropService(itemSystem, gameData, sessions, Clock.systemUTC());
             MonsterDropService monsterDrops = new MonsterDropService(drops, dropCatalog);
             ChannelEventPublisher publisher = new ChannelEventPublisher(eventBus, channelId);
+            BuddyHandler buddy = new BuddyHandler(channelId, intercoord, eventBus, sessions,
+                    buddyListRepository, characterRepository).async(socialIo);
             DefaultControllerLeaseService runtimeLeases = leases;
             ChannelServer server = new ChannelServer(handlers, session -> {
                 org.gms.domain.game.PlayerCharacter character = session.getAttr("character");
@@ -160,6 +162,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                 Runnable cancelTrade = session.getAttr("cancelTrade");
                 if (cancelTrade != null) cancelTrade.run();
                 if (!sessions.unregister(character.getId(), session)) return;
+                buddy.offline(session);
                 publisher.playerOffline(character.getId());
                 players.remove(character);
                 if (character.getMapObject() != null) character.getMapObject().removeCharacter(character);
@@ -171,8 +174,6 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                 NpcTalkHandler.closeConversation(session);
             }, heartbeatConfig);
 
-            BuddyHandler buddy = new BuddyHandler(channelId, intercoord, eventBus, sessions,
-                    buddyListRepository, characterRepository).async(socialIo);
             new ChannelHandlerRegistrar(
                     new PlayerLoggedinHandler(characterRepository, characterLoader, maps, players, sessions,
                             monsters, channelId, publisher, leases, background, saveQueue),

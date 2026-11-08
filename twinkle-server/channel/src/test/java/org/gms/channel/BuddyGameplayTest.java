@@ -133,6 +133,83 @@ public class BuddyGameplayTest {
         assertThat(listCount(owner)).isZero();
     }
 
+    @Test public void addRejectsWhenOwnerBuddyListIsFull() {
+        var owner = joined(1);
+        var target = joined(3);
+        owner.character.setBuddyCapacity(1);
+        repository.insertIfAbsent(row(1, 2, BuddyListEntity.ACCEPTED));
+        characters.records.put(2L, character(2, "Player2"));
+
+        handler.handle(owner, addRequest("Player3", "Default Group"));
+
+        assertThat(repository.findByOwner(1)).hasSize(1);
+        assertThat(repository.findByOwner(3)).isEmpty();
+        assertThat(listCount(owner)).isOne();
+        assertThat(target.sent).isEmpty();
+    }
+
+    @Test public void loginRefreshesOnlineBuddiesLists() {
+        var owner = joined(1);
+        var buddy = joined(2);
+        repository.insertIfAbsent(row(1, 2, BuddyListEntity.ACCEPTED));
+        repository.insertIfAbsent(row(2, 1, BuddyListEntity.ACCEPTED));
+
+        handler.initialize(buddy);
+
+        assertThat(buddyListEntryIds(owner)).containsExactly(2L);
+        assertThat(buddyListChannel(owner, 2)).isZero();
+        assertThat(buddyListEntryIds(buddy)).containsExactly(1L);
+    }
+
+    @Test public void offlineRefreshesOnlineBuddiesLists() {
+        var owner = joined(1);
+        var buddy = joined(2);
+        repository.insertIfAbsent(row(1, 2, BuddyListEntity.ACCEPTED));
+        repository.insertIfAbsent(row(2, 1, BuddyListEntity.ACCEPTED));
+        characters.records.put(2L, character(2, "Player2"));
+        assertThat(sessions.unregister(2, buddy)).isTrue();
+
+        handler.offline(buddy);
+
+        assertThat(buddyListEntryIds(owner)).containsExactly(2L);
+        assertThat(buddyListChannel(owner, 2)).isEqualTo(-2);
+    }
+
+    /** 读取整表包中的好友 id 列表。 */
+    private static List<Long> buddyListEntryIds(GameplayTestSession session) {
+        var packet = new ByteArrayInPacket(session.sent.getLast().getBytes());
+        packet.readUnsignedShort();
+        assertThat(packet.readByte()).isEqualTo((byte) 7);
+        int count = packet.readByte();
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            ids.add((long) packet.readInt());
+            packet.skip(13);
+            packet.readByte();
+            packet.readInt();
+            packet.skip(13);
+            packet.readInt();
+        }
+        return ids;
+    }
+
+    private static int buddyListChannel(GameplayTestSession session, long characterId) {
+        var packet = new ByteArrayInPacket(session.sent.getLast().getBytes());
+        packet.readUnsignedShort();
+        packet.readByte();
+        int count = packet.readByte();
+        for (int i = 0; i < count; i++) {
+            int id = packet.readInt();
+            packet.skip(13);
+            packet.readByte();
+            int channel = packet.readInt();
+            packet.skip(13);
+            packet.readInt();
+            if (id == characterId) return channel;
+        }
+        throw new AssertionError("好友列表中未找到 " + characterId);
+    }
+
     private GameplayTestSession joined(long id) {
         var session = new GameplayTestSession(id, new MapleMap());
         sessions.claim(id, session);
@@ -183,6 +260,16 @@ public class BuddyGameplayTest {
 
         @Override public List<BuddyListEntity> findByOwner(long ownerId) {
             return new ArrayList<>(rows.getOrDefault(ownerId, List.of()));
+        }
+
+        @Override public List<BuddyListEntity> findByBuddy(long buddyId) {
+            List<BuddyListEntity> result = new ArrayList<>();
+            for (List<BuddyListEntity> owned : rows.values()) {
+                for (BuddyListEntity row : owned) {
+                    if (row.getBuddyId() == buddyId) result.add(row);
+                }
+            }
+            return result;
         }
 
         @Override public boolean exists(long ownerId, long buddyId) {

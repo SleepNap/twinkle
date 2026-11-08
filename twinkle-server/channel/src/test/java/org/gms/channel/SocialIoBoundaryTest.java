@@ -49,6 +49,8 @@ public class SocialIoBoundaryTest {
         CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
         BuddyListRepository repository = (BuddyListRepository) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{BuddyListRepository.class}, (proxy, method, args) -> {
             if (method.getName().equals("insertIfAbsent")) { entered.countDown(); assertThat(release.await(3, TimeUnit.SECONDS)).isTrue(); return true; }
+            if (method.getName().equals("exists")) return false;
+            if (method.getName().equals("findByOwner") || method.getName().equals("findByBuddy")) return List.of();
             return null;
         });
         IntercoordService intercoord = (IntercoordService) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{IntercoordService.class}, (proxy, method, args) -> { throw new AssertionError("Unexpected synchronous presence lookup"); });

@@ -25,6 +25,12 @@ public class FlexBuddyListRepository implements BuddyListRepository {
     }
 
     @Override
+    public List<BuddyListEntity> findByBuddy(long buddyId) {
+        return mapper.selectListByQuery(QueryWrapper.create()
+                .where(BuddyListEntity::getBuddyId).eq(buddyId));
+    }
+
+    @Override
     public boolean exists(long ownerId, long buddyId) {
         return mapper.selectCountByQuery(QueryWrapper.create()
                 .where(BuddyListEntity::getOwnerId).eq(ownerId)

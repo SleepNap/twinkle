@@ -12,6 +12,11 @@ public interface BuddyListRepository {
     /** 某玩家全部好友（ACCEPTED + PENDING）。 */
     List<BuddyListEntity> findByOwner(long ownerId);
 
+    /** 反向查询：哪些玩家把 {@code buddyId} 加为好友（用于上线/离线通知）。 */
+    default List<BuddyListEntity> findByBuddy(long buddyId) {
+        return List.of();
+    }
+
     /** 好友关系是否存在（任意方向，幂等判断）。 */
     boolean exists(long ownerId, long buddyId);
 
