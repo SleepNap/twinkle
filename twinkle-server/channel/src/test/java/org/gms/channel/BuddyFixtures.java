@@ -17,10 +17,15 @@ public final class BuddyFixtures {
     }
 
     public static BuddyListEntity row(long owner, long buddy, String status) {
+        return row(owner, buddy, status, BuddyListEntity.DEFAULT_GROUP);
+    }
+
+    public static BuddyListEntity row(long owner, long buddy, String status, String group) {
         BuddyListEntity entity = new BuddyListEntity();
         entity.setOwnerId(owner);
         entity.setBuddyId(buddy);
         entity.setStatus(status);
+        entity.setGroupName(group);
         return entity;
     }
 

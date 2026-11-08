@@ -46,7 +46,7 @@ import java.util.function.Supplier;
  */
 @Log4j2
 public final class BuddyHandler implements PacketHandler, AutoCloseable {
-    private static final String DEFAULT_GROUP = "Default Group";
+    private static final String DEFAULT_GROUP = BuddyListEntity.DEFAULT_GROUP;
     private static final int NAME_LENGTH = 13;
     private static final int NAME_LIMIT = 13;
 
@@ -63,7 +63,11 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
      */
     private record Refresh(long ownerId, int channel, long peerId, int peerChannel, List<BuddyEntry> entries) { }
 
-    private record InitResult(List<BuddyEntry> ownEntries, List<Refresh> refreshes) { }
+    private record InitResult(List<BuddyEntry> ownEntries, List<Pending> requests,
+                              List<Refresh> refreshes) { }
+
+    /** 别人发给我、尚未确认的申请；登录时重放 mode 9。 */
+    private record Pending(long fromId, String fromName, String group) { }
 
     private SerialTaskQueue io;
     private final int channelId;
@@ -134,8 +138,15 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
         PlayerCharacter character = session.getAttr("character");
         if (character == null) return;
         long playerId = character.getId();
-        offload(() -> new InitResult(list(playerId), refreshes(playerId, channelId)), result -> {
-            if (sessions.get(playerId) == session) session.send(buddyListPacket(result.ownEntries()));
+        offload(() -> new InitResult(list(playerId), pendingRequests(playerId),
+                refreshes(playerId, channelId)), result -> {
+            if (sessions.get(playerId) == session) {
+                session.send(buddyListPacket(result.ownEntries()));
+                for (Pending pending : result.requests()) {
+                    session.send(requestBuddylistAdd(pending.fromId(), pending.fromName(),
+                            playerId, pending.group()));
+                }
+            }
             dispatch(result.refreshes());
         });
     }
@@ -151,7 +162,7 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
     private void add(PacketSession session, PlayerCharacter character, String name, String group) {
         if (name == null || name.length() < 2 || name.length() > NAME_LIMIT
                 || name.equals(character.getName())) return;
-        String useGroup = group == null || group.isBlank() || group.length() > 16 ? DEFAULT_GROUP : group;
+        String useGroup = groupName(group);
         long ownerId = character.getId();
         String ownerName = character.getName();
         int capacity = character.getBuddyCapacity();
@@ -162,8 +173,8 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
             if (!existing && acceptedCount(ownerId) >= capacity) {
                 return new AddResult(0, list(ownerId), -1);
             }
-            buddyRepo.insertIfAbsent(row(ownerId, target.id(), BuddyListEntity.PENDING));
-            buddyRepo.insertIfAbsent(row(target.id(), ownerId, BuddyListEntity.PENDING));
+            buddyRepo.insertIfAbsent(row(ownerId, target.id(), BuddyListEntity.PENDING, useGroup));
+            buddyRepo.insertIfAbsent(row(target.id(), ownerId, BuddyListEntity.PENDING, DEFAULT_GROUP));
             return new AddResult(target.id(), list(ownerId), channelOf(target.id()));
         }, result -> {
             if (sessions.get(ownerId) == session) {
@@ -302,9 +313,21 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
             String name = nameOf(row.getBuddyId());
             if (name == null) continue;
             int channel = row.getBuddyId() == peerId ? peerChannel : channelOf(row.getBuddyId());
-            entries.add(new BuddyEntry(row.getBuddyId(), name, channel, DEFAULT_GROUP));
+            entries.add(new BuddyEntry(row.getBuddyId(), name, channel, groupOf(row)));
         }
         return entries;
+    }
+
+    /** 别人发给我、尚未确认的申请：按持久化的申请方分组重放 mode 9。 */
+    private List<Pending> pendingRequests(long characterId) {
+        List<Pending> requests = new ArrayList<>();
+        for (BuddyListEntity row : buddyRepo.findByBuddy(characterId)) {
+            if (!BuddyListEntity.PENDING.equals(row.getStatus())) continue;
+            String name = nameOf(row.getOwnerId());
+            if (name == null) continue;
+            requests.add(new Pending(row.getOwnerId(), name, groupOf(row)));
+        }
+        return requests;
     }
 
     /**
@@ -348,12 +371,24 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
                 .orElse(null);
     }
 
-    private BuddyListEntity row(long owner, long buddy, String status) {
+    private BuddyListEntity row(long owner, long buddy, String status, String group) {
         BuddyListEntity entity = new BuddyListEntity();
         entity.setOwnerId(owner);
         entity.setBuddyId(buddy);
         entity.setStatus(status);
+        entity.setGroupName(group);
         return entity;
+    }
+
+    /** 分组名按 v83 固定 13 字节字段校验；空白或超长（含多字节）回退默认分组。 */
+    private static String groupName(String group) {
+        if (group == null || group.isBlank()) return DEFAULT_GROUP;
+        return group.getBytes(InPacket.DEFAULT_CHARSET).length > NAME_LENGTH ? DEFAULT_GROUP : group;
+    }
+
+    private static String groupOf(BuddyListEntity row) {
+        String group = row.getGroupName();
+        return group == null || group.isBlank() ? DEFAULT_GROUP : group;
     }
 
     /** 有执行归属时走后台 IO + 版本门回包；否则同步执行（测试/无频道适配器）。 */

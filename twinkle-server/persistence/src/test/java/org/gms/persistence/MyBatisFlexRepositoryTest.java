@@ -1,10 +1,12 @@
 package org.gms.persistence;
 
 import com.mybatisflex.core.MybatisFlexBootstrap;
+import org.gms.persistence.entity.BuddyListEntity;
 import org.gms.persistence.entity.GameAccountRecord;
 import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.persistence.entity.InventoryItemEntity;
 import org.gms.persistence.entity.QuestStatusEntity;
+import org.gms.persistence.mapper.BuddyListMapper;
 import org.gms.persistence.mapper.GameAccountRecordMapper;
 import org.gms.persistence.mapper.PlayerCharacterRecordMapper;
 import org.gms.persistence.mapper.InventoryItemMapper;
@@ -13,6 +15,7 @@ import org.gms.persistence.mapper.QuestStatusMapper;
 import org.gms.persistence.mapper.SkillMapper;
 import org.gms.persistence.migrate.MigrationRunner;
 import org.gms.persistence.repo.FlexGameAccountRepository;
+import org.gms.persistence.repo.FlexBuddyListRepository;
 import org.gms.persistence.repo.FlexPlayerCharacterRepository;
 import org.gms.persistence.repo.FlexPlayerCharacterSnapshotRepository;
 import org.gms.persistence.repo.FlexInventoryItemRepository;
@@ -68,6 +71,51 @@ class MyBatisFlexRepositoryTest {
         repository.replaceAll(9L, java.util.List.of(), java.util.List.of());
         assertThat(repository.findStatusesByCharacterId(9L)).isEmpty();
         assertThat(repository.findProgressByCharacterId(9L)).isEmpty();
+    }
+
+    @Test
+    void buddyListStoresGroupAndStatusUpdateKeepsIt() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-buddy").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+        MybatisFlexBootstrap bootstrap = new MybatisFlexBootstrap();
+        bootstrap.setDataSource(ds);
+        bootstrap.setEnvironmentId("buddy-" + dbPath);
+        bootstrap.addMapper(BuddyListMapper.class);
+        bootstrap.start();
+
+        FlexBuddyListRepository repository = new FlexBuddyListRepository(
+                bootstrap.getMapper(BuddyListMapper.class));
+        BuddyListEntity row = new BuddyListEntity();
+        row.setOwnerId(1);
+        row.setBuddyId(2);
+        row.setStatus(BuddyListEntity.PENDING);
+        row.setGroupName("Friends");
+        assertThat(repository.insertIfAbsent(row)).isTrue();
+        assertThat(repository.insertIfAbsent(row)).isFalse();
+
+        BuddyListEntity saved = repository.findByOwner(1).getFirst();
+        assertThat(saved.getStatus()).isEqualTo(BuddyListEntity.PENDING);
+        assertThat(saved.getGroupName()).isEqualTo("Friends");
+        assertThat(saved.getCreatedAt()).isNotBlank();
+        assertThat(repository.findByBuddy(2)).hasSize(1);
+
+        repository.updateStatus(1, 2, BuddyListEntity.ACCEPTED);
+        BuddyListEntity updated = repository.findByOwner(1).getFirst();
+        assertThat(updated.getStatus()).isEqualTo(BuddyListEntity.ACCEPTED);
+        assertThat(updated.getGroupName()).isEqualTo("Friends");
+        assertThat(updated.getCreatedAt()).isEqualTo(saved.getCreatedAt());
+
+        BuddyListEntity defaulted = new BuddyListEntity();
+        defaulted.setOwnerId(2);
+        defaulted.setBuddyId(1);
+        defaulted.setStatus(BuddyListEntity.ACCEPTED);
+        repository.insertIfAbsent(defaulted);
+        assertThat(repository.findByOwner(2).getFirst().getGroupName())
+                .isEqualTo(BuddyListEntity.DEFAULT_GROUP);
+
+        repository.delete(1, 2);
+        assertThat(repository.findByOwner(1)).isEmpty();
     }
 
     @Test

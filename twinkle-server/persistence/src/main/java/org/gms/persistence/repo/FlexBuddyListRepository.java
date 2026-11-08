@@ -1,6 +1,7 @@
 package org.gms.persistence.repo;
 
 import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.core.update.UpdateChain;
 import org.gms.persistence.entity.BuddyListEntity;
 import org.gms.persistence.mapper.BuddyListMapper;
 
@@ -42,6 +43,9 @@ public class FlexBuddyListRepository implements BuddyListRepository {
         if (exists(buddy.getOwnerId(), buddy.getBuddyId())) {
             return false;
         }
+        if (buddy.getGroupName() == null || buddy.getGroupName().isBlank()) {
+            buddy.setGroupName(BuddyListEntity.DEFAULT_GROUP);
+        }
         buddy.setCreatedAt(Instant.now().toString());
         mapper.insert(buddy);
         return true;
@@ -49,11 +53,13 @@ public class FlexBuddyListRepository implements BuddyListRepository {
 
     @Override
     public void updateStatus(long ownerId, long buddyId, String status) {
-        BuddyListEntity e = new BuddyListEntity();
-        e.setStatus(status);
-        mapper.updateByQuery(e, QueryWrapper.create()
+        // 复合主键没有 @Id 可跳过：用 UpdateChain 只写 status，避免实体的 long 默认值把
+        // owner_id/buddy_id 一起改成 0（updateByQuery 会把非 null 的原始类型字段也写回）。
+        UpdateChain.of(mapper)
                 .where(BuddyListEntity::getOwnerId).eq(ownerId)
-                .and(BuddyListEntity::getBuddyId).eq(buddyId));
+                .and(BuddyListEntity::getBuddyId).eq(buddyId)
+                .set(BuddyListEntity::getStatus, status)
+                .update();
     }
 
     @Override

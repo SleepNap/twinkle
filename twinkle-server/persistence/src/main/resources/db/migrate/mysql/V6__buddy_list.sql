@@ -5,6 +5,7 @@ CREATE TABLE `buddy_list` (
     `owner_id` BIGINT NOT NULL,
     `buddy_id` BIGINT NOT NULL,
     `status` VARCHAR(16) NOT NULL DEFAULT 'ACCEPTED',
+    `group_name` VARCHAR(32) NOT NULL DEFAULT 'Default Group',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`owner_id`, `buddy_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -170,6 +170,83 @@ public class BuddyGameplayTest {
         assertThat(buddyListChannel(owner, 2)).isEqualTo(-2);
     }
 
+    @Test public void addStoresSelectedGroupAndFullListShowsIt() {
+        var owner = joined(1);
+        var target = joined(2);
+
+        handler.handle(owner, addRequest("Player2", "Friends"));
+
+        assertThat(repository.findByOwner(1).getFirst().getGroupName()).isEqualTo("Friends");
+        assertThat(repository.findByOwner(2).getFirst().getGroupName())
+                .isEqualTo(BuddyListEntity.DEFAULT_GROUP);
+
+        handler.handle(target, idRequest(2, 1));
+        owner.sent.clear();
+        handler.initialize(owner);
+
+        var packet = new ByteArrayInPacket(owner.sent.getFirst().getBytes());
+        packet.readUnsignedShort();
+        assertThat(packet.readByte()).isEqualTo((byte) 7);
+        assertThat(packet.readByte()).isEqualTo((byte) 1);
+        assertThat(packet.readInt()).isEqualTo(2);
+        assertThat(readFixed(packet, 13)).isEqualTo("Player2");
+        packet.readByte();
+        packet.readInt();
+        assertThat(readFixed(packet, 13)).isEqualTo("Friends");
+        packet.readInt();
+        assertThat(packet.readInt()).isZero();
+        assertThat(packet.available()).isZero();
+    }
+
+    @Test public void loginReplaysPendingRequestFromOtherPlayer() {
+        var owner = joined(1);
+        repository.insertIfAbsent(BuddyFixtures.row(2, 1, BuddyListEntity.PENDING, "Friends"));
+        characters.records.put(2L, character(2, "Player2"));
+
+        handler.initialize(owner);
+
+        assertThat(owner.sent).hasSize(2);
+        var request = new ByteArrayInPacket(owner.sent.getLast().getBytes());
+        assertThat(request.readUnsignedShort()).isEqualTo(SendOpcode.BUDDYLIST.getValue());
+        assertThat(request.readByte()).isEqualTo((byte) 9);
+        assertThat(request.readInt()).isEqualTo(2);
+        assertThat(request.readString()).isEqualTo("Player2");
+        assertThat(request.readInt()).isEqualTo(2);
+        assertThat(readFixed(request, 11)).isEqualTo("Player2");
+        request.skip(3);
+        assertThat(request.readInt()).isEqualTo(0x0F);
+        assertThat(readFixed(request, 13)).isEqualTo("Friends");
+        request.readByte();
+        assertThat(request.readInt()).isOne();
+        assertThat(request.available()).isZero();
+    }
+
+    @Test public void loginDoesNotReplayOwnOutgoingPendingAsRequest() {
+        var owner = joined(1);
+        repository.insertIfAbsent(BuddyFixtures.row(1, 2, BuddyListEntity.PENDING, "Friends"));
+        characters.records.put(2L, character(2, "Player2"));
+
+        handler.initialize(owner);
+
+        assertThat(owner.sent).hasSize(1);
+        assertThat(listCount(owner)).isZero();
+    }
+
+    @Test public void groupBeyondWireWidthFallsBackToDefault() {
+        var owner = joined(1);
+        joined(2);
+        joined(3);
+
+        handler.handle(owner, addRequest("Player2", "ABCDEFGHIJKLMNO"));
+        handler.handle(owner, addRequest("Player3", "好友分组测试组"));
+
+        assertThat(repository.findByOwner(1)).hasSize(2);
+        assertThat(repository.findByOwner(1).getFirst().getGroupName())
+                .isEqualTo(BuddyListEntity.DEFAULT_GROUP);
+        assertThat(repository.findByOwner(1).getLast().getGroupName())
+                .isEqualTo(BuddyListEntity.DEFAULT_GROUP);
+    }
+
     /** 读取整表包中的好友 id 列表。 */
     private static List<Long> buddyListEntryIds(GameplayTestSession session) {
         var packet = new ByteArrayInPacket(session.sent.getLast().getBytes());
