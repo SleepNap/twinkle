@@ -37,7 +37,7 @@ public class ScrollGameplayTest {
     private static final int CURSED_SCROLL = 2_043_002;
     private static final int HELMET_SCROLL = 2_040_000;
     private static final int RESTRICTED_SCROLL = 2_043_003;
-    private static final int CHAOS_SCROLL = 2_049_100;
+    private static final int UNSUPPORTED_SCROLL = 2_049_300;
     private static final int WHITE_SCROLL = 2_340_000;
 
     private final DefaultVersionGate versions = new DefaultVersionGate();
@@ -139,9 +139,9 @@ public class ScrollGameplayTest {
         assertThat(owner.character.getItemCount(HELMET_SCROLL)).isOne();
         assertEmptyInventoryOperation(owner);
 
-        short chaos = giveScroll(owner, CHAOS_SCROLL);
-        handler.handle(owner, request(chaos, (short) -11, false));
-        assertThat(owner.character.getItemCount(CHAOS_SCROLL)).isOne();
+        short unsupported = giveScroll(owner, UNSUPPORTED_SCROLL);
+        handler.handle(owner, request(unsupported, (short) -11, false));
+        assertThat(owner.character.getItemCount(UNSUPPORTED_SCROLL)).isOne();
 
         short restricted = giveScroll(owner, RESTRICTED_SCROLL);
         handler.handle(owner, request(restricted, (short) -11, false));
@@ -253,7 +253,7 @@ public class ScrollGameplayTest {
                 Map.entry(CURSED_SCROLL, scroll(CURSED_SCROLL, 0, 100, Set.of(), Map.of("watk", 2))),
                 Map.entry(HELMET_SCROLL, scroll(HELMET_SCROLL, 100, 0, Set.of(), Map.of("wdef", 1))),
                 Map.entry(RESTRICTED_SCROLL, scroll(RESTRICTED_SCROLL, 100, 0, Set.of(HAT), Map.of("watk", 1))),
-                Map.entry(CHAOS_SCROLL, scroll(CHAOS_SCROLL, 100, 0, Set.of(), Map.of("watk", 1))),
+                Map.entry(UNSUPPORTED_SCROLL, scroll(UNSUPPORTED_SCROLL, 100, 0, Set.of(), Map.of("watk", 1))),
                 Map.entry(WHITE_SCROLL, whiteScroll)), Map.of());
     }
 

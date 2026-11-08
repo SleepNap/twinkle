@@ -32,6 +32,11 @@ public interface CharacterState extends Versioned {
         return false;
     }
 
+    /** 已学技能等级；未实现或未学习返回 0（匠人之魂等被动判定用）。 */
+    public default int skillLevel(int skillId) {
+        return 0;
+    }
+
     // ---- 身份 / 成长 ----
 
     long getId();

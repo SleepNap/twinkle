@@ -68,7 +68,7 @@ public final class EquipmentService {
                 GameplayPackets.inventory(character, InventoryType.EQUIP)).forEach(session::send);
         OutPacket effect = GameplayPackets.scrollEffect((int) character.getId(),
                 result.outcome() == ScrollOutcome.SUCCESS, result.outcome() == ScrollOutcome.CURSE,
-                result.whiteScroll());
+                result.legendarySpirit(), result.whiteScroll());
         sessions.broadcastToMap(character.getMapObject(), effect);
         equipment.refresh(character, clock.millis());
         scheduleRefresh(session, character);

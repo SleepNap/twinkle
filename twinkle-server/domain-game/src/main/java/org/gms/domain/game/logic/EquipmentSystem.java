@@ -16,8 +16,11 @@ public interface EquipmentSystem {
     /** 卷轴砸卷结果；诅咒会销毁装备，失败只减少升级次数。 */
     public enum ScrollOutcome { SUCCESS, FAIL, CURSE }
 
-    /** {@code whiteScroll} 是本次实际消耗白色卷轴的记录，用于客户端播放对应效果。 */
-    public record ScrollResult(ScrollOutcome outcome, boolean whiteScroll) { }
+    /**
+     * {@code whiteScroll} 是本次实际消耗白色卷轴的记录，{@code legendarySpirit} 表示
+     * 通过匠人之魂对背包内装备砸卷，两者都用于客户端播放对应效果。
+     */
+    public record ScrollResult(ScrollOutcome outcome, boolean whiteScroll, boolean legendarySpirit) { }
 
     public long dataVersion();
 

@@ -28,6 +28,16 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
     /** v83 白色卷轴：失败时保留升级次数，按客户端勾选消耗。 */
     private static final int WHITE_SCROLL_ITEM_ID = 2_340_000;
 
+    /** 匠人之魂（传说的精神）技能 id；学习后可对背包内装备砸卷。 */
+    private static final int LEGENDARY_SPIRIT_SKILL_ID = 1003;
+
+    /** 混沌卷轴单次属性浮动范围（v83 默认 ±5）。 */
+    private static final int CHAOS_STAT_RANGE = 5;
+
+    /** 混沌类卷轴：普通混沌、骗子树液、枫叶糖浆与奇迹混沌。 */
+    private static final Set<Integer> CHAOS_SCROLLS = Set.of(
+            2_049_100, 2_049_101, 2_049_102, 2_049_116, 2_049_117);
+
     private final Predicate<CharacterState> accepts;
     private final GameDataProvider data;
 
@@ -81,31 +91,42 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
     }
 
     /**
-     * v83 升级卷轴：成功加属性并提升一级，失败消耗一次升级机会，诅咒直接销毁装备。
+     * v83 升级卷轴：普通卷轴按类别加属性；纯白恢复一次升级机会；混沌随机增减属性；
+     * 饰品卷轴可作用于戒指/吊坠/腰带。成功加属性并提升一级（纯白只恢复次数），失败
+     * 消耗一次升级机会（纯白不消耗），诅咒销毁装备。
      *
-     * <p>只接普通 {@code 2040xxx-2048xxx} 卷轴；{@code 2049xxx}（混沌/纯白/饰品特殊卷轴）
-     * 与匠人之魂留在后续批次。卷轴在判定前先按实例扣掉，白色卷轴按客户端勾选一并消耗。
+     * <p>匠人之魂（技能 1003）已学习时允许对 `EQUIP` 背包正槽的装备砸卷。
+     * 白色卷轴按客户端勾选消耗，纯白卷轴不使用白色卷轴保护。
      */
     public ScrollResult scroll(EquipmentState state, short scrollSlot, short equipSlot,
                                boolean whiteScroll, long now, RandomGenerator random) {
         synchronized (state) {
-            if (!accepts.test(state) || state.getHp() <= 0 || scrollSlot <= 0 || equipSlot >= 0) return null;
+            if (!accepts.test(state) || state.getHp() <= 0 || scrollSlot <= 0 || equipSlot == 0) return null;
             TradeItemSnapshot scroll = state.snapshotTradeItem((byte) 2, scrollSlot, 1);
-            if (scroll == null || expired(scroll, now) || !isStandardScroll(scroll.itemId())) return null;
-            ItemData scrollDefinition = data.item(scroll.itemId());
+            if (scroll == null || expired(scroll, now)) return null;
+            int scrollId = scroll.itemId();
+            ScrollKind kind = scrollKind(scrollId);
+            if (kind == null) return null;
+            ItemData scrollDefinition = data.item(scrollId);
             if (scrollDefinition == null || scrollDefinition.getScroll() == null) return null;
             ScrollData scrollData = scrollDefinition.getScroll();
+            boolean legendarySpirit = equipSlot > 0;
+            if (legendarySpirit && state.skillLevel(LEGENDARY_SPIRIT_SKILL_ID) <= 0) return null;
             Map<Short, TradeItemSnapshot> before = state.equipmentItems();
             TradeItemSnapshot item = before.get(equipSlot);
             if (!usable(item, now)) return null;
             ItemData definition = data.item(item.itemId());
             if (definition == null || definition.getEquipment() == null || definition.getEquipment().cash()
-                    || !scrollData.allows(item.itemId())
-                    || !sameScrollCategory(scroll.itemId(), item.itemId())) return null;
+                    || !scrollData.allows(item.itemId()) || !matchesTarget(kind, scrollId, item.itemId())) return null;
             EquipSnapshot stats = item.equip();
-            if (stats.upgradeSlots() <= 0) return null;
+            if (kind == ScrollKind.CLEAN_SLATE) {
+                if (!canUseCleanSlate(stats, definition)) return null;
+            } else if (stats.upgradeSlots() <= 0) {
+                return null;
+            }
 
-            boolean usedWhiteScroll = whiteScroll && state.getItemCount(WHITE_SCROLL_ITEM_ID) > 0;
+            boolean usedWhiteScroll = kind != ScrollKind.CLEAN_SLATE
+                    && whiteScroll && state.getItemCount(WHITE_SCROLL_ITEM_ID) > 0;
             if (!state.removeTradeItems(List.of(scroll))) return null;
             if (usedWhiteScroll && !state.removeItem(WHITE_SCROLL_ITEM_ID, 1)) {
                 refund(state, scroll, false);
@@ -114,14 +135,25 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
             boolean success = random.nextInt(100) < scrollData.success();
             boolean cursed = !success && random.nextInt(100) < scrollData.cursed();
             if (cursed) {
-                if (!state.removeEquipment(before, Set.of(equipSlot))) {
+                if (!state.removeEquipmentItem(before, equipSlot)) {
                     refund(state, scroll, usedWhiteScroll);
                     return null;
                 }
-                return new ScrollResult(ScrollOutcome.CURSE, usedWhiteScroll);
+                return new ScrollResult(ScrollOutcome.CURSE, usedWhiteScroll, legendarySpirit);
             }
-            EquipSnapshot updated = success ? improved(stats, scrollData.stats())
-                    : spentSlot(stats, usedWhiteScroll);
+            if (!success && kind == ScrollKind.CLEAN_SLATE) {
+                return new ScrollResult(ScrollOutcome.FAIL, false, legendarySpirit);
+            }
+            EquipSnapshot updated;
+            if (success) {
+                updated = switch (kind) {
+                    case CLEAN_SLATE -> withSlots(stats, stats.upgradeSlots() + 1);
+                    case CHAOS -> chaos(stats, random);
+                    default -> improved(stats, scrollData.stats());
+                };
+            } else {
+                updated = spentSlot(stats, usedWhiteScroll);
+            }
             TradeItemSnapshot replacement = new TradeItemSnapshot(item.inventoryType(), item.sourcePosition(),
                     item.itemId(), item.quantity(), item.cashId(), item.petId(), item.owner(), item.flag(),
                     item.expiration(), item.giftFrom(), updated, null);
@@ -129,7 +161,8 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
                 refund(state, scroll, usedWhiteScroll);
                 return null;
             }
-            return new ScrollResult(success ? ScrollOutcome.SUCCESS : ScrollOutcome.FAIL, usedWhiteScroll);
+            return new ScrollResult(success ? ScrollOutcome.SUCCESS : ScrollOutcome.FAIL,
+                    usedWhiteScroll, legendarySpirit);
         }
     }
 
@@ -217,14 +250,41 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
         return 0;
     }
 
-    /** 只接普通升级卷轴；2049xxx 的特殊卷轴与匠人之魂未接入。 */
-    private static boolean isStandardScroll(int itemId) {
-        return itemId / 10000 == 204 && itemId / 1000 != 2049;
+    /** 卷轴种类；Vega/活动等未识别 2049xxx 卷轴返回 null 由调用方拒绝。 */
+    private enum ScrollKind { STANDARD, CLEAN_SLATE, CHAOS, ACCESSORY }
+
+    /**
+     * 识别已接入的卷轴：普通 2040xxx-2048xxx、纯白 2049000-2049003、混沌
+     * 2049100/2049101/2049102/2049116/2049117、饰品 2049200-2049211。
+     */
+    private static ScrollKind scrollKind(int itemId) {
+        if (itemId >= 2_049_000 && itemId <= 2_049_003) return ScrollKind.CLEAN_SLATE;
+        if (CHAOS_SCROLLS.contains(itemId)) return ScrollKind.CHAOS;
+        if (itemId >= 2_049_200 && itemId <= 2_049_211) return ScrollKind.ACCESSORY;
+        if (itemId / 10000 == 204 && itemId / 1000 != 2049) return ScrollKind.STANDARD;
+        return null;
+    }
+
+    /** 普通卷轴按类别位匹配；饰品卷轴固定作用于戒指/吊坠/腰带；纯白与混沌不限部位。 */
+    private static boolean matchesTarget(ScrollKind kind, int scrollId, int equipmentId) {
+        int category = (equipmentId / 10000) % 100;
+        return switch (kind) {
+            case STANDARD -> sameScrollCategory(scrollId, equipmentId);
+            case ACCESSORY -> category == 11 || category == 12 || category == 13;
+            case CLEAN_SLATE, CHAOS -> true;
+        };
     }
 
     /** 卷轴 204XYZ 的类别位与装备 id 的第三段对应（头盔 0、上衣 4、武器 30 等）。 */
     private static boolean sameScrollCategory(int scrollId, int equipmentId) {
         return (scrollId / 100) % 100 == (equipmentId / 10000) % 100;
+    }
+
+    /** 纯白只恢复丢失的升级次数：已用次数 + 剩余次数必须小于模板上限 + 诅咒次数。 */
+    private static boolean canUseCleanSlate(EquipSnapshot stats, ItemData definition) {
+        EquipmentData equipment = definition.getEquipment();
+        return equipment != null
+                && stats.upgradeSlots() + stats.level() < equipment.upgradeSlots() + stats.vicious();
     }
 
     private static boolean expired(TradeItemSnapshot item, long now) {
@@ -251,6 +311,44 @@ public final class DefaultEquipmentSystem implements EquipmentSystem {
                 add(stats.speed(), increments.get("speed")),
                 add(stats.jump(), increments.get("jump")),
                 stats.vicious(), stats.itemLevel(), stats.itemExp(), stats.ringId());
+    }
+
+    /** 只替换升级次数，保持等级与全部属性（纯白成功）。 */
+    private static EquipSnapshot withSlots(EquipSnapshot stats, int slots) {
+        return new EquipSnapshot((byte) Math.clamp(slots, 0, 255), stats.level(),
+                stats.strStat(), stats.dexStat(), stats.intStat(), stats.lukStat(), stats.hp(), stats.mp(),
+                stats.wAtk(), stats.mAtk(), stats.wDef(), stats.mDef(), stats.acc(), stats.avoid(),
+                stats.hands(), stats.speed(), stats.jump(),
+                stats.vicious(), stats.itemLevel(), stats.itemExp(), stats.ringId());
+    }
+
+    /** 混沌成功：每个已有正属性随机 ±5 后写回，升级次数 -1、等级 +1。 */
+    private static EquipSnapshot chaos(EquipSnapshot stats, RandomGenerator random) {
+        return new EquipSnapshot(
+                (byte) Math.max(0, stats.upgradeSlots() - 1),
+                (short) Math.clamp(stats.level() + 1, 0, 255),
+                chaos(stats.strStat(), random),
+                chaos(stats.dexStat(), random),
+                chaos(stats.intStat(), random),
+                chaos(stats.lukStat(), random),
+                chaos(stats.hp(), random),
+                chaos(stats.mp(), random),
+                chaos(stats.wAtk(), random),
+                chaos(stats.mAtk(), random),
+                chaos(stats.wDef(), random),
+                chaos(stats.mDef(), random),
+                chaos(stats.acc(), random),
+                chaos(stats.avoid(), random),
+                chaos(stats.hands(), random),
+                chaos(stats.speed(), random),
+                chaos(stats.jump(), random),
+                stats.vicious(), stats.itemLevel(), stats.itemExp(), stats.ringId());
+    }
+
+    private static short chaos(short value, RandomGenerator random) {
+        if (value <= 0) return value;
+        int delta = random.nextInt(CHAOS_STAT_RANGE * 2 + 1) - CHAOS_STAT_RANGE;
+        return (short) Math.clamp((long) value + delta, 0, Short.MAX_VALUE);
     }
 
     /** 失败时消耗一次升级机会；白色卷轴生效则保留次数，其它属性不变。 */

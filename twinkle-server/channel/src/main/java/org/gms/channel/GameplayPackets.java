@@ -153,12 +153,13 @@ public final class GameplayPackets {
     }
 
     /** v83 卷轴效果广播：角色 id + 成功/诅咒/匠人之魂/白色卷轴四个布尔。 */
-    public static OutPacket scrollEffect(int characterId, boolean success, boolean cursed, boolean whiteScroll) {
+    public static OutPacket scrollEffect(int characterId, boolean success, boolean cursed,
+                                         boolean legendarySpirit, boolean whiteScroll) {
         ByteArrayOutPacket packet = packet(SendOpcode.SHOW_SCROLL_EFFECT);
         packet.writeInt(characterId);
         packet.writeBool(success);
         packet.writeBool(cursed);
-        packet.writeBool(false);        // 匠人之魂未接入，固定 false
+        packet.writeBool(legendarySpirit);
         packet.writeBool(whiteScroll);
         return packet;
     }

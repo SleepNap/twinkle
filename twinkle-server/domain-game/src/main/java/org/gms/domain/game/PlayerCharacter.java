@@ -160,10 +160,10 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
         return true;
     }
 
-    /** 卷轴强化：只替换已穿戴实例的装备属性，保留原对象、期限、归属和现金 id。 */
+    /** 卷轴强化：替换装备实例属性（负槽已穿戴或正槽背包），保留期限、归属和现金 id。 */
     @Override public synchronized boolean updateEquipmentItem(Map<Short, TradeItemSnapshot> expected,
                                                               short slot, TradeItemSnapshot replacement) {
-        if (slot >= 0 || replacement == null || replacement.equip() == null) return false;
+        if (slot == 0 || replacement == null || replacement.equip() == null) return false;
         if (!equipmentItems().equals(expected)) return false;
         if (!(getInventory(InventoryType.EQUIP).getItem(slot) instanceof Equip equip)
                 || replacement.itemId() != equip.getId()) return false;
@@ -189,6 +189,16 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
         equip.setItemLevel(value.itemLevel());
         equip.setItemExp(value.itemExp());
         equip.setRingId(value.ringId());
+        markDirty();
+        return true;
+    }
+
+    /** 卷轴诅咒：移除装备实例，负槽为已穿戴装备，正槽为背包物品。 */
+    @Override public synchronized boolean removeEquipmentItem(Map<Short, TradeItemSnapshot> expected, short slot) {
+        if (slot == 0 || !equipmentItems().equals(expected)) return false;
+        Inventory bag = getInventory(InventoryType.EQUIP);
+        if (!(bag.getItem(slot) instanceof Equip)) return false;
+        bag.removeItem(slot);
         markDirty();
         return true;
     }
@@ -480,6 +490,11 @@ public class PlayerCharacter implements BuffState, AvatarState, ControlsState, E
     public SkillEntry getSkill(int skillId) {
         requireStateAccess();
         return skillBook.get(skillId);
+    }
+
+    @Override public int skillLevel(int skillId) {
+        SkillEntry skill = getSkill(skillId);
+        return skill == null ? 0 : skill.level();
     }
 
     public void putSkill(SkillEntry entry) { requireStateAccess();
