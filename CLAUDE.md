@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **split 多进程 / 滚动重启 / 回滚**：`./scripts/split-start.sh` / `./scripts/rolling-restart.sh [频道号]` / `./scripts/rollback.sh`（见 `docs/archived/ops/split-deployment.md`、`docs/archived/ops/switch-to-production.md`）
 - **启动自检**：`curl http://127.0.0.1:8686/admin/v1/health`、`/admin/v1/channels`；`/internal/v1/health` 需携带具有 `server.health:read` Scope 的 API Key。
 
-关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`twinkle.net.channel.host`=`127.0.0.1`（登录服下发给客户端连接频道的 IPv4，不是监听地址）、`micronaut.server.port`=`8686`。HTTP 与客户端 Netty 端口默认监听所有网卡，安全边界由 API Key Scope、管理员 RBAC、TLS/反向代理和防火墙共同承担。`data/twinkle.db` 为运行期产物不入仓。
+关键配置（默认值，env 可覆盖）：`twinkle.profile`=`single`（`standalone` 低配 / `split-channel` / `split-realm`）、`twinkle.db.url`=`jdbc:sqlite:./data/twinkle.db`、`twinkle.service.language`=`zh-CN`、`twinkle.net.login.port`=`8484`、`twinkle.net.channel.port`=`8584`、`twinkle.net.channel.host`=`127.0.0.1`（登录服下发给客户端连接频道的 IPv4，不是监听地址）、`micronaut.server.port`=`8686`、`twinkle.wz.cache-path`=`./data/wz-cache`（WZ 代际快照目录；WZ 源目录可能是只读参考仓库，运行期文件不得写进源目录）。HTTP 与客户端 Netty 端口默认监听所有网卡，安全边界由 API Key Scope、管理员 RBAC、TLS/反向代理和防火墙共同承担。`data/twinkle.db` 为运行期产物不入仓。
 
 **Micronaut 注解处理器增量编译坑**：改动 Repository / bean 接口后若报 `NonUniqueBeanException`（残留旧 `$MyBatisFlexFactory$XxxRepositoryN$Definition` 类），用 `mvn clean verify` 重来。改 Repository 接口须同步更新相关测试桩。
 
