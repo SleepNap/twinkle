@@ -187,7 +187,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     new PlayerInteractionHandler(tradeSystem, sessions, entityReloadCoordinator),
                     new NpcTalkHandler(scriptManager, itemSystem, questSystem), new NpcTalkMoreHandler(),
                     new UseItemHandler(itemSystem, gameData, parties),
-                    new WhisperHandler(channelId, intercoord, eventBus, sessions),
+                    new WhisperHandler(channelId, intercoord, eventBus, sessions,
+                            characterRepository).async(socialIo),
                     new ChangeChannelHandler(channelId, intercoord, reliableEventBus, sessions, players, saveQueue, background).asyncPresence(presenceIo),
                     buddy,
                     new MoveLifeHandler(leases, sessions), new GeneralChatHandler(sessions)).register(handlers);

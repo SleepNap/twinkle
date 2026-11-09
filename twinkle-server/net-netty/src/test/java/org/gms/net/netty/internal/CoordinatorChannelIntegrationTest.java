@@ -97,7 +97,7 @@ class CoordinatorChannelIntegrationTest {
 
             // ---- EVENT 路由：频道 A 发悄悄话 → coordinator 路由回本频道 ----
             RemoteEventBus remoteBus = new RemoteEventBus(channelBus, link);
-            remoteBus.send(MessageTargets.channel(21), new WhisperRequest(1001, "Alice", 1002, "Bob", "你好"));
+            remoteBus.send(MessageTargets.channel(21), new WhisperRequest(1001, "Alice", 5, 1002, "Bob", "你好"));
 
             await(() -> delivered.get() != null);
             assertThat(delivered.get().fromId()).isEqualTo(1001);

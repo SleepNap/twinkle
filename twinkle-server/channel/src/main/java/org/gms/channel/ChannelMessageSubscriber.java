@@ -51,9 +51,11 @@ public final class ChannelMessageSubscriber implements AutoCloseable {
     private void deliverWhisper(WhisperRequest req) {
         // 物理会话注册表是本频道投递的真值，无需同步查询远端 Presence。
         PacketSession target = sessions.get(req.toId());
-        if (target != null) {
-            target.send(WhisperHandler.whisperPacket(req));
+        if (target == null) {
+            log.debug(I18n.message("log.whisper.target_not_in_channel"), req.toId(), channelId);
+            return;
         }
+        target.send(WhisperHandler.whisperPacket(req));
     }
 
     private void deliverNotice(NoticeMessage notice) {
