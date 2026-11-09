@@ -196,6 +196,21 @@ describe("adminApi", () => {
     }))
   })
 
+  it("集群状态缺省字段归一化", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      phase: "RUNNING", targetCount: 0, completedCount: 0,
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(adminApi.clusterShutdownStatus()).resolves.toEqual({
+      phase: "RUNNING",
+      targetCount: 0,
+      completedCount: 0,
+      failedChannelIds: [],
+      error: null,
+    })
+  })
+
   it("生成带审计原因的临时密码", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       generated: true,

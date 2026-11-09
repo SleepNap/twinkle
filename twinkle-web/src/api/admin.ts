@@ -659,8 +659,17 @@ export const adminApi = {
       body: "{}",
       headers: { "X-Admin-Reason": reason },
     }),
-  clusterShutdownStatus: (signal?: AbortSignal) =>
-    request<ClusterShutdownStatus>("/cluster/shutdown/status", { signal }),
+  clusterShutdownStatus: async (signal?: AbortSignal) => {
+    // 后端对空集合可能整体省略字段（如 failedChannelIds），这里统一归一化，避免页面读 length 崩溃。
+    const response = await request<Partial<ClusterShutdownStatus>>("/cluster/shutdown/status", { signal })
+    return {
+      phase: response.phase ?? "RUNNING",
+      targetCount: response.targetCount ?? 0,
+      completedCount: response.completedCount ?? 0,
+      failedChannelIds: response.failedChannelIds ?? [],
+      error: response.error ?? null,
+    } satisfies ClusterShutdownStatus
+  },
   shutdownCluster: (reason: string, force = false) =>
     request<ClusterShutdownResponse>(`/cluster/shutdown?force=${force}`, {
       method: "POST",

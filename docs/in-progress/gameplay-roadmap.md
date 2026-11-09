@@ -149,7 +149,7 @@
 | 第二批 | `mvn -B verify`，末次调整后定向回归 | 通过；新增 13 项回归并扩展 Buff 测试，末次 17 项定向检查通过 |
 | 第三批 | `mvn -B -DskipTests compile`、15 项相关回归、7 条架构规则；最后复查 4 项操作设置回归 | 通过；新增 6 项回归并扩展既有队伍/持久化测试；本批尚未重新执行全量 `verify` |
 | 第四批 | 全后端编译，54 项定向检查（包含 7 条架构规则） | 通过，无跳过；新增 16 项装备回归；本批未执行全量 `verify` 或客户端联调 |
-| 第二十一批 | 全后端编译；`BuddyGameplayTest` 15 项；`ChannelPacketFactoryLayoutTest` 3 项；`MyBatisFlexRepositoryTest` 6 项；`channel` 模块 166 项 | 2026-11-09 通过；新增 3 项目标容量/分组调整回归和 1 项服务器提示布局回归；架构/并发检查本批未重跑（避免本机高负载），待后续补跑 |
+| 第二十一批 | 全后端编译；`BuddyGameplayTest` 15 项；`ChannelPacketFactoryLayoutTest` 3 项；`MyBatisFlexRepositoryTest` 6 项；`channel` 模块 166 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项；控制台无头验收 10 页截图 | 2026-11-09 通过；新增 3 项目标容量/分组调整回归和 1 项服务器提示布局回归；架构/并发已补跑；控制台无头验收顺带修复运维页空集合字段崩溃 |
 | 第二十批 | 全后端编译；`WhisperGameplayTest` 8 项；`channel` 模块 162 项；`CoordinatorChannelIntegrationTest` 1 项（更新悄悄话载荷字段）；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-09 通过；新增 8 项悄悄话收发/跨频道/位置查询回归；本批未执行全量 `verify` 或客户端联调 |
 | 第十九批 | 全后端编译；`BuddyGameplayTest` 12 项；`BuddyCrossChannelTest` 8 项；`MyBatisFlexRepositoryTest` 6 项（含好友分组/状态更新）；`channel` 模块 154 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-08 通过；新增 4 项分组/离线申请回归和 1 项持久化回归；本批未执行全量 `verify` 或客户端联调 |
 | 第十八批 | 全后端编译；`BuddyCrossChannelTest` 8 项；`BuddyGameplayTest` 8 项；`SocialIoBoundaryTest` 2 项；`channel` 模块 150 项；`CoordinatorChannelIntegrationTest` 1 项（含跨进程好友事件序列化断言）；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-08 通过；新增 8 项跨频道好友回归；本批未执行全量 `verify` 或客户端联调 |

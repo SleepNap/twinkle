@@ -147,6 +147,15 @@ npm test
 npm run build
 ```
 
+无头验收（需先启动后端 `:8686` 与前端 `:5173`，内置管理员 `admin/admin`）：
+
+```bash
+npm run smoke:console
+BASE_URL=http://localhost:8686 npm run smoke:console   # 直接验收后端内置的打包页面
+```
+
+脚本会登录、逐页截图到 `docs/screenshots/console/`，并断言健康检查、频道接口与 10 个页面均正常渲染；退出码非 0 表示有页面异常或接口失败。只驱动本机已安装的 Chromium，不下载浏览器（可用 `CHROME_PATH` 指定）。
+
 ## 关键配置
 
 | 环境变量 | 用途 | 默认值 |
