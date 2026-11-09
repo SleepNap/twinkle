@@ -61,6 +61,7 @@ public final class WzResourceRegistry implements GameDataProvider {
     }
 
     private final Path wzRoot;
+    private final Path snapshotCache;
     private final List<WzResourceLoader<?>> loaders;
     private final Executor executor;
     private final AtomicReference<Snapshot> current;
@@ -102,7 +103,13 @@ public final class WzResourceRegistry implements GameDataProvider {
     public View view() { return new View(); }
 
     public WzResourceRegistry(Path wzRoot, List<WzResourceLoader<?>> loaders, Executor executor) {
+        this(wzRoot, null, loaders, executor);
+    }
+
+    /** @param snapshotCache 代际缓存目录；为 {@code null} 时落在 WZ 源目录内的 {@code .twinkle-snapshots} */
+    public WzResourceRegistry(Path wzRoot, Path snapshotCache, List<WzResourceLoader<?>> loaders, Executor executor) {
         this.wzRoot = Objects.requireNonNull(wzRoot, "wzRoot").toAbsolutePath().normalize();
+        this.snapshotCache = snapshotCache == null ? null : snapshotCache.toAbsolutePath().normalize();
         this.loaders = validate(loaders);
         this.executor = Objects.requireNonNull(executor, "executor");
         this.current = new AtomicReference<>(buildSnapshot(1));
@@ -172,7 +179,9 @@ public final class WzResourceRegistry implements GameDataProvider {
     }
 
     private Snapshot buildSnapshot(long version) {
-        WzSourceSnapshot source = WzSourceSnapshot.freeze(wzRoot);
+        WzSourceSnapshot source = snapshotCache == null
+                ? WzSourceSnapshot.freeze(wzRoot)
+                : WzSourceSnapshot.freeze(wzRoot, snapshotCache);
         Map<WzResourceKey<?>, Object> resources = new LinkedHashMap<>();
         Map<String, Integer> counts = new LinkedHashMap<>();
         List<CompletableFuture<LoadedResource>> futures = loaders.stream()

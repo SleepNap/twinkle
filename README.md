@@ -113,7 +113,7 @@ flowchart TB
 - **Node.js 20+** 与 npm
 - 与目标客户端匹配的 WZ XML 数据和服务端脚本
 
-WZ 与脚本不随仓库分发，启动时分别通过 `TWINKLE_WZ_PATH` 和 `TWINKLE_SCRIPT_PATH` 指向本地目录。
+WZ 与脚本不随仓库分发，启动时分别通过 `TWINKLE_WZ_PATH` 和 `TWINKLE_SCRIPT_PATH` 指向本地目录。WZ 代际快照默认写入 `TWINKLE_WZ_CACHE`（`./data/wz-cache`），不会写进 WZ 源目录；WZ 源目录可以是只读的参考仓库。
 
 ### 验证服务端
 
@@ -163,6 +163,7 @@ BASE_URL=http://localhost:8686 npm run smoke:console   # 直接验收后端内�
 | `TWINKLE_PROFILE` | 运行拓扑 | `single` |
 | `TWINKLE_DB_URL` | JDBC 数据库地址 | `jdbc:sqlite:./data/twinkle.db` |
 | `TWINKLE_WZ_PATH` | WZ XML 数据目录 | 启动前应显式配置 |
+| `TWINKLE_WZ_CACHE` | WZ 代际快照缓存目录（相对路径按进程工作目录解析） | `./data/wz-cache` |
 | `TWINKLE_SCRIPT_PATH` | 服务端脚本目录 | 启动前应显式配置 |
 | `TWINKLE_SERVICE_LANGUAGE` | 服务端语言 | `zh-CN` |
 | `TWINKLE_LOGIN_PORT` | v83 登录端口 | `8484` |

@@ -39,11 +39,13 @@ public class WzConfig {
     @Singleton
     public WzResourceRegistry wzResourceRegistry(
             @Property(name = "twinkle.wz.path", defaultValue = "./wz") String wzPath,
+            @Property(name = "twinkle.wz.cache-path", defaultValue = "") String cachePath,
             List<WzResourceLoader<?>> loaders,
             I18nBootstrap i18nBootstrap,
             ThreadManager threadManager) {
         // 显式依赖 i18nBootstrap，保证任何 WZ 解析异常都能使用已安装的国际化服务。
-        return new WzResourceRegistry(Path.of(wzPath), loaders, threadManager);
+        Path cache = cachePath.isBlank() ? null : Path.of(cachePath);
+        return new WzResourceRegistry(Path.of(wzPath), cache, loaders, threadManager);
     }
 
     @Bean(preDestroy = "close")

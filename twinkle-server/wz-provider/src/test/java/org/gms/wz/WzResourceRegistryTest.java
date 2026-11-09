@@ -53,6 +53,33 @@ class WzResourceRegistryTest {
     }
 
     @Test
+    void externalSnapshotCacheKeepsWzSourceDirectoryClean(@TempDir Path source, @TempDir Path cache) throws Exception {
+        WzResourceKey<String> custom = new WzResourceKey<>("custom");
+        WzResourceLoader<String> loader = new WzResourceLoader<>() {
+            @Override
+            public WzResourceKey<String> key() {
+                return custom;
+            }
+
+            @Override
+            public String load(Path wzRoot) {
+                return "value";
+            }
+
+            @Override
+            public int entryCount(String resource) {
+                return 1;
+            }
+        };
+        Files.writeString(source.resolve("sample.txt"), "wz");
+
+        new WzResourceRegistry(source, cache.resolve("wz-cache"), List.of(loader), Runnable::run);
+
+        assertThat(source.resolve(".twinkle-snapshots")).doesNotExist();
+        assertThat(cache.resolve("wz-cache")).isDirectory();
+    }
+
+    @Test
     void failedReloadKeepsEntirePreviousSnapshot(@TempDir Path root) {
         WzResourceKey<String> stable = new WzResourceKey<>("stable");
         WzResourceKey<String> failing = new WzResourceKey<>("failing");

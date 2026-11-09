@@ -71,6 +71,9 @@ twinkle:
   # ============== WZ / 脚本数据源（架构 6.4：直接指定路径、单份数据、读不到启动报错） ==============
   wz:
     path: ${TWINKLE_WZ_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\wz}
+    # 代际快照缓存目录；相对路径按进程工作目录解析。默认落在 twinkle 自己的运行数据目录，
+    # 避免在 WZ 源目录（可能是只读参考仓库）里生成 .twinkle-snapshots 大量文件。
+    cache-path: ${TWINKLE_WZ_CACHE:./data/wz-cache}
   script:
     path: ${TWINKLE_SCRIPT_PATH:E:\LocalGit\GitHub\BeiDou-Server\gms-server\scripts}
 
