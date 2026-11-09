@@ -33,17 +33,17 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/30 px-4">
-      <form onSubmit={submit} className="grid w-full max-w-sm gap-5 rounded-xl border bg-background p-6 shadow-sm">
-        <div className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+    <div className="flex min-h-svh items-center justify-center bg-muted/40 p-5">
+      <form onSubmit={submit} className="grid w-full max-w-sm gap-5 rounded-xl border border-border bg-card p-7 shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
+          <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Server className="size-4" />
           </span>
           Twinkle
         </div>
-        <div className="grid gap-1.5">
-          <h1 className="text-lg font-semibold">{t("auth.signIn")}</h1>
-          <p className="text-sm text-muted-foreground">{t("auth.signInDescription")}</p>
+        <div className="-mt-2 grid gap-1.5">
+          <h1 className="text-xl font-semibold tracking-tight">{t("auth.signIn")}</h1>
+          <p className="text-sm leading-6 text-muted-foreground">{t("auth.signInDescription")}</p>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="login-name">{t("auth.accountName")}</Label>
@@ -66,7 +66,7 @@ export function LoginPage() {
           />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={pending || !name.trim() || !password}>
+        <Button type="submit" className="w-full" disabled={pending || !name.trim() || !password}>
           {pending && <Loader2 data-icon="inline-start" className="animate-spin" />}
           {pending ? t("common.processing") : t("auth.signIn")}
         </Button>

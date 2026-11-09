@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 const messages = {
   "zh-CN": {
-    "app.console": "控制台", "app.navigation": "控制台导航",
+    "app.console": "控制台", "app.navigation": "控制台导航", "app.server": "服务端",
     "app.dataHint": "数据来自本机管理接口，并按页面频率自动刷新。", "language.label": "语言",
     "nav.overview": "概览", "nav.channels": "频道", "nav.players": "角色管理", "nav.accounts": "账号管理",
     "nav.config": "配置中心", "nav.operations": "运维操作", "nav.apiKeys": "API Key", "nav.audits": "审计日志", "nav.tasks": "任务监控",
@@ -263,7 +263,7 @@ const messages = {
     "roles.perm.account": "账号管控",
   },
   "en-US": {
-    "app.console": "Console", "app.navigation": "Console navigation",
+    "app.console": "Console", "app.navigation": "Console navigation", "app.server": "Server",
     "app.dataHint": "Data comes from the local admin API and refreshes automatically.", "language.label": "Language",
     "nav.overview": "Overview", "nav.channels": "Channels", "nav.players": "Character management", "nav.accounts": "Account management",
     "nav.config": "Configuration", "nav.operations": "Operations", "nav.apiKeys": "API Keys", "nav.audits": "Audit logs", "nav.tasks": "Tasks",

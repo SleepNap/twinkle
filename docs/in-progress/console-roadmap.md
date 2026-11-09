@@ -10,6 +10,7 @@
 - 在线角色临时封包监听：实时启停、收发方向、include/exclude opcode 过滤、默认降噪、有界内存窗口、凭证强制不采集和独立 RBAC 审计。
 - 公共、管理、内部 API 的主版本边界、生命周期登记、自动 OpenAPI 产物与 Swagger UI 入口。
 - 无头验收：`npm run smoke:console` 登录后遍历概览/频道/角色/账号/配置/运维/角色权限/审计/API Key/能力目录并截图到 `docs/screenshots/console/`，同时断言健康检查与频道接口。首次运行即发现并修复运维页因后端省略空集合字段（`failedChannelIds`）导致的整页崩溃。
+- 视觉参考 `E:\LocalGit\GitCN\headless-web-foundation`（仅页面设计与风格，不复用其功能）：灰底与近白卡片、深灰主色、13.25rem 分组侧栏、行内标签页、弱化表头与等宽数字；登录页改为居中卡片，顶部补“服务端 / 当前页”面包屑。
 
 ## 后续任务
 

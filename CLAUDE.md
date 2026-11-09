@@ -129,7 +129,7 @@ Micronaut 4（DI/HTTP）、GraalVM CE for JDK 21（原生内置 JVMCI + GraalVM 
 
 ### Web 控制台结构（`twinkle-web/src`）
 
-React 19 + Vite + Tailwind CSS v4 + shadcn（视觉基准固定 `radix-nova` 官方风格，不用 Notion 仿制主题；纪律见 `docs/archived/design/design-system.md`）。TanStack Query 管服务端状态，react-router-dom 管路由。
+React 19 + Vite + Tailwind CSS v4 + shadcn（组件仍用 `radix-nova` 官方风格；页面布局、配色、侧栏与数据表观感参考 `E:\LocalGit\GitCN\headless-web-foundation`，只参考视觉与页面设计，不复用其功能或实现）。TanStack Query 管服务端状态，react-router-dom 管路由。
 
 **前端组件硬约束**：凡 shadcn 已提供对应组件，必须使用 `components/ui/` 中的 shadcn 实现，禁止直接使用浏览器原生交互控件替代（包括但不限于 `select`、日期选择器、checkbox、dialog、popover）。只有 shadcn 确实没有对应能力时才允许使用原生控件，并须在代码注释中说明原因；新增通用交互应先补齐 shadcn 组件封装，再由页面复用。
 

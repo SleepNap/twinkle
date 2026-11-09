@@ -72,9 +72,9 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-svh bg-muted/30 text-foreground">
-      <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6">
+    <div className="min-h-svh bg-background text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center px-4 sm:px-6 lg:px-7">
           <NavLink to="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Server className="size-4" />
@@ -84,6 +84,13 @@ export function AppShell() {
           <Badge variant="secondary" className="ml-2 hidden font-normal sm:inline-flex">
             {t("app.console")}
           </Badge>
+          <span className="ml-3 hidden items-center gap-2 text-xs text-muted-foreground md:flex">
+            <span className="hidden sm:inline">{t("app.server")}</span>
+            <span className="hidden sm:inline">/</span>
+            <span className="truncate text-foreground/80">
+              {currentRoute ? t(currentRoute.label) : t("app.console")}
+            </span>
+          </span>
           <Badge variant={token ? "secondary" : "outline"} className="ml-auto hidden font-normal sm:flex">
             {token ? t("api.connected") : t("api.disconnected")}
           </Badge>
@@ -117,9 +124,9 @@ export function AppShell() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl md:grid-cols-[14rem_minmax(0,1fr)]">
-        <aside className="min-w-0 border-b bg-background px-3 py-3 md:min-h-[calc(100svh-3.5rem)] md:border-r md:border-b-0 md:py-5">
-          <nav aria-label={t("app.navigation")} className="flex flex-col gap-2">
+      <div className="mx-auto grid max-w-[1600px] md:grid-cols-[13.25rem_minmax(0,1fr)]">
+        <aside className="min-w-0 border-b border-border bg-sidebar px-3 py-3 md:sticky md:top-14 md:min-h-[calc(100svh-3.5rem)] md:max-h-[calc(100svh-3.5rem)] md:overflow-y-auto md:border-r md:border-b-0 md:py-4">
+          <nav aria-label={t("app.navigation")} className="flex flex-col gap-1">
             {primaryNavigationPaths.map((path) => (
               <NavigationRouteLink key={path} route={workspaceRoutesByPath.get(path)!} />
             ))}
@@ -132,13 +139,13 @@ export function AppShell() {
                     type="button"
                     onClick={() => toggleGroup(group.key)}
                     aria-expanded={!isCollapsed}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-foreground/80 transition-colors hover:bg-accent/50 hover:text-foreground"
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-xs font-medium tracking-wide text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   >
-                    <ChevronDown className={cn("size-4 transition-transform", isCollapsed && "-rotate-90")} />
+                    <ChevronDown className={cn("size-3.5 transition-transform", isCollapsed && "-rotate-90")} />
                     <span className="min-w-0 whitespace-nowrap text-left leading-5">{t(group.label)}</span>
                   </button>
                   {!isCollapsed && (
-                    <div className="ml-3 flex flex-col gap-1 border-l pl-2">
+                    <div className="ml-2.5 flex flex-col gap-0.5 border-l border-sidebar-border pl-1.5">
                       {group.routePaths.map((path) => (
                         <NavigationRouteLink key={path} route={workspaceRoutesByPath.get(path)!} />
                       ))}
@@ -168,7 +175,7 @@ export function AppShell() {
 
         <section className="min-w-0">
           {displayedTabs.length > 0 && (
-            <div className="sticky top-14 z-20 border-b bg-background/95 px-3 pt-2 backdrop-blur sm:px-5">
+            <div className="sticky top-14 z-20 border-b border-border bg-background/95 px-4 sm:px-6 lg:px-7">
               <div role="tablist" aria-label={t("app.navigation")} className="flex min-w-0 gap-1 overflow-x-auto">
                 {displayedTabs.map((tab) => {
                   const route = workspaceRoutesByPath.get(tab.routePath)!
@@ -178,10 +185,10 @@ export function AppShell() {
                     <div
                       key={route.path}
                       className={cn(
-                        "group flex h-9 shrink-0 items-center rounded-t-md border border-b-0 text-sm transition-colors",
+                        "group flex h-9 shrink-0 items-center border-b-2 text-sm transition-colors",
                         active
-                          ? "bg-muted/60 text-foreground"
-                          : "border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                          ? "border-foreground text-foreground"
+                          : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
                       )}
                     >
                       <button
@@ -213,7 +220,7 @@ export function AppShell() {
             </div>
           )}
 
-          <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">
+          <main className="admin-content mx-auto w-full max-w-[1600px] flex-1 px-4 py-4 sm:px-6 lg:px-7 lg:py-5">
             {displayedTabs.map((tab) => {
               const route = workspaceRoutesByPath.get(tab.routePath)!
               const Page = route.component
@@ -245,8 +252,9 @@ function NavigationRouteLink({ route }: { route: WorkspaceRouteDefinition }) {
       end={route.path === "/"}
       className={({ isActive }) =>
         cn(
-          buttonVariants({ variant: isActive ? "secondary" : "ghost" }),
-          "shrink-0 justify-start",
+          buttonVariants({ variant: "ghost", size: "sm" }),
+          "h-8 shrink-0 justify-start px-2.5 text-sm",
+          isActive && "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent",
         )
       }
     >
