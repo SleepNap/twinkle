@@ -26,6 +26,10 @@ public interface BuddyListRepository {
     /** 更新关系状态（PENDING → ACCEPTED / 删除）。 */
     void updateStatus(long ownerId, long buddyId, String status);
 
+    /** 调整 owner 视角的好友分组；不支持分组的实现可保持空实现。 */
+    default void updateGroup(long ownerId, long buddyId, String group) {
+    }
+
     /** 删除好友关系（双向清理由调用方执行两次）。 */
     void delete(long ownerId, long buddyId);
 }

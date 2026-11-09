@@ -63,6 +63,15 @@ public class FlexBuddyListRepository implements BuddyListRepository {
     }
 
     @Override
+    public void updateGroup(long ownerId, long buddyId, String group) {
+        UpdateChain.of(mapper)
+                .where(BuddyListEntity::getOwnerId).eq(ownerId)
+                .and(BuddyListEntity::getBuddyId).eq(buddyId)
+                .set(BuddyListEntity::getGroupName, group)
+                .update();
+    }
+
+    @Override
     public void delete(long ownerId, long buddyId) {
         mapper.deleteByQuery(QueryWrapper.create()
                 .where(BuddyListEntity::getOwnerId).eq(ownerId)

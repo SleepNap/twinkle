@@ -25,6 +25,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChannelPacketFactoryLayoutTest {
 
     @Test
+    void serverNoticeWritesTypeAndMessage() {
+        ByteArrayInPacket packet = new ByteArrayInPacket(
+                ChannelPacketFactory.serverNotice(1, "buddy list is full").getBytes());
+
+        assertThat(packet.readUnsignedShort()).isEqualTo(
+                org.gms.net.opcodes.SendOpcode.SERVERMESSAGE.getValue());
+        assertThat(packet.readByte()).isEqualTo((byte) 1);
+        assertThat(packet.readString()).isEqualTo("buddy list is full");
+        assertThat(packet.available()).isZero();
+    }
+
+    @Test
     void changeChannelUsesResolvedEndpointWithoutPortArithmetic() {
         ByteArrayInPacket packet = new ByteArrayInPacket(ChannelPacketFactory.changeChannel(
                 new byte[]{10, 20, 30, 40}, 19001).getBytes());

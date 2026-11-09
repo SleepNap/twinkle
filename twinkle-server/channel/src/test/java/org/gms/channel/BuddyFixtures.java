@@ -70,6 +70,12 @@ public final class BuddyFixtures {
             }
         }
 
+        @Override public void updateGroup(long ownerId, long buddyId, String group) {
+            for (BuddyListEntity row : rows.getOrDefault(ownerId, List.of())) {
+                if (row.getBuddyId() == buddyId) row.setGroupName(group);
+            }
+        }
+
         @Override public void delete(long ownerId, long buddyId) {
             rows.getOrDefault(ownerId, new ArrayList<>()).removeIf(row -> row.getBuddyId() == buddyId);
         }

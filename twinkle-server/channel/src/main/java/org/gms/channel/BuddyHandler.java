@@ -53,9 +53,9 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
     /** 好友整表条目；{@code channel} 为 -1 表示离线。 */
     public record BuddyEntry(long characterId, String name, int channel, String group) { }
 
-    private record Target(long id, String name) { }
+    private record Target(long id, String name, int capacity) { }
 
-    private record AddResult(long targetId, List<BuddyEntry> entries, int targetChannel) { }
+    private record AddResult(long targetId, List<BuddyEntry> entries, int targetChannel, String notice) { }
 
     /**
      * 一次好友列表刷新。{@code entries} 非空表示目标在本频道，直接回包；为空表示目标在其它
@@ -168,17 +168,33 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
         int capacity = character.getBuddyCapacity();
         offload(() -> {
             Target target = findCharacter(name);
-            if (target == null) return new AddResult(0, list(ownerId), -1);
-            boolean existing = buddyRepo.exists(ownerId, target.id());
-            if (!existing && acceptedCount(ownerId) >= capacity) {
-                return new AddResult(0, list(ownerId), -1);
+            if (target == null) return new AddResult(0, list(ownerId), -1, null);
+            Optional<BuddyListEntity> existing = existingRow(ownerId, target.id());
+            if (existing.isPresent()) {
+                // v83 重复添加同一好友时由客户端改分组：同组提示已存在，不同组只更新分组。
+                if (useGroup.equals(groupOf(existing.get()))) {
+                    return new AddResult(0, list(ownerId), -1,
+                            I18n.message("game.buddy.already_friend", target.name()));
+                }
+                buddyRepo.updateGroup(ownerId, target.id(), useGroup);
+                return new AddResult(0, list(ownerId), -1, null);
+            }
+            if (acceptedCount(ownerId) >= capacity) {
+                return new AddResult(0, list(ownerId), -1, null);
+            }
+            if (target.capacity() > 0 && acceptedCount(target.id()) >= target.capacity()) {
+                return new AddResult(0, list(ownerId), -1,
+                        I18n.message("game.buddy.target_full", target.name()));
             }
             buddyRepo.insertIfAbsent(row(ownerId, target.id(), BuddyListEntity.PENDING, useGroup));
             buddyRepo.insertIfAbsent(row(target.id(), ownerId, BuddyListEntity.PENDING, DEFAULT_GROUP));
-            return new AddResult(target.id(), list(ownerId), channelOf(target.id()));
+            return new AddResult(target.id(), list(ownerId), channelOf(target.id()), null);
         }, result -> {
             if (sessions.get(ownerId) == session) {
                 session.send(buddyListPacket(result.entries()));
+                if (result.notice() != null) {
+                    session.send(ChannelPacketFactory.serverNotice(1, result.notice()));
+                }
             }
             if (result.targetId() == 0) return;
             PacketSession target = sessions.get(result.targetId());
@@ -362,13 +378,21 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
         for (PacketSession session : sessions.all()) {
             PlayerCharacter character = session.getAttr("character");
             if (character != null && character.getName().equals(name)) {
-                return new Target(character.getId(), character.getName());
+                return new Target(character.getId(), character.getName(), character.getBuddyCapacity());
             }
         }
         if (characters == null) return null;
         return characters.findByName(name)
-                .map(record -> new Target(record.getId(), record.getName()))
+                .map(record -> new Target(record.getId(), record.getName(), record.getBuddyCapacity()))
                 .orElse(null);
+    }
+
+    /** owner 视角下与 {@code buddyId} 的关系行（不区分 PENDING/ACCEPTED）。 */
+    private Optional<BuddyListEntity> existingRow(long ownerId, long buddyId) {
+        for (BuddyListEntity row : buddyRepo.findByOwner(ownerId)) {
+            if (row.getBuddyId() == buddyId) return Optional.of(row);
+        }
+        return Optional.empty();
     }
 
     private BuddyListEntity row(long owner, long buddy, String status, String group) {

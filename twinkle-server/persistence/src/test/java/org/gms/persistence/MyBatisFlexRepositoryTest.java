@@ -106,6 +106,9 @@ class MyBatisFlexRepositoryTest {
         assertThat(updated.getGroupName()).isEqualTo("Friends");
         assertThat(updated.getCreatedAt()).isEqualTo(saved.getCreatedAt());
 
+        repository.updateGroup(1, 2, "Close Friends");
+        assertThat(repository.findByOwner(1).getFirst().getGroupName()).isEqualTo("Close Friends");
+
         BuddyListEntity defaulted = new BuddyListEntity();
         defaulted.setOwnerId(2);
         defaulted.setBuddyId(1);

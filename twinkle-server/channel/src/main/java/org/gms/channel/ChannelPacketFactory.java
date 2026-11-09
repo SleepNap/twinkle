@@ -39,9 +39,17 @@ public final class ChannelPacketFactory {
      * 广播用（喇叭/活动公告，架构 4.4 消息总线）。思路参考 BeiDou 的 PacketCreator.serverNotice。
      */
     public static OutPacket serverNotice(String message) {
+        return serverNotice(4, message);
+    }
+
+    /**
+     * 指定类型的服务器消息：类型字节 + 短字符串。类型 1 是客户端蓝色提示框，
+     * 用于好友列表已满、重复添加等操作反馈；类型 4 是顶部滚动公告。
+     */
+    public static OutPacket serverNotice(int type, String message) {
         ByteArrayOutPacket p = new ByteArrayOutPacket();
         p.writeShort(SendOpcode.SERVERMESSAGE.getValue());
-        p.writeByte(4); // 公告类型（4 = 顶部滚动）
+        p.writeByte(type);
         p.writeString(message);
         return p;
     }

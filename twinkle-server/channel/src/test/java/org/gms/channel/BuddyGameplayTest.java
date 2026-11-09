@@ -2,6 +2,7 @@ package org.gms.channel;
 
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.map.MapleMap;
+import org.gms.i18n.I18n;
 import org.gms.net.opcodes.SendOpcode;
 import org.gms.net.packet.ByteArrayInPacket;
 import org.gms.net.packet.ByteArrayOutPacket;
@@ -247,6 +248,53 @@ public class BuddyGameplayTest {
                 .isEqualTo(BuddyListEntity.DEFAULT_GROUP);
     }
 
+    @Test public void addRejectsWhenTargetBuddyListIsFull() {
+        var owner = joined(1);
+        var target = joined(2);
+        target.character.setBuddyCapacity(1);
+        repository.insertIfAbsent(BuddyFixtures.row(2, 3, BuddyListEntity.ACCEPTED));
+        characters.records.put(3L, character(3, "Player3"));
+
+        handler.handle(owner, addRequest("Player2", "Default Group"));
+
+        assertThat(repository.findByOwner(1)).isEmpty();
+        assertThat(repository.findByOwner(2)).hasSize(1);
+        var notice = new ByteArrayInPacket(owner.sent.getLast().getBytes());
+        assertThat(notice.readUnsignedShort()).isEqualTo(SendOpcode.SERVERMESSAGE.getValue());
+        assertThat(notice.readByte()).isEqualTo((byte) 1);
+        assertThat(notice.readString()).isEqualTo(I18n.message("game.buddy.target_full", "Player2"));
+        assertThat(notice.available()).isZero();
+    }
+
+    @Test public void addExistingBuddyChangesGroupWithoutNewRequest() {
+        var owner = joined(1);
+        var target = joined(2);
+        repository.insertIfAbsent(BuddyFixtures.row(1, 2, BuddyListEntity.ACCEPTED, "Default Group"));
+        repository.insertIfAbsent(BuddyFixtures.row(2, 1, BuddyListEntity.ACCEPTED, "Default Group"));
+
+        handler.handle(owner, addRequest("Player2", "Friends"));
+
+        assertThat(repository.findByOwner(1).getFirst().getGroupName()).isEqualTo("Friends");
+        assertThat(target.sent).isEmpty();
+        assertThat(buddyListGroup(owner, 2)).isEqualTo("Friends");
+    }
+
+    @Test public void addExistingSameGroupNotifiesWithoutNewRequest() {
+        var owner = joined(1);
+        var target = joined(2);
+        repository.insertIfAbsent(BuddyFixtures.row(1, 2, BuddyListEntity.ACCEPTED, "Friends"));
+        repository.insertIfAbsent(BuddyFixtures.row(2, 1, BuddyListEntity.ACCEPTED, "Friends"));
+
+        handler.handle(owner, addRequest("Player2", "Friends"));
+
+        assertThat(repository.findByOwner(1).getFirst().getGroupName()).isEqualTo("Friends");
+        assertThat(target.sent).isEmpty();
+        var notice = new ByteArrayInPacket(owner.sent.getLast().getBytes());
+        assertThat(notice.readUnsignedShort()).isEqualTo(SendOpcode.SERVERMESSAGE.getValue());
+        assertThat(notice.readByte()).isEqualTo((byte) 1);
+        assertThat(notice.readString()).isEqualTo(I18n.message("game.buddy.already_friend", "Player2"));
+    }
+
     /** 读取整表包中的好友 id 列表。 */
     private static List<Long> buddyListEntryIds(GameplayTestSession session) {
         var packet = new ByteArrayInPacket(session.sent.getLast().getBytes());
@@ -278,6 +326,23 @@ public class BuddyGameplayTest {
             packet.skip(13);
             packet.readInt();
             if (id == characterId) return channel;
+        }
+        throw new AssertionError("好友列表中未找到 " + characterId);
+    }
+
+    private static String buddyListGroup(GameplayTestSession session, long characterId) {
+        var packet = new ByteArrayInPacket(session.sent.getLast().getBytes());
+        packet.readUnsignedShort();
+        packet.readByte();
+        int count = packet.readByte();
+        for (int i = 0; i < count; i++) {
+            int id = packet.readInt();
+            packet.skip(13);
+            packet.readByte();
+            packet.readInt();
+            String group = readFixed(packet, 13);
+            packet.readInt();
+            if (id == characterId) return group;
         }
         throw new AssertionError("好友列表中未找到 " + characterId);
     }
