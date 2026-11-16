@@ -3,11 +3,13 @@ package org.gms.persistence;
 import com.mybatisflex.core.MybatisFlexBootstrap;
 import org.gms.persistence.entity.BuddyListEntity;
 import org.gms.persistence.entity.GameAccountRecord;
+import org.gms.persistence.entity.GuildRecordEntity;
 import org.gms.persistence.entity.PlayerCharacterRecord;
 import org.gms.persistence.entity.InventoryItemEntity;
 import org.gms.persistence.entity.QuestStatusEntity;
 import org.gms.persistence.mapper.BuddyListMapper;
 import org.gms.persistence.mapper.GameAccountRecordMapper;
+import org.gms.persistence.mapper.GuildRecordMapper;
 import org.gms.persistence.mapper.PlayerCharacterRecordMapper;
 import org.gms.persistence.mapper.InventoryItemMapper;
 import org.gms.persistence.mapper.QuestProgressMapper;
@@ -16,6 +18,7 @@ import org.gms.persistence.mapper.SkillMapper;
 import org.gms.persistence.migrate.MigrationRunner;
 import org.gms.persistence.repo.FlexGameAccountRepository;
 import org.gms.persistence.repo.FlexBuddyListRepository;
+import org.gms.persistence.repo.FlexGuildRecordRepository;
 import org.gms.persistence.repo.FlexPlayerCharacterRepository;
 import org.gms.persistence.repo.FlexPlayerCharacterSnapshotRepository;
 import org.gms.persistence.repo.FlexInventoryItemRepository;
@@ -383,5 +386,64 @@ class MyBatisFlexRepositoryTest {
         second.setBanned(0);
         accountMapper.insertSelective(second);
         assertThat(accountRepo.findByName("tester")).isPresent();
+    }
+
+    /**
+     * 公会头：显式列名映射、乐观锁与成员排序。
+     *
+     * <p>{@code rank_title_1..5} 的数字是独立 token，实体必须用 {@code @Column} 显式指定；
+     * 默认驼峰转换会生成 {@code rank_title1}，与迁移列名不符并直接抛 SQL 异常。
+     */
+    @Test
+    void guildRecordRoundTripUsesExplicitColumnsAndVersionLock() throws Exception {
+        String dbPath = Files.createTempDirectory("twinkle-guild-record").resolve("test.db").toString();
+        SimpleDriverDataSource ds = new SimpleDriverDataSource("jdbc:sqlite:" + dbPath, "", "");
+        MigrationRunner.applyMigrations(ds, "sqlite");
+        MybatisFlexBootstrap bootstrap = new MybatisFlexBootstrap();
+        bootstrap.setDataSource(ds);
+        bootstrap.setEnvironmentId("guild-" + dbPath);
+        bootstrap.addMapper(GuildRecordMapper.class);
+        bootstrap.addMapper(PlayerCharacterRecordMapper.class);
+        bootstrap.start();
+
+        FlexGuildRecordRepository guilds = new FlexGuildRecordRepository(bootstrap.getMapper(GuildRecordMapper.class));
+        FlexPlayerCharacterRepository characters =
+                new FlexPlayerCharacterRepository(bootstrap.getMapper(PlayerCharacterRecordMapper.class));
+
+        GuildRecordEntity head = new GuildRecordEntity();
+        head.setWorld(0);
+        head.setName("Alpha");
+        head.setLeaderId(11);
+        GuildRecordEntity inserted = guilds.insert(head);
+        assertThat(inserted.getGuildRecordId()).isNotNull();
+
+        GuildRecordEntity loaded = guilds.findById(inserted.getGuildRecordId()).orElseThrow();
+        assertThat(loaded.getRankTitle1()).isEqualTo("Master");
+        assertThat(loaded.getRankTitle2()).isEqualTo("Jr. Master");
+        assertThat(loaded.getRankTitle5()).isEqualTo("Member");
+        assertThat(loaded.getUpdatedAt()).isNotBlank();
+
+        loaded.setNotice("hello");
+        int version = loaded.getRowVersion();
+        assertThat(guilds.update(loaded, version)).isTrue();
+        assertThat(guilds.update(loaded, version)).isFalse();
+        assertThat(guilds.findByName(0, "Alpha").orElseThrow().getNotice()).isEqualTo("hello");
+
+        int guildId = Math.toIntExact(inserted.getGuildRecordId());
+        characters.insert(guildMember(11, "Zulu", guildId, 5));
+        characters.insert(guildMember(12, "Alpha", guildId, 1));
+        characters.insert(guildMember(13, "Bravo", guildId, 5));
+        assertThat(characters.findByGuild(guildId))
+                .extracting(PlayerCharacterRecord::getName)
+                .containsExactly("Alpha", "Bravo", "Zulu");
+    }
+
+    private static PlayerCharacterRecord guildMember(long id, String name, int guildId, int rank) {
+        PlayerCharacterRecord record = new PlayerCharacterRecord();
+        record.setId(id);
+        record.setName(name);
+        record.setGuildId(guildId);
+        record.setGuildRank(rank);
+        return record;
     }
 }
