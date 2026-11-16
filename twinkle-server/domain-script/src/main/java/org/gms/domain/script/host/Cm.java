@@ -211,6 +211,15 @@ public interface Cm {
         throw unsupported("warp");
     }
 
+    /**
+     * 打开仓库窗口（v83 仓库包由服务端主动下发，客户端不会请求）。
+     *
+     * @param npcId 触发仓库的 NPC 模板 id；传 0 表示使用当前对话 NPC
+     */
+    default void openStorage(int npcId) {
+        throw unsupported("openStorage");
+    }
+
     private static UnsupportedOperationException unsupported(String name) {
         return new UnsupportedOperationException(I18n.message("error.script.host_not_implemented", name));
     }

@@ -32,18 +32,25 @@ public final class NpcTalkHandler implements PacketHandler {
     private final QuestSystem questSystem;
     private final MapTransitionService transitions;
     private final NpcShopHandler shops;
+    private final StorageService storage;
 
     public NpcTalkHandler(ScriptManager scriptManager, ItemSystem itemSystem, QuestSystem questSystem) {
-        this(scriptManager, itemSystem, questSystem, null, null);
+        this(scriptManager, itemSystem, questSystem, null, null, null);
     }
 
     public NpcTalkHandler(ScriptManager scriptManager, ItemSystem itemSystem, QuestSystem questSystem,
                           MapTransitionService transitions, NpcShopHandler shops) {
+        this(scriptManager, itemSystem, questSystem, transitions, shops, null);
+    }
+
+    public NpcTalkHandler(ScriptManager scriptManager, ItemSystem itemSystem, QuestSystem questSystem,
+                          MapTransitionService transitions, NpcShopHandler shops, StorageService storage) {
         this.scriptManager = scriptManager;
         this.itemSystem = itemSystem;
         this.questSystem = questSystem;
         this.transitions = transitions;
         this.shops = shops;
+        this.storage = storage;
     }
 
     @Override
@@ -72,7 +79,7 @@ public final class NpcTalkHandler implements PacketHandler {
         int npcId = npc.templateId();
         if (shops != null && shops.open(session, npc)) return;
         NpcConversationHost host = new NpcConversationHost(session, chr, npcId,
-                itemSystem, questSystem, () -> closeConversation(session), transitions);
+                itemSystem, questSystem, () -> closeConversation(session), transitions, storage);
         ConversationScript script = scriptManager.openConversation("nps/" + npcId, Map.of("cm", host));
         if (script == null) {
             log.warn(I18n.message("log.npc.script_missing"), npcId);

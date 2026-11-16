@@ -20,6 +20,8 @@ import org.gms.net.netty.HeartbeatConfig;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.persistence.repo.BuddyListRepository;
 import org.gms.persistence.repo.PlayerCharacterRepository;
+import org.gms.persistence.repo.StorageItemRepository;
+import org.gms.persistence.repo.StorageRecordRepository;
 import org.gms.service.intercoord.IntercoordService;
 import org.gms.tick.TickScheduler;
 import org.gms.wz.WzResourceRegistry;
@@ -29,11 +31,16 @@ import org.gms.wz.WzResourceRegistry;
 public final class ChannelRuntimeFactory implements AutoCloseable {
     private final SerialTaskQueue socialIo;
     private final SerialTaskQueue presenceIo;
-    @Override public void close() { socialIo.close(); presenceIo.close(); }
+    private final SerialTaskQueue storageIo;
+    @Override public void close() { socialIo.close(); presenceIo.close(); storageIo.close(); }
     public void drainSaves() {
         try { saveQueue.drain(); } catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
     }
-    public void drainIo() { socialIo.awaitIdle(Duration.ofSeconds(5)); presenceIo.awaitIdle(Duration.ofSeconds(5)); }
+    public void drainIo() {
+        socialIo.awaitIdle(Duration.ofSeconds(5));
+        presenceIo.awaitIdle(Duration.ofSeconds(5));
+        storageIo.awaitIdle(Duration.ofSeconds(5));
+    }
 
     private final PlayerCharacterRepository characterRepository;
     private final PlayerCharacterAssembler characterLoader;
@@ -51,6 +58,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
     private final ReliableReceiver reliableReceiver;
     private final IntercoordService intercoord;
     private final BuddyListRepository buddyListRepository;
+    private final StorageRecordRepository storageRecordRepository;
+    private final StorageItemRepository storageItemRepository;
     private final CharacterSaveQueue saveQueue;
     private final ChannelPlayerDirectory playerDirectory;
     private final TickScheduler tickScheduler;
@@ -73,7 +82,9 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                                  QuestSystem questSystem, EntityReloadCoordinator entityReloadCoordinator,
                                  EventBus eventBus, ReliableEventBus reliableEventBus,
                                  ReliableReceiver reliableReceiver, IntercoordService intercoord,
-                                 BuddyListRepository buddyListRepository, CharacterSaveQueue saveQueue,
+                                 BuddyListRepository buddyListRepository,
+                                 StorageRecordRepository storageRecordRepository,
+                                 StorageItemRepository storageItemRepository, CharacterSaveQueue saveQueue,
                                  ChannelPlayerDirectory playerDirectory, TickScheduler tickScheduler,
                                  HeartbeatConfig heartbeatConfig, int worldId, long leaseTtlSeconds,
                                  long leaseCooldownSeconds, long leaseSweepIntervalMillis, NpcShopCatalog shopCatalog,
@@ -95,6 +106,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         this.reliableReceiver = reliableReceiver;
         this.intercoord = intercoord;
         this.buddyListRepository = buddyListRepository;
+        this.storageRecordRepository = storageRecordRepository;
+        this.storageItemRepository = storageItemRepository;
         this.saveQueue = saveQueue;
         this.playerDirectory = playerDirectory;
         this.tickScheduler = tickScheduler;
@@ -110,6 +123,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         this.background = background;
         this.socialIo = new SerialTaskQueue(background, 4096);
         this.presenceIo = new SerialTaskQueue(background, 8192);
+        this.storageIo = new SerialTaskQueue(background, 2048);
         this.logic = logic;
     }
 
@@ -203,7 +217,9 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             gameplay = new ChannelGameplay(handlers, maps, monsters, leases, channelId, gameData,
                     sessions, itemSystem, questSystem, scriptManager, shopCatalog, channelTicks,
                     wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
-                    logic.service(EquipmentSystem.class), parties, drops, buddy);
+                    logic.service(EquipmentSystem.class), parties, drops, buddy,
+                    new StorageService(worldId, storageRecordRepository, storageItemRepository,
+                            storageIo, sessions, itemSystem));
             ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
             runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));

@@ -15,6 +15,8 @@ import org.gms.persistence.entity.PointTransaction;
 import org.gms.persistence.entity.QuestProgressEntity;
 import org.gms.persistence.entity.QuestStatusEntity;
 import org.gms.persistence.entity.SkillEntity;
+import org.gms.persistence.entity.StorageItemEntity;
+import org.gms.persistence.entity.StorageRecordEntity;
 import org.gms.persistence.mapper.AccountAdminRoleMapper;
 import org.gms.persistence.mapper.GameAccountRecordMapper;
 import org.gms.persistence.mapper.AdminSessionMapper;
@@ -27,6 +29,8 @@ import org.gms.persistence.mapper.PointTransactionMapper;
 import org.gms.persistence.mapper.QuestProgressMapper;
 import org.gms.persistence.mapper.QuestStatusMapper;
 import org.gms.persistence.mapper.SkillMapper;
+import org.gms.persistence.mapper.StorageItemMapper;
+import org.gms.persistence.mapper.StorageRecordMapper;
 
 import java.util.List;
 
@@ -45,7 +49,13 @@ public final class FlexAccountDeletionRepository implements AccountDeletionRepos
     private final AccountAdminRoleMapper accountAdminRoleMapper;
     private final AdminSessionMapper adminSessionMapper;
     private final ApiKeyMapper apiKeyMapper;
+    /** 账号仓库两表（V19）：旧构造器装配时为 null，表示该装配不含 storage 表。 */
+    private final StorageItemMapper storageItemMapper;
+    private final StorageRecordMapper storageRecordMapper;
 
+    /**
+     * 兼容装配：不含账号仓库两表（既有单元测试按此签名手工 new，未注册 storage mapper）。
+     */
     public FlexAccountDeletionRepository(
             GameAccountRecordMapper accountMapper,
             PlayerCharacterRecordMapper characterMapper,
@@ -59,6 +69,27 @@ public final class FlexAccountDeletionRepository implements AccountDeletionRepos
             AccountAdminRoleMapper accountAdminRoleMapper,
             AdminSessionMapper adminSessionMapper,
             ApiKeyMapper apiKeyMapper) {
+        this(accountMapper, characterMapper, inventoryItemMapper, questStatusMapper, questProgressMapper,
+                skillMapper, buddyListMapper, pointGameAccountRecordMapper, pointTransactionMapper,
+                accountAdminRoleMapper, adminSessionMapper, apiKeyMapper, null, null);
+    }
+
+    /** 完整装配（MyBatisFlexFactory 使用）：账号删除同时清理账号仓库物品行与仓库头。 */
+    public FlexAccountDeletionRepository(
+            GameAccountRecordMapper accountMapper,
+            PlayerCharacterRecordMapper characterMapper,
+            InventoryItemMapper inventoryItemMapper,
+            QuestStatusMapper questStatusMapper,
+            QuestProgressMapper questProgressMapper,
+            SkillMapper skillMapper,
+            BuddyListMapper buddyListMapper,
+            PointAccountMapper pointGameAccountRecordMapper,
+            PointTransactionMapper pointTransactionMapper,
+            AccountAdminRoleMapper accountAdminRoleMapper,
+            AdminSessionMapper adminSessionMapper,
+            ApiKeyMapper apiKeyMapper,
+            StorageItemMapper storageItemMapper,
+            StorageRecordMapper storageRecordMapper) {
         this.accountMapper = accountMapper;
         this.characterMapper = characterMapper;
         this.inventoryItemMapper = inventoryItemMapper;
@@ -71,6 +102,8 @@ public final class FlexAccountDeletionRepository implements AccountDeletionRepos
         this.accountAdminRoleMapper = accountAdminRoleMapper;
         this.adminSessionMapper = adminSessionMapper;
         this.apiKeyMapper = apiKeyMapper;
+        this.storageItemMapper = storageItemMapper;
+        this.storageRecordMapper = storageRecordMapper;
     }
 
     @Override
@@ -104,6 +137,15 @@ public final class FlexAccountDeletionRepository implements AccountDeletionRepos
             inventoryQuery.or(InventoryItemEntity::getCharacterId).in(characterIds);
         }
         relatedRows += inventoryItemMapper.deleteByQuery(inventoryQuery);
+        // 账号仓库 storage/trunk：先删物品行再删仓库头（无外键约束，顺序仅为可读性）。
+        if (storageItemMapper != null) {
+            relatedRows += storageItemMapper.deleteByQuery(QueryWrapper.create()
+                    .where(StorageItemEntity::getAccountId).eq(accountId));
+        }
+        if (storageRecordMapper != null) {
+            relatedRows += storageRecordMapper.deleteByQuery(QueryWrapper.create()
+                    .where(StorageRecordEntity::getAccountId).eq(accountId));
+        }
         relatedRows += pointTransactionMapper.deleteByQuery(QueryWrapper.create()
                 .where(PointTransaction::getAccountId).eq(accountId));
         relatedRows += pointGameAccountRecordMapper.deleteByQuery(QueryWrapper.create()

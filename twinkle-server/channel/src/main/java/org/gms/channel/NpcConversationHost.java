@@ -29,6 +29,7 @@ public final class NpcConversationHost implements Cm {
     private final QuestSystem questSystem;
     private final Runnable onDispose;
     private final MapTransitionService transitions;
+    private final StorageService storage;
 
     /** nextlevel 路由上下文（经典 status 脚本为 null）。 */
     private NextLevelContext context;
@@ -45,6 +46,12 @@ public final class NpcConversationHost implements Cm {
     public NpcConversationHost(PacketSession session, PlayerCharacter chr, int npcId,
                                ItemSystem itemSystem, QuestSystem questSystem, Runnable onDispose,
                                MapTransitionService transitions) {
+        this(session, chr, npcId, itemSystem, questSystem, onDispose, transitions, null);
+    }
+
+    public NpcConversationHost(PacketSession session, PlayerCharacter chr, int npcId,
+                               ItemSystem itemSystem, QuestSystem questSystem, Runnable onDispose,
+                               MapTransitionService transitions, StorageService storage) {
         this.session = session;
         this.chr = chr;
         this.npcId = npcId;
@@ -52,6 +59,14 @@ public final class NpcConversationHost implements Cm {
         this.questSystem = questSystem;
         this.onDispose = onDispose;
         this.transitions = transitions;
+        this.storage = storage;
+    }
+
+    /** 打开仓库窗口：v83 由服务端主动下发，脚本在 NPC 对话里调用。 */
+    @Override
+    public void openStorage(int storageNpcId) {
+        if (storage == null) return;
+        storage.open(session, chr, storageNpcId > 0 ? storageNpcId : npcId);
     }
 
     /** 当前 npc 模板 id。 */

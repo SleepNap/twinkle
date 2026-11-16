@@ -128,6 +128,8 @@ public final class MapTransitionService {
     private void leaveMap(PacketSession session, PlayerCharacter character) {
         session.setAttr("mapTransition", true);
         session.setAttr("npcShop", null);
+        // 仓库窗口与 NPC 会话同生命周期：换图后旧 NPC 的仓库操作必须失效。
+        session.setAttr(StorageService.SESSION_ATTR, null);
         if (sessions != null) sessions.visibility().leave(session);
         if (sessions != null) session.setAttr("mapVisibilityReady", false);
         character.setChairItemId(0);

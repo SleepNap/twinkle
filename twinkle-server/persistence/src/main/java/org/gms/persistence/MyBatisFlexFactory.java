@@ -24,6 +24,8 @@ import org.gms.persistence.mapper.ParamConfMapper;
 import org.gms.persistence.mapper.QuestProgressMapper;
 import org.gms.persistence.mapper.QuestStatusMapper;
 import org.gms.persistence.mapper.SkillMapper;
+import org.gms.persistence.mapper.StorageItemMapper;
+import org.gms.persistence.mapper.StorageRecordMapper;
 import org.gms.persistence.mapper.ToolExecutionAuditMapper;
 import org.gms.persistence.mapper.PointAccountMapper;
 import org.gms.persistence.mapper.PointTransactionMapper;
@@ -57,6 +59,10 @@ import org.gms.persistence.repo.InventoryItemRepository;
 import org.gms.persistence.repo.QuestRepository;
 import org.gms.persistence.repo.FlexSkillRepository;
 import org.gms.persistence.repo.SkillRepository;
+import org.gms.persistence.repo.StorageItemRepository;
+import org.gms.persistence.repo.StorageRecordRepository;
+import org.gms.persistence.repo.FlexStorageItemRepository;
+import org.gms.persistence.repo.FlexStorageRecordRepository;
 import org.gms.persistence.repo.ToolExecutionAuditRepository;
 import org.gms.persistence.repo.FlexToolExecutionAuditRepository;
 import org.gms.persistence.repo.PointAccountRepository;
@@ -117,6 +123,9 @@ public class MyBatisFlexFactory {
         bootstrap.addMapper(AccountAdminRoleMapper.class);
         bootstrap.addMapper(AdminSessionMapper.class);
         bootstrap.addMapper(AdminOperationAuditMapper.class);
+        // 账号仓库 storage/trunk 持久化（V19 迁移建表）
+        bootstrap.addMapper(StorageRecordMapper.class);
+        bootstrap.addMapper(StorageItemMapper.class);
         bootstrap.start();
         return bootstrap;
     }
@@ -243,6 +252,18 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public StorageRecordMapper storageRecordMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(StorageRecordMapper.class);
+    }
+
+    @Bean
+    @Singleton
+    public StorageItemMapper storageItemMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(StorageItemMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -268,11 +289,14 @@ public class MyBatisFlexFactory {
             PointTransactionMapper pointTransactionMapper,
             AccountAdminRoleMapper accountAdminRoleMapper,
             AdminSessionMapper adminSessionMapper,
-            ApiKeyMapper apiKeyMapper) {
+            ApiKeyMapper apiKeyMapper,
+            StorageItemMapper storageItemMapper,
+            StorageRecordMapper storageRecordMapper) {
         return new FlexAccountDeletionRepository(
                 accountMapper, characterMapper, inventoryItemMapper, questStatusMapper,
                 questProgressMapper, skillMapper, buddyListMapper, pointGameAccountRecordMapper,
-                pointTransactionMapper, accountAdminRoleMapper, adminSessionMapper, apiKeyMapper);
+                pointTransactionMapper, accountAdminRoleMapper, adminSessionMapper, apiKeyMapper,
+                storageItemMapper, storageRecordMapper);
     }
 
     @Bean
@@ -285,6 +309,18 @@ public class MyBatisFlexFactory {
     @Singleton
     public InventoryItemRepository inventoryItemRepository(InventoryItemMapper mapper) {
         return new FlexInventoryItemRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public StorageRecordRepository storageRecordRepository(StorageRecordMapper mapper) {
+        return new FlexStorageRecordRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public StorageItemRepository storageItemRepository(StorageItemMapper mapper) {
+        return new FlexStorageItemRepository(mapper);
     }
 
     @Bean
