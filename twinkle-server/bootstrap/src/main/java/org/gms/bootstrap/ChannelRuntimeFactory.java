@@ -219,7 +219,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
                     logic.service(EquipmentSystem.class), parties, drops, buddy,
                     new StorageService(worldId, storageRecordRepository, storageItemRepository,
-                            storageIo, sessions, itemSystem));
+                            storageIo, sessions, itemSystem, gameData));
             ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
             runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));

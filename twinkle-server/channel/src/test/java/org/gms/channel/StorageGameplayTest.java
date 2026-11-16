@@ -46,6 +46,8 @@ public class StorageGameplayTest {
     private static final int EQUIP_ITEM = 1302000;
     private static final int DART_ITEM = 2070000;
     private static final int CASH_ITEM = 5000000;
+    /** 可堆叠消耗品：用于整理合并用例。 */
+    private static final int POTION_ITEM = 2000000;
     private static final int STORE_FEE = 100;
     private static final int START_MESO = 1000;
     /** 客户端收包模式字节：4 取出、5 存入、7 金币搬运。 */
@@ -57,10 +59,11 @@ public class StorageGameplayTest {
     private final StorageFixtures.Records records = new StorageFixtures.Records();
     private final StorageFixtures.Items stored = new StorageFixtures.Items();
     private final DefaultVersionGate versions = new DefaultVersionGate();
-    private final GameDataProvider gameData = GameDataProvider.fixed(Map.of(EQUIP_ITEM, equipData()), Map.of());
+    private final GameDataProvider gameData = GameDataProvider.fixed(
+            Map.of(EQUIP_ITEM, equipData(), POTION_ITEM, potionData()), Map.of());
     private final ItemSystem itemSystem = new DefaultItemSystem(versions, gameData);
     private final StorageService storage = new StorageService(StorageFixtures.WORLD, records, stored,
-            StorageFixtures.inlineIo(), sessions, itemSystem);
+            StorageFixtures.inlineIo(), sessions, itemSystem, gameData);
     private final StorageHandler handler = new StorageHandler(storage);
 
     @Test public void openSendsStoragePacketWithSlotsMesoAndEmptyItems() {
@@ -383,9 +386,25 @@ public class StorageGameplayTest {
         assertThat(stored.storedByAccount(account())).isEmpty();
     }
 
+    @Test public void arrangeMergesSameStackItem() {
+        var session = joined();
+        records.seed(account(), StorageFixtures.WORLD, 4);
+        long recordId = records.byAccount(account()).getStorageRecordId();
+        stored.seed(StorageFixtures.item(recordId, account(), 2, 0, POTION_ITEM, 40));
+        stored.seed(StorageFixtures.item(recordId, account(), 2, 1, POTION_ITEM, 50));
+
+        storage.open(session, session.character, NPC_ID);
+        storage.arrange(session, session.character);
+
+        var rows = stored.stored(recordId);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().getItemId()).isEqualTo(POTION_ITEM);
+        assertThat(rows.getFirst().getQuantity()).isEqualTo(90);
+        assertThat(rows.getFirst().getSlotIndex()).isZero();
+    }
+
     /** 进图会话：等级够开仓库、账号已绑定、默认带 {@link #START_MESO} 金币。 */
-    private GameplayTestSession joined() {
-        var session = new GameplayTestSession(CHARACTER_ID, new MapleMap());
+    private GameplayTestSession joined() {        var session = new GameplayTestSession(CHARACTER_ID, new MapleMap());
         session.character.setAccountId(ACCOUNT_ID);
         session.character.setLevel(LEVEL);
         session.character.setMeso(START_MESO);
@@ -395,6 +414,13 @@ public class StorageGameplayTest {
 
     private static int account() {
         return (int) ACCOUNT_ID;
+    }
+
+    /** 可堆叠消耗品模板：slotMax 200，供整理合并用例使用。 */
+    private static ItemData potionData() {
+        ItemData data = new ItemData(POTION_ITEM);
+        data.setSlotMax(200);
+        return data;
     }
 
     /**

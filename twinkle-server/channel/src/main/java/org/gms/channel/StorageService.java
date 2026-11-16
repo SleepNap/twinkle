@@ -5,8 +5,10 @@ import org.gms.concurrent.SerialTaskQueue;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.inventory.ItemConstants;
+import org.gms.domain.game.item.ItemData;
 import org.gms.domain.game.logic.ItemSystem;
 import org.gms.domain.game.spi.TradeItemSnapshot;
+import org.gms.domain.game.wz.GameDataProvider;
 import org.gms.i18n.I18n;
 import org.gms.net.packet.OutPacket;
 import org.gms.net.packet.PacketSession;
@@ -78,17 +80,20 @@ public final class StorageService {
     private final SerialTaskQueue io;
     private final PlayerSessionRegistry sessions;
     private final ItemSystem itemSystem;
+    private final GameDataProvider data;
     /** accountId → 仓库状态；同账号多角色同频道共享，跨频道由 row_version 兜底。 */
     private final Map<Long, State> cache = new HashMap<>();
 
     public StorageService(int worldId, StorageRecordRepository records, StorageItemRepository items,
-                          SerialTaskQueue io, PlayerSessionRegistry sessions, ItemSystem itemSystem) {
+                          SerialTaskQueue io, PlayerSessionRegistry sessions, ItemSystem itemSystem,
+                          GameDataProvider data) {
         this.worldId = worldId;
         this.records = records;
         this.items = items;
         this.io = io;
         this.sessions = sessions;
         this.itemSystem = itemSystem;
+        this.data = data;
     }
 
     /**
@@ -181,13 +186,65 @@ public final class StorageService {
         }
     }
 
-    /** 整理：按类型重排顺序下标，保证客户端下标与内存一致；不合并堆叠（需要 WZ slotMax）。 */
+    /** 整理：先合并可叠加的同类物品，再按类型重排顺序下标；装备与宠物不合并。 */
     public void arrange(PacketSession session, PlayerCharacter character) {
         State state = active(session, character);
         if (state == null) return;
+        merge(state);
         renumber(state);
         persist(accountIdOf(character), state);
         session.send(StoragePackets.arrange(state.slotCount, snapshotsOf(state)));
+    }
+
+    /**
+     * 合并可叠加物品：同类型、同 itemId、同所有者/标记/期限，且总量不超过 slotMax 时并成一行。
+     *
+     * <p>放不下的部分保持独立行，不做拆分——拆分需要再造实例，收益低且容易与客户端下标错位。
+     */
+    private void merge(State state) {
+        Map<String, StorageItemEntity> byKey = new HashMap<>();
+        List<StorageItemEntity> result = new ArrayList<>();
+        for (StorageItemEntity item : state.items) {
+            if (!mergeable(item)) {
+                result.add(item);
+                continue;
+            }
+            String key = mergeKey(item);
+            StorageItemEntity target = byKey.get(key);
+            if (target == null) {
+                byKey.put(key, item);
+                result.add(item);
+                continue;
+            }
+            int total = target.getQuantity() + item.getQuantity();
+            if (total <= slotMaxOf(item.getItemId())) {
+                target.setQuantity(total);
+            } else {
+                result.add(item);
+            }
+        }
+        if (result.size() != state.items.size()) {
+            state.items.clear();
+            state.items.addAll(result);
+        }
+    }
+
+    /** 只有普通堆叠物可合并；装备与宠物带着独立实例属性，永远各自一行。 */
+    private static boolean mergeable(StorageItemEntity item) {
+        return item.getInventoryType() != InventoryType.EQUIP.getType() && item.getPetId() <= 0;
+    }
+
+    private static String mergeKey(StorageItemEntity item) {
+        return item.getInventoryType() + ":" + item.getItemId() + ":" + item.getOwner()
+                + ":" + item.getFlag() + ":" + item.getExpiration();
+    }
+
+    private int slotMaxOf(int itemId) {
+        if (data != null) {
+            ItemData itemData = data.item(itemId);
+            if (itemData != null && itemData.getSlotMax() > 0) return itemData.getSlotMax();
+        }
+        return ItemSystem.DEFAULT_SLOT_MAX;
     }
 
     /** 金币搬运：正数存入、负数取出，双向都做溢出与余额校验。 */
