@@ -1,17 +1,22 @@
 package org.gms.channel;
 
+import lombok.extern.log4j.Log4j2;
 import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.map.Portal;
 import org.gms.domain.game.lease.ControllerLeaseService;
 import org.gms.domain.game.lease.LeaseOwner;
+import org.gms.domain.script.ScriptManager;
+import org.gms.i18n.I18n;
 import org.gms.net.packet.PacketSession;
 
 import java.util.Comparator;
+import java.util.Map;
 import java.util.function.IntFunction;
 
 /** 统一处理客户端门、复活与脚本传送；目标地图和落点始终由服务端选择。 */
+@Log4j2
 public final class MapTransitionService {
 
     /** v83 复活轮（现金栏）；死亡后原地复活并消耗 1 个。 */
@@ -22,19 +27,27 @@ public final class MapTransitionService {
     private final ControllerLeaseService leases;
     private final int channelId;
     private final PlayerSessionRegistry sessions;
+    private final ScriptManager scripts;
 
     public MapTransitionService(IntFunction<MapleMap> maps, MonsterSpawnService monsters,
                                 ControllerLeaseService leases, int channelId) {
-        this(maps, monsters, leases, channelId, null);
+        this(maps, monsters, leases, channelId, null, null);
     }
 
     public MapTransitionService(IntFunction<MapleMap> maps, MonsterSpawnService monsters,
                                 ControllerLeaseService leases, int channelId, PlayerSessionRegistry sessions) {
+        this(maps, monsters, leases, channelId, sessions, null);
+    }
+
+    public MapTransitionService(IntFunction<MapleMap> maps, MonsterSpawnService monsters,
+                                ControllerLeaseService leases, int channelId, PlayerSessionRegistry sessions,
+                                ScriptManager scripts) {
         this.maps = maps;
         this.monsters = monsters;
         this.leases = leases;
         this.channelId = channelId;
         this.sessions = sessions;
+        this.scripts = scripts;
     }
 
     public boolean usePortal(PacketSession session, String name, int requestedMap) {
@@ -42,10 +55,64 @@ public final class MapTransitionService {
         if (!GameplaySession.canAct(session, character)) return false;
         Portal portal = character.getMapObject().portals().stream()
                 .filter(candidate -> candidate.getName().equals(name)).findFirst().orElse(null);
-        if (portal == null || portal.isScript() || !GameplaySession.near(character, portal.getX(), portal.getY(), 150)
-                || portal.getTargetMapId() == 999_999_999
+        if (portal == null || !GameplaySession.near(character, portal.getX(), portal.getY(), 150)) return false;
+        if (portal.isScript()) return runPortalScript(session, character, portal);
+        if (portal.getTargetMapId() == 999_999_999
                 || requestedMap >= 0 && requestedMap != portal.getTargetMapId()) return false;
         return transfer(session, portal.getTargetMapId(), portal.getTargetPortalName(), false);
+    }
+
+    /**
+     * 执行 v83 脚本门（{@code scripts/portal/<scriptName>.js}）。
+     *
+     * <p>脚本没主动传送、且该门同时带普通目标地图时回退到默认传送——v83 里不少脚本门既跑脚本
+     * 又保留目标地图；脚本抛异常只记录日志并拒绝本次传送，不会让频道线程崩掉。
+     */
+    private boolean runPortalScript(PacketSession session, PlayerCharacter character, Portal portal) {
+        String scriptName = portal.getScriptName();
+        if (scripts == null || scriptName == null || scriptName.isBlank()) return false;
+        PortalScriptHost host = new PortalScriptHost(session, character, this, portal);
+        try {
+            scripts.run("portal/" + scriptName, Map.of("portal", host));
+        } catch (RuntimeException error) {
+            log.error(I18n.message("log.script.portal_failed"), scriptName, error);
+            return false;
+        }
+        if (host.warped()) return true;
+        if (portal.getTargetMapId() > 0 && portal.getTargetMapId() != 999_999_999) {
+            return transfer(session, portal.getTargetMapId(), portal.getTargetPortalName(), false);
+        }
+        return false;
+    }
+
+    /**
+     * 供脚本宿主调用的传图入口。
+     *
+     * <p>{@code portalName} 为空或目标地图没有该落点时，回退到目标地图的第一个传送点，
+     * 避免脚本只写 {@code warp(mapId)} 时因为找不到落点而整次失败。
+     */
+    boolean warpTo(PacketSession session, int mapId, String portalName) {
+        if (mapId <= 0) return false;
+        MapleMap target;
+        try {
+            target = maps.apply(mapId);
+        } catch (IllegalArgumentException error) {
+            return false;
+        }
+        if (target == null) return false;
+        final String requested = portalName;
+        boolean found = requested != null && target.portals().stream()
+                .anyMatch(portal -> portal.getName().equals(requested));
+        String name = requested;
+        if (!found) {
+            name = target.portals().stream()
+                    .map(Portal::getName)
+                    .filter(candidate -> candidate != null && !candidate.isBlank())
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (name == null) return false;
+        return transfer(session, mapId, name, false);
     }
 
     public boolean revive(PacketSession session) {

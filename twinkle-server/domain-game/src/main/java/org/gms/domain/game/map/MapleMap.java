@@ -52,6 +52,8 @@ public class MapleMap implements MapGeometry {
     private volatile String onUserEnter;
     /** 首次进入触发脚本名。 */
     private volatile String onFirstUserEnter;
+    /** 首次进入脚本是否已经执行过（每个地图运行实例只跑一次）。 */
+    private final AtomicInteger firstUserEnterState = new AtomicInteger();
     /** 限时地图秒数（0 = 不限时）。 */
     private volatile int timeLimit;
     /** 是否显示时钟。 */
@@ -107,6 +109,15 @@ public class MapleMap implements MapGeometry {
      * <p>复活轮原地复活按 v83 行为回到最近出生点；没有候选点时返回 {@code null}，
      * 调用方保留死亡坐标。
      */
+    /**
+     * 抢占「首次进入脚本」执行权：仅第一个调用者返回 true。
+     *
+     * <p>地图运行实例由同图所有玩家共享，判定必须原子，否则多人同时进图会重复触发刷怪/剧情脚本。
+     */
+    public boolean markFirstUserEnterExecuted() {
+        return firstUserEnterState.compareAndSet(0, 1);
+    }
+
     public Portal closestSpawnPortal(int x, int y) {
         Portal closest = null;
         long shortest = Long.MAX_VALUE;

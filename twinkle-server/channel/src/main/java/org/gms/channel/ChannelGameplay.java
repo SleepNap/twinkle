@@ -44,7 +44,7 @@ public final class ChannelGameplay implements AutoCloseable {
             drops.expire(); parties.refresh(); sessions.all().forEach(skills::expire); sessions.all().forEach(avatars::refresh);
             sessions.all().forEach(equipment::refresh);
         } };
-        MapTransitionService transitions = new MapTransitionService(maps::getMap, monsters, leases, channelId, sessions);
+        MapTransitionService transitions = new MapTransitionService(maps::getMap, monsters, leases, channelId, sessions, scripts);
         PlayerDeathService deaths = new PlayerDeathService(progression, sessions, Clock.systemUTC());
         handlers.register(RecvOpcode.TAKE_DAMAGE, new TakeDamageHandler(sessions, deaths, parties));
         NpcShopHandler shops = new NpcShopHandler(shopCatalog, data, items);
@@ -83,7 +83,7 @@ public final class ChannelGameplay implements AutoCloseable {
         handlers.register(RecvOpcode.CHANGE_MAP_SPECIAL, new ChangeMapHandler(transitions, true));
         handlers.register(RecvOpcode.USE_INNER_PORTAL, new ChangeMapHandler(transitions, true));
         handlers.replace(RecvOpcode.PLAYER_MAP_TRANSFER, (session, packet) -> {
-            new PlayerMapTransitionHandler().handle(session, packet);
+            new PlayerMapTransitionHandler(scripts, sessions).handle(session, packet);
             sessions.visibility().enter(session);
             drops.enter(session);
         }, 2);
