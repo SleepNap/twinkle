@@ -10,7 +10,7 @@
 
 **2026-09-09 参考修复对照：** 已检查北斗 `b72f991b9` 与 datas-server `466d476c2` 基线，完成队伍/掉落/可见性入口收口、冻结期间队伍恢复、同编号地图实例掉落隔离、换线输出终态、进图失败清理，以及 WZ 频道资源视图和提交重检。具体触发条件、对应提交与剩余边界见 [修复对照记录](reference-fix-audit.md)。本批仍需重启发布，不改变内置 Java 热更新前置改造及客户端统一验证安排。
 
-截至 2026-11-16，已接入二十三批游戏功能，最新一批为账号仓库与 NPC 存储。批次按功能划分，第二、三批合并在同一次提交中；第四至二十三批可按下列提交标题在 Git 历史中定位。
+截至 2026-11-16，已接入二十六批游戏功能，最新一批为传送门脚本与地图进入脚本。批次按功能划分，第二、三批合并在同一次提交中；第四至二十六批可按下列提交标题在 Git 历史中定位。
 
 | 批次 | 服务端范围 | 提交记录 |
 |---|---|---|
@@ -39,6 +39,7 @@
 | 第二十三批：账号仓库与 NPC 存储 | `RecvOpcode.STORAGE 0x3E` 处理 mode 4 取出、5 存入、6 整理、7 金币、8 关闭；`SendOpcode.STORAGE 0x135` 下发开窗（0x16）、存入回执（0x0D）、取出回执（0x09）、金币（0x13）、整理（0x0F）与错误码；账号级 `storage_records`/`storage_items`（V19，三方言）与 `row_version` 乐观锁；`cm.openStorage(npcId)` 由 NPC 脚本触发开窗；物品一律走 `TradeItemSnapshot` 精确实例通道，可充值道具强制整叠、现金道具拒绝入库；换图与断线使会话失效 | `feat: 接入账号仓库与 NPC 存储` |
 | 第二十四批：仓库整理合并 | 整理时按「同类型 + 同 itemId + 同所有者/标记/期限」合并可叠加物品，上限取 WZ `slotMax`（读不到回退默认 100）；装备与宠物永远各占一行；放不下的部分保持原行不拆分 | `feat: 接入仓库整理合并` |
 | 第二十五批：公会最小闭环 | `GUILD_OPERATION 0x7E` 处理 0x02 创建（单人、扣 150 万金币）、0x05 邀请、0x06 接受、0x07 退出（会长即解散）、0x10 公告；`DENY_GUILD_REQUEST 0x7F` 拒绝邀请；`GUILD_OPERATION 0x41` 下发整表（0x1A）、邀请（0x05）、新成员（0x27）、离会（0x2C）、解散（0x32）、上下线（0x3D）、公告（0x44）与结果码；新增 `guild_record` 单表（V20，三方言）与 `row_version` 乐观锁，成员关系仍以 `character_records.guild_id/guild_rank` 为唯一权威 | `feat: 接入公会最小闭环` |
+| 第二十六批：传送门脚本与地图进入脚本 | `Portal.script/scriptName` 生效：脚本门执行 `scripts/portal/<scriptName>.js`，宿主 `portal` 提供 `playPortalSound`/`warp(mapId[, portalName])`，脚本未传送且门带目标地图时回退普通传送，异常拒绝本次传送但不影响频道；`MapleMap.onUserEnter`/`onFirstUserEnter` 生效：玩家发出 `PLAYER_MAP_TRANSFER` 后执行 `scripts/field/<name>.js`，宿主 `em` 提供 `setMapTimer`/`broadcastMessage`，首次进入用原子标记只跑一次，脚本异常不阻断进图 | `feat: 接入传送门与地图进入脚本` |
 
 按本次并发审查先收口状态访问入口，之后继续战斗与死亡结算。本文分别记录代码接入、自动验证与后续客户端验收，不以历史里程碑或封包数量计算完整玩法完成率。
 
@@ -70,6 +71,7 @@
 | 悄悄话 | `WHISPER` 按 v83 flags（WHISPER/LOCATION/LOCATION_FRIEND）解析目标名与内容；同频道直发、异频道经 `channel:{id}` 消息总线投递；`WHISPER\|RECEIVE` 带发送者名/频道/是否 GM/内容，`WHISPER\|RESULT` 回执；位置查询返回同频道地图与坐标或其他频道号 | 无黑名单/屏蔽、GM 隐身与发送频率限制；位置查询不含商城/ITC 类型 |
 | 账号仓库 | `STORAGE` 收包 mode 4/5/6/7/8 对应取出、存入、整理、金币搬运、关闭；开窗由 NPC 脚本经 `cm.openStorage` 主动下发；账号级两表持久化、`row_version` 乐观锁、账号删除同步清理；存入按 100 金币收费、库存上限 4~48 格；可充值道具强制整叠，现金道具拒绝入库；整理合并可叠加物品（上限取 WZ `slotMax`）、装备与宠物不合并；换图/断线清会话 | 无扩槽道具与 NPC 费用 WZ 读取（`trunkPut`/`trunkGet` 未接入，费用固定 100）；一账号一世界一份；跨频道并发以最后写入为准 |
 | 公会 | 创建（单人建会、扣 150 万金币、创建者为职级 1）、邀请、接受（职级 5）、退出（会长退出即解散）、公告、拒绝邀请；登录推送整表，上下线广播 `0x3D`；`guild_record` 单表 + `row_version` 乐观锁，成员关系以 `character_records.guild_id/guild_rank` 为唯一权威 | 不做多人共建的匹配确认（`0x03`/`0x1E`）、GP 与公会等级、徽章变更、开除、职级称号、扩容、联盟、BBS、公会 Boss；同屏公会名与 `CHAR_INFO` 公会段未接入；跨频道成员变更不广播刷新（在线状态按 Presence 显示） |
+| 地图与任务脚本 | 传送门脚本（`scripts/portal/<scriptName>.js`，宿主 `portal`）与地图进入脚本（`scripts/field/<name>.js`，宿主 `em`）已接入；首次进入脚本按地图实例只执行一次；脚本异常只记日志，不影响传送与进图 | `em.setMapTimer` 只记录秒数、尚未下发客户端时钟包；地图离开脚本、限时地图踢出、条件门、选择奖励与重复任务未接入 |
 
 同时修复两个基础问题：各频道不再共用 WZ 缓存中的地图运行对象；NPC 对话不再把对象 ID 当成模板 ID。药水改为精确消耗请求槽位，并用正确的 HP/MP 状态包响应。普通奖励/购买的物品不会堆进带不同期限、主人等属性的旧实例。
 
@@ -134,7 +136,7 @@
 
 2026-11-16 账号仓库与 NPC 存储已接入：`RecvOpcode.STORAGE 0x3E` 按 v83 mode 4/5/6/7/8 解析，`SendOpcode.STORAGE 0x135` 下发开窗与各类回执；仓库属账号，新增 `storage_records`/`storage_items` 两表（V19 三方言）并以 `row_version` 做乐观锁，账号删除时同步清理；开窗改由 NPC 脚本 `cm.openStorage(npcId)` 触发（v83 客户端不会主动请求）；物品搬运全部走 `TradeItemSnapshot` 精确实例通道，避免装备强化、期限与宠物属性丢失；可充值道具按整叠存入，现金道具拒绝入库。随后补齐整理合并：同类型同物品按 `slotMax` 合并，装备与宠物保持独立行。已知边界：`trunkPut`/`trunkGet` 费用未接 WZ，固定 100；跨频道并发以最后写入为准。
 
-2026-11-16 公会最小闭环已接入：`GUILD_OPERATION 0x7E` 支持创建（单人建会、扣 150 万金币、创建者为职级 1）、邀请、接受（职级 5）、退出（会长退出即解散）、公告五类操作，`DENY_GUILD_REQUEST 0x7F` 拒绝邀请；发包用 `GUILD_OPERATION 0x41` 的 0x1A 整表、0x05 邀请、0x27 新成员、0x2C 离会、0x32 解散、0x3D 上下线、0x44 公告与单字节结果码。新增 `guild_record` 单表（V20 三方言、`row_version` 乐观锁），成员关系仍以 `character_records.guild_id/guild_rank` 为唯一权威，不另建成员表以避免双写。刻意不做多人共建的匹配确认（需要 world 级 MatchChecker，无客户端联调无法验证时序）、GP 与公会等级、徽章变更、开除、职级称号、扩容、联盟、BBS 与公会 Boss；同屏公会名与 `CHAR_INFO` 公会段、跨频道成员变更广播也留待后续。下一步是地图/任务脚本宿主或公会补全。
+2026-11-16 公会最小闭环已接入：`GUILD_OPERATION 0x7E` 支持创建（单人建会、扣 150 万金币、创建者为职级 1）、邀请、接受（职级 5）、退出（会长退出即解散）、公告五类操作，`DENY_GUILD_REQUEST 0x7F` 拒绝邀请；发包用 `GUILD_OPERATION 0x41` 的 0x1A 整表、0x05 邀请、0x27 新成员、0x2C 离会、0x32 解散、0x3D 上下线、0x44 公告与单字节结果码。新增 `guild_record` 单表（V20 三方言、`row_version` 乐观锁），成员关系仍以 `character_records.guild_id/guild_rank` 为唯一权威，不另建成员表以避免双写。刻意不做多人共建的匹配确认（需要 world 级 MatchChecker，无客户端联调无法验证时序）、GP 与公会等级、徽章变更、开除、职级称号、扩容、联盟、BBS 与公会 Boss；同屏公会名与 `CHAR_INFO` 公会段、跨频道成员变更广播也留待后续。2026-11-16 传送门脚本与地图进入脚本已接入：`Portal.script/scriptName` 原本只被 `usePortal` 拒绝，现在改为执行 `scripts/portal/<scriptName>.js`，宿主 `portal` 提供 `playPortalSound`/`warp(mapId[, portalName])`；脚本没主动传送且该门带普通目标地图时回退默认传送，脚本异常只记日志并拒绝本次传送。`MapleMap.onUserEnter`/`onFirstUserEnter` 原本只被 WZ 加载、无人使用，现在在客户端发出 `PLAYER_MAP_TRANSFER`（进图加载完成）后执行 `scripts/field/<name>.js`，宿主 `em` 提供 `setMapTimer`/`broadcastMessage`；首次进入用 `MapleMap.markFirstUserEnterExecuted()` 原子抢占，只跑一次。已知边界：`em.setMapTimer` 只记录秒数、未下发客户端时钟包；地图离开脚本、限时踢出、条件门与选择奖励未接入。下一步是地图离开脚本与限时地图，或公会补全。
 
 2026-09-11 并发整改：好友/Presence 后台化、插件在途排空、WZ 内容快照及跨 Worker 预检、慢库存档容量治理均已完成，并通过自动回归；详见 [四项整改记录](concurrency-completion.md)。下方 2026-09-06 收工记录保留为历史顺序。
 
@@ -161,6 +163,7 @@
 | 第二批 | `mvn -B verify`，末次调整后定向回归 | 通过；新增 13 项回归并扩展 Buff 测试，末次 17 项定向检查通过 |
 | 第三批 | `mvn -B -DskipTests compile`、15 项相关回归、7 条架构规则；最后复查 4 项操作设置回归 | 通过；新增 6 项回归并扩展既有队伍/持久化测试；本批尚未重新执行全量 `verify` |
 | 第四批 | 全后端编译，54 项定向检查（包含 7 条架构规则） | 通过，无跳过；新增 16 项装备回归；本批未执行全量 `verify` 或客户端联调 |
+| 第二十六批 | `ScriptHostGameplayTest` 10 项；`channel` 模块 211 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-16 通过；新增 10 项脚本宿主回归（脚本门传送/异常/回退/缺失、双次 warp、同图广播、首次进入只跑一次、脚本异常不阻断进图、脚本 key 取值）；本批未执行全量 `verify` 或客户端联调 |
 | 第二十五批 | 全后端编译（19 模块）；`GuildGameplayTest` 18 项；`channel` 模块 201 项；`persistence` 的 `MyBatisFlexRepositoryTest` 7 项（含公会头列名映射与乐观锁）；`AccountDeletionRepositoryTest` 1 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-16 通过；新增 18 项公会回归与 1 项公会持久化回归；本批未执行全量 `verify` 或客户端联调 |
 | 第二十四批 | `StorageGameplayTest` 13 项；`channel` 模块 183 项 | 2026-11-16 通过；新增 1 项整理合并回归；本批未执行全量 `verify` 或客户端联调 |
 | 第二十三批 | 全后端编译（19 模块）；`StorageGameplayTest` 12 项；`channel` 模块 170 项；`persistence` 的 `MyBatisFlexRepositoryTest` 6 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-16 通过；新增 12 项仓库开窗/存入/取出/整理/金币/异常路径回归；本批未执行全量 `verify` 或客户端联调 |
