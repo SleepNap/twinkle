@@ -37,6 +37,7 @@
 | 第二十一批：好友容量与分组调整 | 加好友时校验目标方 `buddyCapacity` 并用蓝色服务器提示回执；重复添加同一好友时同组提示已存在、不同组只更新分组并刷新，不再重发申请包 | `feat: 接入好友容量与分组调整` |
 | 第二十二批：好友申请队列与接受校验 | 登录与确认后一次只推一个待确认申请（按 `created_at` 先进先出），确认后继续推下一个；接受前要求双方关系均为 PENDING 且本人未满 `buddyCapacity`，超限用蓝色服务器提示回执且不建立关系；补上好友请求/确认/删除日志 | `feat: 接入好友申请队列与接受校验` |
 | 第二十三批：账号仓库与 NPC 存储 | `RecvOpcode.STORAGE 0x3E` 处理 mode 4 取出、5 存入、6 整理、7 金币、8 关闭；`SendOpcode.STORAGE 0x135` 下发开窗（0x16）、存入回执（0x0D）、取出回执（0x09）、金币（0x13）、整理（0x0F）与错误码；账号级 `storage_records`/`storage_items`（V19，三方言）与 `row_version` 乐观锁；`cm.openStorage(npcId)` 由 NPC 脚本触发开窗；物品一律走 `TradeItemSnapshot` 精确实例通道，可充值道具强制整叠、现金道具拒绝入库；换图与断线使会话失效 | `feat: 接入账号仓库与 NPC 存储` |
+| 第二十四批：仓库整理合并 | 整理时按「同类型 + 同 itemId + 同所有者/标记/期限」合并可叠加物品，上限取 WZ `slotMax`（读不到回退默认 100）；装备与宠物永远各占一行；放不下的部分保持原行不拆分 | `feat: 接入仓库整理合并` |
 
 按本次并发审查先收口状态访问入口，之后继续战斗与死亡结算。本文分别记录代码接入、自动验证与后续客户端验收，不以历史里程碑或封包数量计算完整玩法完成率。
 
@@ -66,7 +67,7 @@
 | 同频道组队 | 创建、邀请、拒绝、加入、退出、解散、踢人、转交队长、地图/等级刷新、离线清理、队伍聊天、同图 HP 同步 | 临时频道队伍，最多六人；离开频道即退出，队长离线解散；同图经验按等级分摊，无跨频道保队、队伍门和等级区间过滤 |
 | 好友列表 | `BUDDYLIST_MODIFY` 加好友/接受/删除，`buddy_list` 双向 PENDING/ACCEPTED 持久化并按 owner 保存分组；登录与变更后推送 `BUDDYLIST` mode 7 整表（名字、当前频道在线、持久化分组），在线目标收到 mode 9 申请包；待确认申请按队列逐个重放，确认一个后继续推下一个；加好友校验发起方与目标方 `buddyCapacity`，接受前再校验双方 PENDING 与本人容量；已存在关系同组提示、不同组只改分组；登录/断线/接受/删除跨频道刷新好友整表 | 分组由客户端在加好友时指定，没有独立的新建/改名/移动分组包；拒绝与取消申请等价于 mode 3 删除 PENDING 关系，服务端不发专门的拒绝回执；黑名单不在 v83 客户端协议内（参考实现无对应 opcode） |
 | 悄悄话 | `WHISPER` 按 v83 flags（WHISPER/LOCATION/LOCATION_FRIEND）解析目标名与内容；同频道直发、异频道经 `channel:{id}` 消息总线投递；`WHISPER\|RECEIVE` 带发送者名/频道/是否 GM/内容，`WHISPER\|RESULT` 回执；位置查询返回同频道地图与坐标或其他频道号 | 无黑名单/屏蔽、GM 隐身与发送频率限制；位置查询不含商城/ITC 类型 |
-| 账号仓库 | `STORAGE` 收包 mode 4/5/6/7/8 对应取出、存入、整理、金币搬运、关闭；开窗由 NPC 脚本经 `cm.openStorage` 主动下发；账号级两表持久化、`row_version` 乐观锁、账号删除同步清理；存入按 100 金币收费、库存上限 4~48 格；可充值道具强制整叠，现金道具拒绝入库；换图/断线清会话 | 无扩槽道具与 NPC 费用 WZ 读取（费用固定 100）；整理只重排下标不合并堆叠（缺 WZ slotMax 接入）；一账号一世界一份；跨频道并发以最后写入为准 |
+| 账号仓库 | `STORAGE` 收包 mode 4/5/6/7/8 对应取出、存入、整理、金币搬运、关闭；开窗由 NPC 脚本经 `cm.openStorage` 主动下发；账号级两表持久化、`row_version` 乐观锁、账号删除同步清理；存入按 100 金币收费、库存上限 4~48 格；可充值道具强制整叠，现金道具拒绝入库；整理合并可叠加物品（上限取 WZ `slotMax`）、装备与宠物不合并；换图/断线清会话 | 无扩槽道具与 NPC 费用 WZ 读取（`trunkPut`/`trunkGet` 未接入，费用固定 100）；一账号一世界一份；跨频道并发以最后写入为准 |
 
 同时修复两个基础问题：各频道不再共用 WZ 缓存中的地图运行对象；NPC 对话不再把对象 ID 当成模板 ID。药水改为精确消耗请求槽位，并用正确的 HP/MP 状态包响应。普通奖励/购买的物品不会堆进带不同期限、主人等属性的旧实例。
 
@@ -129,7 +130,7 @@
 
 2026-11-16 好友申请队列与接受校验已接入：登录与确认后按 `created_at` 先进先出只推一个待确认申请，确认一个后继续推下一个（客户端一次只显示一个申请弹窗）；接受前要求双方关系均为 PENDING，且本人未满 `buddyCapacity`，超限时用蓝色服务器提示回执且不建立关系；补齐好友请求/确认/删除日志。协议核对结论：参考实现没有黑名单 opcode，v83 客户端不含黑名单功能，拒绝与取消申请等价于 mode 3 删除 PENDING 关系。下一步是仓库或公会。
 
-2026-11-16 账号仓库与 NPC 存储已接入：`RecvOpcode.STORAGE 0x3E` 按 v83 mode 4/5/6/7/8 解析，`SendOpcode.STORAGE 0x135` 下发开窗与各类回执；仓库属账号，新增 `storage_records`/`storage_items` 两表（V19 三方言）并以 `row_version` 做乐观锁，账号删除时同步清理；开窗改由 NPC 脚本 `cm.openStorage(npcId)` 触发（v83 客户端不会主动请求）；物品搬运全部走 `TradeItemSnapshot` 精确实例通道，避免装备强化、期限与宠物属性丢失；可充值道具按整叠存入，现金道具拒绝入库。已知边界：费用固定 100（未读 WZ `trunkPut`）、整理只重排下标不合并堆叠、跨频道并发以最后写入为准。下一步是公会或地图/任务脚本宿主。
+2026-11-16 账号仓库与 NPC 存储已接入：`RecvOpcode.STORAGE 0x3E` 按 v83 mode 4/5/6/7/8 解析，`SendOpcode.STORAGE 0x135` 下发开窗与各类回执；仓库属账号，新增 `storage_records`/`storage_items` 两表（V19 三方言）并以 `row_version` 做乐观锁，账号删除时同步清理；开窗改由 NPC 脚本 `cm.openStorage(npcId)` 触发（v83 客户端不会主动请求）；物品搬运全部走 `TradeItemSnapshot` 精确实例通道，避免装备强化、期限与宠物属性丢失；可充值道具按整叠存入，现金道具拒绝入库。随后补齐整理合并：同类型同物品按 `slotMax` 合并，装备与宠物保持独立行。已知边界：`trunkPut`/`trunkGet` 费用未接 WZ，固定 100；跨频道并发以最后写入为准。下一步是公会或地图/任务脚本宿主。
 
 2026-09-11 并发整改：好友/Presence 后台化、插件在途排空、WZ 内容快照及跨 Worker 预检、慢库存档容量治理均已完成，并通过自动回归；详见 [四项整改记录](concurrency-completion.md)。下方 2026-09-06 收工记录保留为历史顺序。
 
@@ -156,6 +157,7 @@
 | 第二批 | `mvn -B verify`，末次调整后定向回归 | 通过；新增 13 项回归并扩展 Buff 测试，末次 17 项定向检查通过 |
 | 第三批 | `mvn -B -DskipTests compile`、15 项相关回归、7 条架构规则；最后复查 4 项操作设置回归 | 通过；新增 6 项回归并扩展既有队伍/持久化测试；本批尚未重新执行全量 `verify` |
 | 第四批 | 全后端编译，54 项定向检查（包含 7 条架构规则） | 通过，无跳过；新增 16 项装备回归；本批未执行全量 `verify` 或客户端联调 |
+| 第二十四批 | `StorageGameplayTest` 13 项；`channel` 模块 183 项 | 2026-11-16 通过；新增 1 项整理合并回归；本批未执行全量 `verify` 或客户端联调 |
 | 第二十三批 | 全后端编译（19 模块）；`StorageGameplayTest` 12 项；`channel` 模块 170 项；`persistence` 的 `MyBatisFlexRepositoryTest` 6 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项 | 2026-11-16 通过；新增 12 项仓库开窗/存入/取出/整理/金币/异常路径回归；本批未执行全量 `verify` 或客户端联调 |
 | 第二十二批 | 全后端编译；`BuddyGameplayTest` 19 项；`BuddyCrossChannelTest` 8 项、`SocialIoBoundaryTest` 2 项；`persistence` 的 `MyBatisFlexRepositoryTest` 6 项 | 2026-11-16 通过；新增 4 项申请队列/接受校验回归；本批未重跑 `channel` 全量、全量 `verify` 或客户端联调 |
 | 第二十一批 | 全后端编译；`BuddyGameplayTest` 15 项；`ChannelPacketFactoryLayoutTest` 3 项；`MyBatisFlexRepositoryTest` 6 项；`channel` 模块 166 项；`ArchitectureRulesTest` 8 项；`ConcurrencyAssemblyTest` 1 项；控制台无头验收 10 页截图 | 2026-11-09 通过；新增 3 项目标容量/分组调整回归和 1 项服务器提示布局回归；架构/并发已补跑；控制台无头验收顺带修复运维页空集合字段崩溃 |
