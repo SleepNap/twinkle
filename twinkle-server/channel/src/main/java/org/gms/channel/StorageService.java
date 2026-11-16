@@ -260,24 +260,36 @@ public final class StorageService {
         int slotCount = state.slotCount;
         long recordId = state.recordId;
         state.version = expectedVersion + 1;
-        io.submit(() -> {
-            boolean updated = records.updateMesoAndSlots(recordId, meso, slotCount, expectedVersion);
-            if (!updated) {
-                // 另一个频道或进程已经写过：本次内存态仍然生效，但要让下一次读取重新对齐数据库版本。
-                log.warn(I18n.message("log.storage.version_conflict"), accountId, expectedVersion);
-                return Boolean.TRUE;
+        if (io == null) {
+            // 测试或无频道适配器时同步落库，与 offload 的兜底语义保持一致。
+            if (applyPersist(accountId, recordId, meso, slotCount, expectedVersion, snapshot)) {
+                cache.remove(accountId);
             }
-            items.replaceAll(recordId, (int) accountId, snapshot);
-            return Boolean.FALSE;
-        }).whenComplete((conflict, error) -> {
-            if (error != null) {
-                log.error(I18n.message("log.storage.persist_failed"), accountId, error);
-                return;
-            }
-            if (Boolean.TRUE.equals(conflict) && sessions.execution() != null) {
-                sessions.execution().execute(() -> cache.remove(accountId));
-            }
-        });
+            return;
+        }
+        io.submit(() -> applyPersist(accountId, recordId, meso, slotCount, expectedVersion, snapshot))
+                .whenComplete((conflict, error) -> {
+                    if (error != null) {
+                        log.error(I18n.message("log.storage.persist_failed"), accountId, error);
+                        return;
+                    }
+                    if (Boolean.TRUE.equals(conflict) && sessions.execution() != null) {
+                        sessions.execution().execute(() -> cache.remove(accountId));
+                    }
+                });
+    }
+
+    /** 覆盖写仓库头与物品行；返回 {@code true} 表示版本冲突，需要丢弃内存缓存。 */
+    private boolean applyPersist(long accountId, long recordId, int meso, int slotCount,
+                                 int expectedVersion, List<StorageItemEntity> snapshot) {
+        boolean updated = records.updateMesoAndSlots(recordId, meso, slotCount, expectedVersion);
+        if (!updated) {
+            // 另一个频道或进程已经写过：本次内存态仍然生效，但要让下一次读取重新对齐数据库版本。
+            log.warn(I18n.message("log.storage.version_conflict"), accountId, expectedVersion);
+            return true;
+        }
+        items.replaceAll(recordId, (int) accountId, snapshot);
+        return false;
     }
 
     private void sendBagChanges(PacketSession session, PlayerCharacter character, InventoryType type,
