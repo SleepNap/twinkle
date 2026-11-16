@@ -19,6 +19,7 @@ import org.gms.hotreload.versioned.VersionGate;
 import org.gms.net.netty.HeartbeatConfig;
 import org.gms.net.packet.HandlerRegistry;
 import org.gms.persistence.repo.BuddyListRepository;
+import org.gms.persistence.repo.GuildRecordRepository;
 import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.persistence.repo.StorageItemRepository;
 import org.gms.persistence.repo.StorageRecordRepository;
@@ -32,7 +33,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
     private final SerialTaskQueue socialIo;
     private final SerialTaskQueue presenceIo;
     private final SerialTaskQueue storageIo;
-    @Override public void close() { socialIo.close(); presenceIo.close(); storageIo.close(); }
+    private final SerialTaskQueue guildIo;
+    @Override public void close() { socialIo.close(); presenceIo.close(); storageIo.close(); guildIo.close(); }
     public void drainSaves() {
         try { saveQueue.drain(); } catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
     }
@@ -40,6 +42,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         socialIo.awaitIdle(Duration.ofSeconds(5));
         presenceIo.awaitIdle(Duration.ofSeconds(5));
         storageIo.awaitIdle(Duration.ofSeconds(5));
+        guildIo.awaitIdle(Duration.ofSeconds(5));
     }
 
     private final PlayerCharacterRepository characterRepository;
@@ -60,6 +63,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
     private final BuddyListRepository buddyListRepository;
     private final StorageRecordRepository storageRecordRepository;
     private final StorageItemRepository storageItemRepository;
+    private final GuildRecordRepository guildRecordRepository;
     private final CharacterSaveQueue saveQueue;
     private final ChannelPlayerDirectory playerDirectory;
     private final TickScheduler tickScheduler;
@@ -84,7 +88,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                                  ReliableReceiver reliableReceiver, IntercoordService intercoord,
                                  BuddyListRepository buddyListRepository,
                                  StorageRecordRepository storageRecordRepository,
-                                 StorageItemRepository storageItemRepository, CharacterSaveQueue saveQueue,
+                                 StorageItemRepository storageItemRepository,
+                                 GuildRecordRepository guildRecordRepository, CharacterSaveQueue saveQueue,
                                  ChannelPlayerDirectory playerDirectory, TickScheduler tickScheduler,
                                  HeartbeatConfig heartbeatConfig, int worldId, long leaseTtlSeconds,
                                  long leaseCooldownSeconds, long leaseSweepIntervalMillis, NpcShopCatalog shopCatalog,
@@ -108,6 +113,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         this.buddyListRepository = buddyListRepository;
         this.storageRecordRepository = storageRecordRepository;
         this.storageItemRepository = storageItemRepository;
+        this.guildRecordRepository = guildRecordRepository;
         this.saveQueue = saveQueue;
         this.playerDirectory = playerDirectory;
         this.tickScheduler = tickScheduler;
@@ -124,6 +130,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
         this.socialIo = new SerialTaskQueue(background, 4096);
         this.presenceIo = new SerialTaskQueue(background, 8192);
         this.storageIo = new SerialTaskQueue(background, 2048);
+        this.guildIo = new SerialTaskQueue(background, 2048);
         this.logic = logic;
     }
 
@@ -169,6 +176,8 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
             BuddyHandler buddy = new BuddyHandler(channelId, intercoord, eventBus, sessions,
                     buddyListRepository, characterRepository).async(socialIo);
             buddyRef[0] = buddy;
+            GuildService guild = new GuildService(worldId, guildRecordRepository, characterRepository,
+                    guildIo, sessions, intercoord, itemSystem);
             DefaultControllerLeaseService runtimeLeases = leases;
             ChannelServer server = new ChannelServer(handlers, session -> {
                 org.gms.domain.game.PlayerCharacter character = session.getAttr("character");
@@ -180,6 +189,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                 if (cancelTrade != null) cancelTrade.run();
                 if (!sessions.unregister(character.getId(), session)) return;
                 buddy.offline(session);
+                guild.offline(session);
                 publisher.playerOffline(character.getId());
                 players.remove(character);
                 if (character.getMapObject() != null) character.getMapObject().removeCharacter(character);
@@ -219,7 +229,7 @@ public final class ChannelRuntimeFactory implements AutoCloseable {
                     wzResources, progressionSystem, logic.service(AvatarSystem.class), logic.service(ControlsSystem.class),
                     logic.service(EquipmentSystem.class), parties, drops, buddy,
                     new StorageService(worldId, storageRecordRepository, storageItemRepository,
-                            storageIo, sessions, itemSystem, gameData));
+                            storageIo, sessions, itemSystem, gameData), guild);
             ChannelRuntime runtime = new ChannelRuntime(endpoint, handlers, maps, players, sessions, leases, monsters,
                     reassign, server, channelTicks, messages, changes, locations, gameplay, execution);
             runtime.rewards(new RewardDeliveryService(players, sessions, logic.service(RewardSystem.class), saveQueue));

@@ -30,7 +30,7 @@ public final class ChannelGameplay implements AutoCloseable {
                            ScriptManager scripts, NpcShopCatalog shopCatalog, TickScheduler scheduler,
                            WzResourceRegistry resources, ProgressionSystem progression, AvatarSystem avatarLogic,
                            ControlsSystem controlsLogic, EquipmentSystem equipmentLogic, PartyHandler parties,
-                           GroundDropService drops, BuddyHandler buddy, StorageService storage) {
+                           GroundDropService drops, BuddyHandler buddy, StorageService storage, GuildService guild) {
         this.scheduler = scheduler;
         this.drops = drops;
         this.parties = parties;
@@ -58,6 +58,7 @@ public final class ChannelGameplay implements AutoCloseable {
                 controls.initialize(session);
                 equipment.initialize(session);
                 if (buddy != null) buddy.initialize(session);
+                if (guild != null) guild.initialize(session);
             });
             login.handle(session, packet);
         }, 2);
@@ -93,6 +94,11 @@ public final class ChannelGameplay implements AutoCloseable {
         handlers.replace(RecvOpcode.NPC_TALK, new NpcTalkHandler(scripts, items, quests, transitions, shops, storage), 2);
         if (storage != null) {
             handlers.register(RecvOpcode.STORAGE, new StorageHandler(storage));
+        }
+        if (guild != null) {
+            GuildHandler guildHandler = new GuildHandler(guild);
+            handlers.register(RecvOpcode.GUILD_OPERATION, guildHandler);
+            handlers.register(RecvOpcode.DENY_GUILD_REQUEST, guildHandler::deny);
         }
         scheduler.register(expiration);
     }

@@ -18,6 +18,7 @@ import org.gms.persistence.mapper.ApiRequestAuditMapper;
 import org.gms.persistence.mapper.BuddyListMapper;
 import org.gms.persistence.mapper.BusOutboxMapper;
 import org.gms.persistence.mapper.BusStreamMapper;
+import org.gms.persistence.mapper.GuildRecordMapper;
 import org.gms.persistence.mapper.PlayerCharacterRecordMapper;
 import org.gms.persistence.mapper.InventoryItemMapper;
 import org.gms.persistence.mapper.ParamConfMapper;
@@ -43,6 +44,8 @@ import org.gms.persistence.repo.PlayerCharacterRepository;
 import org.gms.persistence.repo.PlayerCharacterSnapshotRepository;
 import org.gms.persistence.repo.FlexGameAccountRepository;
 import org.gms.persistence.repo.FlexAccountDeletionRepository;
+import org.gms.persistence.repo.FlexGuildRecordRepository;
+import org.gms.persistence.repo.GuildRecordRepository;
 import org.gms.persistence.repo.FlexAccountAdminRoleRepository;
 import org.gms.persistence.repo.FlexAdminOperationAuditRepository;
 import org.gms.persistence.repo.FlexAdminRoleRepository;
@@ -126,6 +129,8 @@ public class MyBatisFlexFactory {
         // 账号仓库 storage/trunk 持久化（V19 迁移建表）
         bootstrap.addMapper(StorageRecordMapper.class);
         bootstrap.addMapper(StorageItemMapper.class);
+        // 公会头持久化（V20 迁移建表）
+        bootstrap.addMapper(GuildRecordMapper.class);
         bootstrap.start();
         return bootstrap;
     }
@@ -264,6 +269,12 @@ public class MyBatisFlexFactory {
 
     @Bean
     @Singleton
+    public GuildRecordMapper guildRecordMapper(MybatisFlexBootstrap bootstrap) {
+        return bootstrap.getMapper(GuildRecordMapper.class);
+    }
+
+    @Bean
+    @Singleton
     public ParamConfRepository paramConfRepository(ParamConfMapper mapper) {
         // M1 起替换 M0 的纯 JDBC 实现（JdbcParamConfRepository），接口不变
         return new FlexParamConfRepository(mapper);
@@ -291,12 +302,13 @@ public class MyBatisFlexFactory {
             AdminSessionMapper adminSessionMapper,
             ApiKeyMapper apiKeyMapper,
             StorageItemMapper storageItemMapper,
-            StorageRecordMapper storageRecordMapper) {
+            StorageRecordMapper storageRecordMapper,
+            GuildRecordMapper guildRecordMapper) {
         return new FlexAccountDeletionRepository(
                 accountMapper, characterMapper, inventoryItemMapper, questStatusMapper,
                 questProgressMapper, skillMapper, buddyListMapper, pointGameAccountRecordMapper,
                 pointTransactionMapper, accountAdminRoleMapper, adminSessionMapper, apiKeyMapper,
-                storageItemMapper, storageRecordMapper);
+                storageItemMapper, storageRecordMapper, guildRecordMapper);
     }
 
     @Bean
@@ -321,6 +333,12 @@ public class MyBatisFlexFactory {
     @Singleton
     public StorageItemRepository storageItemRepository(StorageItemMapper mapper) {
         return new FlexStorageItemRepository(mapper);
+    }
+
+    @Bean
+    @Singleton
+    public GuildRecordRepository guildRecordRepository(GuildRecordMapper mapper) {
+        return new FlexGuildRecordRepository(mapper);
     }
 
     @Bean

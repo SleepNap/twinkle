@@ -36,6 +36,15 @@ public interface PlayerCharacterRepository {
     }
 
     /**
+     * 按公会 id 查成员角色快照（公会成员列表、上下线广播与账号删除的级联清理使用）。
+     *
+     * <p>默认返回空集以兼容既有实现；持久化实现应覆盖为按 {@code character_records.guild_id} 查询。
+     */
+    public default List<PlayerCharacterRecord> findByGuild(int guildId) {
+        return List.of();
+    }
+
+    /**
      * 按角色名查重（建角前置，v83 CHECK_CHAR_NAME）。存在返回 true。
      */
     boolean existsByName(String name);
