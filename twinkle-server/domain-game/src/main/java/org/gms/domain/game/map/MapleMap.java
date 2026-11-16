@@ -178,6 +178,8 @@ public class MapleMap implements MapGeometry {
         this.spawnPoints = new ArrayList<>(source.spawnPoints);
         this.footholds = new ArrayList<>(source.footholds);
         this.npcs = new HashMap<>(source.npcs);
+        // WZ 换代后首次进入脚本要能重新触发，否则热重载一次之后该地图的 onFirstUserEnter 永久失效。
+        this.firstUserEnterState.set(0);
     }
 
     /**

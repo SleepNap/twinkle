@@ -5,6 +5,7 @@ import org.gms.domain.game.PlayerCharacter;
 import org.gms.domain.game.inventory.InventoryType;
 import org.gms.domain.game.map.MapleMap;
 import org.gms.domain.game.map.Portal;
+import org.gms.domain.game.map.PortalType;
 import org.gms.domain.game.lease.ControllerLeaseService;
 import org.gms.domain.game.lease.LeaseOwner;
 import org.gms.domain.script.ScriptManager;
@@ -12,6 +13,7 @@ import org.gms.i18n.I18n;
 import org.gms.net.packet.PacketSession;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.function.IntFunction;
 
@@ -105,11 +107,26 @@ public final class MapTransitionService {
                 .anyMatch(portal -> portal.getName().equals(requested));
         String name = requested;
         if (!found) {
-            name = target.portals().stream()
+            // 默认落点优先 sp（v83 出生点约定），其次城镇/地图传送门，最后任意非脚本点；
+            // 不能直接取 portals() 的第一个——底层是 HashMap，顺序不保证，可能挑到脚本门。
+            List<Portal> candidates = target.portals().stream()
+                    .filter(portal -> !portal.isScript())
+                    .toList();
+            name = candidates.stream()
+                    .filter(portal -> "sp".equals(portal.getName()))
                     .map(Portal::getName)
-                    .filter(candidate -> candidate != null && !candidate.isBlank())
                     .findFirst()
-                    .orElse(null);
+                    .orElseGet(() -> candidates.stream()
+                            .filter(portal -> portal.getType() == PortalType.MAP_PORTAL
+                                    || portal.getType() == PortalType.TOWN_PORTAL)
+                            .map(Portal::getName)
+                            .filter(candidate -> candidate != null && !candidate.isBlank())
+                            .findFirst()
+                            .orElseGet(() -> candidates.stream()
+                                    .map(Portal::getName)
+                                    .filter(candidate -> candidate != null && !candidate.isBlank())
+                                    .findFirst()
+                                    .orElse(null)));
         }
         if (name == null) return false;
         return transfer(session, mapId, name, false);
