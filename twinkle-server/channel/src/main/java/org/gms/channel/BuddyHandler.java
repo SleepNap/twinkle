@@ -57,16 +57,17 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
 
     private record AddResult(long targetId, List<BuddyEntry> entries, int targetChannel, String notice) { }
 
+    private record AcceptResult(List<Refresh> refreshes, Pending next, String notice) { }
+
     /**
      * 一次好友列表刷新。{@code entries} 非空表示目标在本频道，直接回包；为空表示目标在其它
      * 频道，按 {@code channel} 投递通知，由对方频道重建整表。
      */
     private record Refresh(long ownerId, int channel, long peerId, int peerChannel, List<BuddyEntry> entries) { }
 
-    private record InitResult(List<BuddyEntry> ownEntries, List<Pending> requests,
-                              List<Refresh> refreshes) { }
+    private record InitResult(List<BuddyEntry> ownEntries, Pending request, List<Refresh> refreshes) { }
 
-    /** 别人发给我、尚未确认的申请；登录时重放 mode 9。 */
+    /** 别人发给我、尚未确认的申请；登录与确认后按队列逐个重放 mode 9。 */
     private record Pending(long fromId, String fromName, String group) { }
 
     private SerialTaskQueue io;
@@ -138,14 +139,11 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
         PlayerCharacter character = session.getAttr("character");
         if (character == null) return;
         long playerId = character.getId();
-        offload(() -> new InitResult(list(playerId), pendingRequests(playerId),
+        offload(() -> new InitResult(list(playerId), nextPending(playerId),
                 refreshes(playerId, channelId)), result -> {
             if (sessions.get(playerId) == session) {
                 session.send(buddyListPacket(result.ownEntries()));
-                for (Pending pending : result.requests()) {
-                    session.send(requestBuddylistAdd(pending.fromId(), pending.fromName(),
-                            playerId, pending.group()));
-                }
+                sendPending(session, result.request(), playerId);
             }
             dispatch(result.refreshes());
         });
@@ -186,8 +184,10 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
                 return new AddResult(0, list(ownerId), -1,
                         I18n.message("game.buddy.target_full", target.name()));
             }
-            buddyRepo.insertIfAbsent(row(ownerId, target.id(), BuddyListEntity.PENDING, useGroup));
+            boolean created = buddyRepo.insertIfAbsent(
+                    row(ownerId, target.id(), BuddyListEntity.PENDING, useGroup));
             buddyRepo.insertIfAbsent(row(target.id(), ownerId, BuddyListEntity.PENDING, DEFAULT_GROUP));
+            log.info(I18n.message("log.buddy.request"), ownerId, target.id(), created);
             return new AddResult(target.id(), list(ownerId), channelOf(target.id()), null);
         }, result -> {
             if (sessions.get(ownerId) == session) {
@@ -209,12 +209,32 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
     private void accept(PacketSession session, PlayerCharacter character, int buddyId) {
         if (buddyId <= 0) return;
         long ownerId = character.getId();
+        int capacity = character.getBuddyCapacity();
         offload(() -> {
+            // v83：只有双方都处于 PENDING 才能确认；重复确认、乱序确认和后补的伪造 id 一律忽略。
+            if (!BuddyListEntity.PENDING.equals(statusOf(ownerId, buddyId))
+                    || !BuddyListEntity.PENDING.equals(statusOf(buddyId, ownerId))) {
+                return new AcceptResult(List.of(), null, null);
+            }
+            // 从收到申请到点确认之间可能已加满，与参考实现接受前的 isFull 检查对齐。
+            if (acceptedCount(ownerId) >= capacity) {
+                return new AcceptResult(List.of(), null, I18n.message("game.buddy.self_full"));
+            }
             buddyRepo.updateStatus(ownerId, buddyId, BuddyListEntity.ACCEPTED);
             buddyRepo.updateStatus(buddyId, ownerId, BuddyListEntity.ACCEPTED);
-            return List.of(refreshOf(ownerId, buddyId, channelOf(buddyId)),
-                    refreshOf(buddyId, ownerId, channelId));
-        }, this::dispatch);
+            log.info(I18n.message("log.buddy.accept"), ownerId, buddyId);
+            return new AcceptResult(List.of(refreshOf(ownerId, buddyId, channelOf(buddyId)),
+                    refreshOf(buddyId, ownerId, channelId)), nextPending(ownerId), null);
+        }, result -> {
+            dispatch(result.refreshes());
+            if (sessions.get(ownerId) != session) return;
+            if (result.notice() != null) {
+                session.send(ChannelPacketFactory.serverNotice(1, result.notice()));
+                return;
+            }
+            // 客户端一次只显示一个申请弹窗：确认一个后继续推下一个未确认申请。
+            sendPending(session, result.next(), ownerId);
+        });
     }
 
     private void delete(PacketSession session, PlayerCharacter character, int buddyId) {
@@ -223,6 +243,7 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
         offload(() -> {
             buddyRepo.delete(ownerId, buddyId);
             buddyRepo.delete(buddyId, ownerId);
+            log.info(I18n.message("log.buddy.delete"), ownerId, buddyId);
             // 双向关系已删除，双方重建整表后该条目自然消失，peerChannel 不再有意义。
             return List.of(refreshOf(ownerId, buddyId, -1), refreshOf(buddyId, ownerId, -1));
         }, this::dispatch);
@@ -334,16 +355,21 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
         return entries;
     }
 
-    /** 别人发给我、尚未确认的申请：按持久化的申请方分组重放 mode 9。 */
-    private List<Pending> pendingRequests(long characterId) {
-        List<Pending> requests = new ArrayList<>();
+    /** 下一个待确认申请：按持久化的申请方分组重放 mode 9。 */
+    private Pending nextPending(long characterId) {
         for (BuddyListEntity row : buddyRepo.findByBuddy(characterId)) {
             if (!BuddyListEntity.PENDING.equals(row.getStatus())) continue;
             String name = nameOf(row.getOwnerId());
             if (name == null) continue;
-            requests.add(new Pending(row.getOwnerId(), name, groupOf(row)));
+            return new Pending(row.getOwnerId(), name, groupOf(row));
         }
-        return requests;
+        return null;
+    }
+
+    /** 推送一个待确认申请；没有待确认申请时不发包（v83 客户端一次只显示一个申请弹窗）。 */
+    private void sendPending(PacketSession session, Pending pending, long toId) {
+        if (pending == null) return;
+        session.send(requestBuddylistAdd(pending.fromId(), pending.fromName(), toId, pending.group()));
     }
 
     /**
@@ -393,6 +419,11 @@ public final class BuddyHandler implements PacketHandler, AutoCloseable {
             if (row.getBuddyId() == buddyId) return Optional.of(row);
         }
         return Optional.empty();
+    }
+
+    /** owner 视角下与 {@code buddyId} 的关系状态；关系不存在时返回 {@code null}。 */
+    private String statusOf(long ownerId, long buddyId) {
+        return existingRow(ownerId, buddyId).map(BuddyListEntity::getStatus).orElse(null);
     }
 
     private BuddyListEntity row(long owner, long buddy, String status, String group) {

@@ -106,6 +106,71 @@ public class BuddyGameplayTest {
         assertThat(listCount(target)).isOne();
     }
 
+    @Test public void acceptDeliversNextPendingRequest() {
+        var owner = joined(1);
+        // 第一段：Player2 的申请，确认后应继续推 Player3 的申请。
+        repository.insertIfAbsent(row(1, 2, BuddyListEntity.PENDING));
+        repository.insertIfAbsent(row(2, 1, BuddyListEntity.PENDING));
+        repository.insertIfAbsent(row(1, 3, BuddyListEntity.PENDING));
+        repository.insertIfAbsent(BuddyFixtures.row(3, 1, BuddyListEntity.PENDING, "Family"));
+        characters.records.put(2L, character(2, "Player2"));
+        characters.records.put(3L, character(3, "Player3"));
+
+        handler.handle(owner, idRequest(2, 2));
+
+        assertThat(owner.sent).hasSize(2);
+        var ownList = new ByteArrayInPacket(owner.sent.getFirst().getBytes());
+        assertThat(ownList.readUnsignedShort()).isEqualTo(SendOpcode.BUDDYLIST.getValue());
+        assertThat(ownList.readByte()).isEqualTo((byte) 7);
+        assertThat(ownList.readByte()).isOne();
+
+        var next = new ByteArrayInPacket(owner.sent.getLast().getBytes());
+        assertThat(next.readUnsignedShort()).isEqualTo(SendOpcode.BUDDYLIST.getValue());
+        assertThat(next.readByte()).isEqualTo((byte) 9);
+        assertThat(next.readInt()).isEqualTo(3);
+        assertThat(next.readString()).isEqualTo("Player3");
+        assertThat(next.readInt()).isEqualTo(3);
+        assertThat(readFixed(next, 11)).isEqualTo("Player3");
+        next.skip(3);
+        assertThat(next.readInt()).isEqualTo(0x0F);
+        assertThat(readFixed(next, 13)).isEqualTo("Family");
+        next.readByte();
+        assertThat(next.readInt()).isOne();
+        assertThat(next.available()).isZero();
+    }
+
+    @Test public void acceptRejectsWhenOwnerListIsFull() {
+        var owner = joined(1);
+        owner.character.setBuddyCapacity(1);
+        repository.insertIfAbsent(row(1, 2, BuddyListEntity.PENDING));
+        repository.insertIfAbsent(row(2, 1, BuddyListEntity.PENDING));
+        repository.insertIfAbsent(row(1, 5, BuddyListEntity.ACCEPTED));
+        repository.insertIfAbsent(row(5, 1, BuddyListEntity.ACCEPTED));
+
+        handler.handle(owner, idRequest(2, 2));
+
+        assertThat(repository.findByOwner(1).stream()
+                .filter(relation -> relation.getBuddyId() == 2).findFirst().orElseThrow().getStatus())
+                .isEqualTo(BuddyListEntity.PENDING);
+        assertThat(repository.findByOwner(2).getFirst().getStatus()).isEqualTo(BuddyListEntity.PENDING);
+        assertThat(owner.sent).hasSize(1);
+        var notice = new ByteArrayInPacket(owner.sent.getFirst().getBytes());
+        assertThat(notice.readUnsignedShort()).isEqualTo(SendOpcode.SERVERMESSAGE.getValue());
+        assertThat(notice.readByte()).isOne();
+        assertThat(notice.readString()).isEqualTo(I18n.message("game.buddy.self_full"));
+        assertThat(notice.available()).isZero();
+    }
+
+    @Test public void acceptIgnoresRelationThatIsNotPending() {
+        var owner = joined(1);
+
+        handler.handle(owner, idRequest(2, 2));
+
+        assertThat(owner.sent).isEmpty();
+        assertThat(repository.findByOwner(1)).isEmpty();
+        assertThat(repository.findByOwner(2)).isEmpty();
+    }
+
     @Test public void deleteRemovesBothDirectionsAndRefreshesBothLists() {
         var owner = joined(1);
         var target = joined(2);
@@ -220,6 +285,26 @@ public class BuddyGameplayTest {
         request.readByte();
         assertThat(request.readInt()).isOne();
         assertThat(request.available()).isZero();
+    }
+
+    @Test public void loginReplaysOnlyFirstPendingRequest() {
+        var owner = joined(1);
+        repository.insertIfAbsent(BuddyFixtures.row(2, 1, BuddyListEntity.PENDING, "Friends"));
+        repository.insertIfAbsent(BuddyFixtures.row(3, 1, BuddyListEntity.PENDING, "Family"));
+        characters.records.put(2L, character(2, "Player2"));
+        characters.records.put(3L, character(3, "Player3"));
+
+        handler.initialize(owner);
+
+        // 整表 + 一个申请：客户端一次只显示一个弹窗，其余申请在确认后逐个补推。
+        assertThat(owner.sent).hasSize(2);
+        var list = new ByteArrayInPacket(owner.sent.getFirst().getBytes());
+        assertThat(list.readUnsignedShort()).isEqualTo(SendOpcode.BUDDYLIST.getValue());
+        assertThat(list.readByte()).isEqualTo((byte) 7);
+        var request = new ByteArrayInPacket(owner.sent.getLast().getBytes());
+        assertThat(request.readUnsignedShort()).isEqualTo(SendOpcode.BUDDYLIST.getValue());
+        assertThat(request.readByte()).isEqualTo((byte) 9);
+        assertThat(request.readInt()).isIn(2, 3);
     }
 
     @Test public void loginDoesNotReplayOwnOutgoingPendingAsRequest() {

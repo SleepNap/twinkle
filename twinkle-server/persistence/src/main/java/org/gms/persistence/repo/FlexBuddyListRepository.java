@@ -27,8 +27,11 @@ public class FlexBuddyListRepository implements BuddyListRepository {
 
     @Override
     public List<BuddyListEntity> findByBuddy(long buddyId) {
-        return mapper.selectListByQuery(QueryWrapper.create()
-                .where(BuddyListEntity::getBuddyId).eq(buddyId));
+        // 申请队列按写入时间先进先出：服务端一次只推一个待确认申请。
+        QueryWrapper query = QueryWrapper.create();
+        query.where(BuddyListEntity::getBuddyId).eq(buddyId);
+        query.orderBy(BuddyListEntity::getCreatedAt, true);
+        return mapper.selectListByQuery(query);
     }
 
     @Override
