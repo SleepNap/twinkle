@@ -62,6 +62,7 @@ CLAUDE.local.md
 # 运行时产物只落在持久化模块的 db 文件与 cache，精确忽略即可。
 twinkle-server/data/cache/
 twinkle-server/persistence/cache/
+twinkle-server/src/test/
 bootstrap/data/
 **/data/twinkle.db
 **/data/cache/

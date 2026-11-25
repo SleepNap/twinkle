@@ -1,0 +1,2 @@
+org.springframework.context.ApplicationContextInitializer=\
+org.gms.database.DatabaseInitializer
